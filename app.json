@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "AppEstetica",
+    "logLevel": "silent",
     "slug": "AppEstetica",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,6 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "entryPoint": "./App.js",
     "assetBundlePatterns": [
       "**/*"
     ],

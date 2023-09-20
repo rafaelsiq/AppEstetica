@@ -19,7 +19,6 @@ const LoginScreen = () => {
   const navigation = useNavigation();
 
   const handleLogin = () => {
-    console.log('handleLogin');
     navigation.navigate('Home');
   }
 
