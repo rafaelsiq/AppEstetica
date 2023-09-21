@@ -1,13 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
     Keyboard,
     SafeAreaView,
-    View,
     Alert,
     StyleSheet
 } from 'react-native';
-import TimeTableView from 'react-native-timetable';
-import { stylesBlue } from './styles';
 import { Calendar } from '../atoms/Calendar/Calendar';
 
 
@@ -23,34 +20,27 @@ const styles = StyleSheet.create({
 
 const ScheduleScreen = () => {
     const events_data = [{
-        id: 1,
-        description: 'Event',
-        startDate: new Date(2023, 9, 17, 12, 0),
-        endDate: new Date(2023, 9, 17, 12, 30),
-        color: 'blue',
-        startTime: new Date(2023, 9, 17, 12, 0),
-        endTime: new Date(2023, 9, 17, 18, 30),
-        style: { borderColor: 'red' },
-        eventKind: 'block',
+        id: '1',
+        startTime: new Date('2023-09-19T13:00:00.000Z'),
+        endTime: new Date('2023-09-19T14:00:00.000Z'),
+        description: 'lavagem de orelha',
+        subdescription: 'maria antonieta'
     },
     {
-        id: 1,
-        startDate: new Date(2023, 1, 20, 9),
-        endDate: new Date(2023, 1, 20, 11),
-        startTime: new Date(2023, 9, 19, 11, 0),
-        endTime: new Date(2023, 9, 19, 11, 30),
-        color: 'blue',
-        description: 'E1',
+        id: '2',
+        startTime: new Date('2023-09-18T13:00:00.000Z'),
+        endTime: new Date('2023-09-18T15:00:00.000Z'),
+        description: 'lavagem de orelha lavagem de orelha lavagem de orelha lavagem de orelha lavagem de',
+        subdescription: 'maria antonieta'
     },
     {
-        id: 2,
-        startDate: new Date(2023, 1, 22, 10),
-        endDate: new Date(2023, 1, 22, 11, 30),
-        startTime: new Date(2023, 9, 18, 12, 0),
-        endTime: new Date(2023, 9, 18, 12, 30),
-        color: 'red',
-        description: 'E2',
-    },]
+        id: '2',
+        startTime: new Date('2023-09-21T18:40:00.000Z'),
+        endTime: new Date('2023-09-21T19:40:00.000Z'),
+        description: 'lavagem de orelha lavagem de orelha lavagem de orelha lavagem de orelha lavagem de',
+        subdescription: 'maria antonieta'
+    }]
+
     const hideKeyboard = () => {
         Keyboard.dismiss();
     };
@@ -64,7 +54,7 @@ const ScheduleScreen = () => {
 
     return (
         <SafeAreaView onTouchStart={hideKeyboard} style={styles.container}>
-           <Calendar/>
+            <Calendar events={events_data} />
         </SafeAreaView>
     );
 };

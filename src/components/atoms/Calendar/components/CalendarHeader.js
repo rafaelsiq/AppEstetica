@@ -1,27 +1,31 @@
 import React from 'react';
-import { Text, View, StyleSheet } from 'react-native';
+import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
 
-export const CalendarHeader = () => {
-    const data = new Date();
+export const CalendarHeader = ({ selectedDate, setModalVisibility }) => {
+    const data = selectedDate;
     const weekDay = { weekday: 'long', timeZone: 'UTC' };
-    const month = { month: 'short', timeZone: 'UTC' }; 
+    const month = { month: 'short', timeZone: 'UTC' };
 
     const weekDayPT = new Intl.DateTimeFormat('pt-BR', weekDay).format(data);
     const monthPT = new Intl.DateTimeFormat('pt-BR', month).format(data).replace('.', '');
 
     return (
-        <View style={styles.container}>
+        <TouchableOpacity 
+        onPress={() => setModalVisibility(true)} 
+        style={styles.container}
+        activeOpacity={1} 
+        >
             <View style={styles.monthContainer}>
                 <Text style={styles.monthText}>{monthPT}</Text>
             </View>
             <View style={styles.centerContainer}>
                 <Text style={styles.weekDayText}>{weekDayPT}</Text>
-                <Text style={styles.yearText}>{data.getFullYear()}</Text>
+                <Text style={styles.yearText}>{data?.getFullYear()}</Text>
             </View>
             <View style={styles.dayContainer}>
-                <Text style={styles.dayText}>{data.getDate()}</Text>
+                <Text style={styles.dayText}>{data?.getDate()}</Text>
             </View>
-        </View>
+        </TouchableOpacity>
     );
 };
 

@@ -4,7 +4,10 @@ import { View, StyleSheet, Text } from 'react-native';
 export const CalendarEvent = (event) => {
     const {
         startTime,
-        endTime
+        endTime,
+        description,
+        subdescription,
+        id
     } = event?.events
 
     const diferencaEmMinutos = (dataInicio, dataFim) => {
@@ -15,37 +18,32 @@ export const CalendarEvent = (event) => {
         let aux = diffEmMinutos / 1.5;
         return aux
     }
-    
     const diferencaMarginTop = (startTime) => {
         return initalMargin = 39 * startTime.getMinutes() / 100
     }
 
-
-    const heightTotal = diferencaEmMinutos(startTime,endTime)-1;
+    const heightTotal = diferencaEmMinutos(startTime, endTime) - 1;
     const marginTopAdjust = diferencaMarginTop(startTime)
 
     return (
-        <View style={styles.eventsContainer}>
+        <View style={[styles.eventsContainer, {zIndex:startTime.getHours()}]}>
             {
                 <View
-                    key={event?.events.id}
+                    key={id}
                     style={[
                         styles.eventRow,
                         {
                             display: 'flex',
                             height: heightTotal,
                             width: '80%',
-                            marginTop: marginTopAdjust
+                            marginTop: marginTopAdjust,
+                            zIndex:startTime.getHours()
                         },
                     ]}
                 >
-                    <View style={styles.eventDetails}>
-                        <View style={styles.eventDescription}>
-                            <Text>{event?.events.description}</Text>
-                        </View>
-                        <View style={styles.eventSubdescription}>
-                            <Text>{event?.events.subdescription}</Text>
-                        </View>
+                    <View style={[styles.eventDetails, {zIndex:startTime.getHours()}]}>
+                        <Text style={[styles.eventDescription, {zIndex:startTime.getHours()}]}>{description}</Text>
+                        <Text style={[styles.eventSubdescription, {zIndex:startTime.getHours()}]}>{subdescription}</Text>
                     </View>
                 </View>
 
@@ -85,5 +83,8 @@ const styles = StyleSheet.create({
     eventDescription: {
         marginBottom: 5,
     },
-    eventSubdescription: {},
+    eventSubdescription: {
+        color: 'grey',
+        marginLeft: '50%'
+    },
 });
