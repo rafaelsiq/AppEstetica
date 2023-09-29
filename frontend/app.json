@@ -23,10 +23,16 @@
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.rafaelsiq.AppEstetica"
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "06883feb-0b8a-4b5a-b6ec-a805aec9a158"
+      }
     }
   }
 }

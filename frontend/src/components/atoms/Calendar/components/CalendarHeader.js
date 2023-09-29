@@ -57,16 +57,18 @@ const styles = StyleSheet.create({
     },
     centerContainer: {
         alignItems: 'center',
+        minWidth: 20
     },
     weekDayText: {
-        color: 'white',
-        fontSize: 16,
+        color: 'black',
+        fontSize: 35,
+        fontFamily: 'Family',
         textAlign: 'center',
     },
     yearText: {
-        color: 'white',
+        color: 'black',
         fontSize: 16,
-        width: '70%',
+        width: '90%',
         textAlign: 'center',
     },
     dayContainer: {
