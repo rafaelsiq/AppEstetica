@@ -1,12 +1,35 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Text, StyleSheet } from 'react-native';
 import { CalendarEvent } from './CalendarEvent';
 
 export const CalendarBody = ({ events }) => {
     const hours = Array.from({ length: 25 }, (_, index) => index);
+    const [currentTimePosition, setCurrentTimePosition] = useState(0);
+
+    useEffect(() => {
+        const updateCurrentTimePosition = () => {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const currentMinutes = hours * 60 + minutes;
+            const position = ((currentMinutes * 0.1) / 1.500);
+            setCurrentTimePosition(position);
+        };
+        const intervalId = setInterval(updateCurrentTimePosition, 60000);
+        updateCurrentTimePosition();
+        return () => clearInterval(intervalId);
+    }, []);
 
     return (
         <ScrollView style={styles.container} vertical={true}>
+            <View
+                style={[
+                    styles.currentTimeIndicator,
+                    {
+                        top: `${currentTimePosition}%`, // Posição vertical com base na porcentagem do dia
+                    },
+                ]}
+            ></View>
             <View>
                 {hours.map((hour) => (
                     <View key={hour} style={[styles.hourRow, {
@@ -70,5 +93,11 @@ const styles = StyleSheet.create({
         marginTop: 10,
         color: 'white',
         justifyContent: 'flex-start'
+    },
+    currentTimeIndicator: {
+        position: 'absolute',
+        width: '100%',
+        height: 2, // Altura máxima de 2 pixels
+        backgroundColor: 'red',
     },
 });
