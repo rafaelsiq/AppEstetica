@@ -25,7 +25,7 @@ const ScheduleScreen = () => {
     };
     
     scrollViewRef = (ref) => {
-        this.timetableRef = ref;
+        this.timetableRef = ref; 
     };
 
     return (
