@@ -1,8 +1,11 @@
-const atendimentoResolvers = require("./atendimentoResolvers");
-const clienteResolvers = require("./clienteResolvers");
-const feriasResolvers = require("./feriasResolvers");
-const servicoResolvers = require("./servicoResolvers");
+const treatmentResolvers = require("./treatmentResolvers");
+const clientResolvers = require("./clientResolvers");
+const eventsResolvers = require("./eventsResolvers");
+const vacationsResolvers = require("./vacationsResolvers");
+const serviceResolvers = require("./serviceResolvers");
+const workerResolvers = require("./workerResolvers");
 
-const resolvers = [atendimentoResolvers, feriasResolvers, clienteResolvers, servicoResolvers];
+const resolvers = [treatmentResolvers, vacationsResolvers, clientResolvers, serviceResolvers, workerResolvers, eventsResolvers];
+
 
 module.exports = resolvers;

@@ -10,7 +10,7 @@ const db = {
    pass: process.env.DB_PASS,
    name: process.env.DB_NAME,
 };
-const dbUri = `mongodb+srv://rafaelsqf22:${db.pass}@app-estetica-cluster.6vsjca1.mongodb.net/`;
+const dbUri = `mongodb+srv://${db.user}:${db.pass}@app-estetica-cluster.6vsjca1.mongodb.net/`;
 const dbOptions = {
    useNewUrlParser: true,
    useUnifiedTopology: true,

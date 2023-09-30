@@ -24,8 +24,8 @@ export const CalendarEvent = (event) => {
     const heightTotal = diferencaEmMinutos(startTime, endTime) - 1;
     const marginTopAdjust = diferencaMarginTop(startTime)
     onEventPress = (evt) => {
-        console.log(evt)
     };
+
     const [pastedEvent, setPastedEvent] = useState(false);
 
     useEffect(() => {

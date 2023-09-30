@@ -1,39 +1,47 @@
 const { gql } = require("apollo-server");
 
 const types = gql`
-type Cliente {
-    atendimentos: [Atendimento!]!
+  type Client {
     id: ID!
-    nome: String!
-    telefone: String
-    endereco: String
+    name: String!
+    phone: String!
+    address: String
+    treatments: [Treatment]
   }
   
-  type Atendente {
+  type Worker {
     id: ID!
-    nome: String!
-    ferias: [Ferias]
+    name: String!
+    vacation: [Vacations]
+  }
+  
+  type Events {
+    eventId: ID!,
+    startTime: String,
+    endTime: String,
+    description: String,
+    subdescription: String
   }
 
-  type Atendimento {
+  type Treatment {
     id: ID!
-    servico: Servico!
-    data: String!
-    atendente: Atendente
-    avaliacao: Int
+    service: Service!
+    date: String!
+    worker: Worker
+    conter: Int
   }
   
-  type Servico {
+  type Service {
     id: ID!
-    titulo: String!
-    descricao: String
-    valor: Float!
+    title: String!
+    description: String
+    price: Float!
   }
   
-  type Ferias {
+  type Vacations {
     id: ID!
-    dataInicio: String!
-    dataFim: String!
+    startDate: String!
+    endDate: String!
   }  
 `;
 module.exports = types;

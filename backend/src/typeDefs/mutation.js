@@ -2,57 +2,29 @@ const { gql } = require("apollo-server");
 
 const mutation = gql`
   type Mutation {
-    criarCliente(input: ClienteInput): Cliente
-    atualizarCliente(id: ID!, input: ClienteInput): Cliente
-    excluirCliente(id: ID!): Cliente
+    createClient(input: ClientInput): Client
+    updateClient(id: ID!, input: ClientInput): Client
+    deleteClient(id: ID!): Client
 
-    criarAtendente(input: AtendenteInput): Atendente
-    atualizarAtendente(id: ID!, input: AtendenteInput): Atendente
-    excluirAtendente(id: ID!): Atendente
+    createWorker(input: WorkerInput): Worker
+    updateWorker(id: ID!, input: WorkerInput): Worker
+    deleteWorker(id: ID!): Worker
 
-    criarServico(input: ServicoInput): Servico
-    atualizarServico(id: ID!, input: ServicoInput): Servico
-    excluirServico(id: ID!): Servico
+    createEvent(input: EventInput): Events
+    updateEvent(id: ID!, input: EventInput): Events
+    deleteEvent(id: ID!): Events
 
-    criarAtendimento(input: AtendimentoInput): Atendimento
-    atualizarAtendimento(id: ID!, input: AtendimentoInput): Atendimento
-    excluirAtendimento(id: ID!): Atendimento
+    createService(input: ServiceInput): Service
+    updateService(id: ID!, input: ServiceInput): Service
+    deleteService(id: ID!): Service
 
-    criarFerias(input: FeriasInput): Ferias
-    atualizarFerias(id: ID!, input: FeriasInput): Ferias
-    excluirFerias(id: ID!): Ferias
-  }
+    createTreatment(input: TreatmentInput): Treatment
+    updateTreatment(id: ID!, input: TreatmentInput): Treatment
+    deleteTreatment(id: ID!): Treatment
 
-  input ClienteInput {
-    nome: String
-    telefone: String
-    endereco: String
-    atendimento: [AtendimentoInput]
-  }
-
-  input AtendenteInput {
-    nome: String
-    telefone: String
-    endereco: String
-    atendimento: [AtendimentoInput]
-  }
-
-  input AtendimentoInput {
-    servicoId: ID
-    data: String
-    avaliacao: Int
-  }
-
-  input FeriasInput {
-    atendenteId: ID
-    dataInicio: String
-    dataFim: String
-  }
-    
-  input ServicoInput {
-    titulo: String
-    descricao: String
-    valor: Float
+    createVacations(input: VacationsInput): Vacations
+    updateVacations(id: ID!, input: VacationsInput): Vacations
+    deleteVacations(id: ID!): Vacations
   }
 `;
 

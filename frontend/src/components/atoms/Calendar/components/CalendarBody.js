@@ -40,7 +40,7 @@ export const CalendarBody = ({ events }) => {
                             events.find((event) => event.startTime.getHours() === hour) ?
                                 <View>
                                     <Text style={styles.hourText}>
-                                        {hour.toString().padStart(2, '0')}
+                                        {hour.toString().padStart(2, '0')+'h'}
                                     </Text>
                                     <View style={styles.eventsColumn}>
                                         <CalendarEvent events={events.find((event) => event.startTime.getHours() === hour)} />
@@ -48,7 +48,7 @@ export const CalendarBody = ({ events }) => {
                                 </View> :
                                 <View>
                                     <Text style={styles.hourText}>
-                                        {hour.toString().padStart(2, '0')}
+                                        {hour.toString().padStart(2, '0')+'h'}
                                     </Text>
                                     <View style={styles.emptyEventsColumn}>
                                         <Text style={styles.emptyEventsColumn}>
@@ -89,9 +89,9 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     hourText: {
-        width: 20,
+        width: 30,
         marginTop: 10,
-        color: 'white',
+        color: 'black',
         justifyContent: 'flex-start'
     },
     currentTimeIndicator: {

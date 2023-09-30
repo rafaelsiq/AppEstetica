@@ -2,39 +2,53 @@ const { gql } = require("apollo-server");
 
 const query = gql`
   type Query {
-    cliente: [Cliente]
-    servico: [Servico]
-    ferias: [Ferias]
-    atendimento: [Atendimento]
-    feriasAtendente: [Ferias]
-    atendente: [Atendente]
+    client: [Client]
+    service: [Service]
+    vacations: [Vacations]
+    treatment: [Treatment]
+    vacationsWorker: [Vacations]
+    worker: [Worker]
+    event: [Events]
+    events: [Events]
   }
 
-  type Atendente {
-    id: ID!
+  input ClientInput {
+    name: String
+    phone: String
+    address: String
+    treatment: [TreatmentInput]
+  }
+  input EventInput {
+    startTime: String,
+    endTime: String,
+    description: String,
+    subdescription: String
   }
 
-  type Cliente {
-    id: ID!
-    atendimentos: [Atendimento!]!
+  input WorkerInput {
+    eventId: ID
+    name: String
+    phone: String
+    address: String
+    treatment: [TreatmentInput]
   }
 
-  type Atendimento {
-    id: ID!
-    servico: Servico
-    data: String
-  }
-  type Atendente {
-    id: ID!
-    nome: String
+  input TreatmentInput {
+    serviceId: ID
+    date: String
+    conter: Int
   }
 
-  type Servico {
-    nome: String
+  input VacationsInput {
+    workerId: ID
+    startDate: String
+    endDate: String
   }
-
-  type Ferias {
-    atendente: Atendente
+    
+  input ServiceInput {
+    title: String
+    description: String
+    price: Float
   }
 `;
 
