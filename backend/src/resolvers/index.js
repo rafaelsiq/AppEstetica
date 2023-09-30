@@ -7,4 +7,5 @@ const workerResolvers = require("./workerResolvers");
 
 const resolvers = [treatmentResolvers, vacationsResolvers, clientResolvers, serviceResolvers, workerResolvers, eventsResolvers];
 
+
 module.exports = resolvers;

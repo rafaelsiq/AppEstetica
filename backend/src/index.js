@@ -21,7 +21,6 @@ mongoose
    .catch((error) => console.log("Databased failed: ", error));
 // GraphQL
 const server = new ApolloServer({ typeDefs, resolvers });
-
 server
    .listen()
    .then(({ url }) => console.log(`Server ready at ${url}`))

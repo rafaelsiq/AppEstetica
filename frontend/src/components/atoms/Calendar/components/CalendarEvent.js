@@ -23,7 +23,6 @@ export const CalendarEvent = (event) => {
     }
     const heightTotal = diferencaEmMinutos(startTime, endTime) - 1;
     const marginTopAdjust = diferencaMarginTop(startTime)
-
     onEventPress = (evt) => {
     };
 
