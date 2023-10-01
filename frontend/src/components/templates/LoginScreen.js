@@ -10,7 +10,7 @@ const LoginScreen = () => {
   const hideKeyboard = () => {
     Keyboard.dismiss();
   };
-  const [loginOrSignUp, setLoginOrSignUp] = useState(false);
+  const [loginOrSignUp, setLoginOrSignUp] = useState(true);
 
   const setLoginOrSignUpAlternate = () => {
     setLoginOrSignUp(!loginOrSignUp);

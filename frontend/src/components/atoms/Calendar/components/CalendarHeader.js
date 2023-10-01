@@ -10,10 +10,10 @@ export const CalendarHeader = ({ selectedDate, setModalVisibility }) => {
     const monthPT = new Intl.DateTimeFormat('pt-BR', month).format(data).replace('.', '');
 
     return (
-        <TouchableOpacity 
-        onPress={() => setModalVisibility(true)} 
-        style={styles.container}
-        activeOpacity={1} 
+        <TouchableOpacity
+            onPress={() => setModalVisibility(true)}
+            style={styles.container}
+            activeOpacity={1}
         >
             <View style={styles.monthContainer}>
                 <Text style={styles.monthText}>{monthPT}</Text>

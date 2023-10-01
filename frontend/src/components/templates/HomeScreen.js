@@ -21,9 +21,9 @@ const HomeScreen = () => {
       <BannerCarousel />
 
       <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-        style={styles.button}
-        onPress={()=>{navigation.navigate('Schedule')}}
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => { navigation.navigate('Schedule') }}
         >
 
           <Icon
@@ -34,15 +34,17 @@ const HomeScreen = () => {
           <Text style={styles.buttonText}>Agenda</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button}>
-        <Icon
+          <Icon
             style={styles.icon}
             name='person'
             size={60}
           />
           <Text style={styles.buttonText}>Clientes</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button}>
-        <Icon
+        <TouchableOpacity
+          onPress={() => { navigation.navigate('Payment') }}
+          style={styles.button}>
+          <Icon
             style={styles.icon}
             name='payment'
             size={60}
@@ -50,7 +52,7 @@ const HomeScreen = () => {
           <Text style={styles.buttonText}>Receber</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button}>
-        <Icon
+          <Icon
             style={styles.icon}
             name='work'
             size={60}
@@ -58,7 +60,7 @@ const HomeScreen = () => {
           <Text style={styles.buttonText}>Serviços</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button}>
-        <Icon
+          <Icon
             style={styles.icon}
             name='people'
             size={60}
