@@ -16,6 +16,7 @@ Aplicação web em React + Vite com autenticação Firebase e persistência no F
   - Condições de saúde
   - Bloco "Para mulheres" exibido de forma condicional conforme sexo da cliente
   - Sessões de acompanhamento
+- Cadastro de cliente com edição (atualização de dados sem recriar registro)
 - Gráficos de evolução por cliente:
   - Dor x estresse
   - Sono por sessão

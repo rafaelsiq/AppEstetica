@@ -12,7 +12,8 @@ import {
   doc,
   onSnapshot,
   serverTimestamp,
-  setDoc
+  setDoc,
+  updateDoc
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
@@ -581,6 +582,8 @@ export default function App() {
   const [clientBirthDate, setClientBirthDate] = useState("");
   const [clientSex, setClientSex] = useState("");
   const [clientAddress, setClientAddress] = useState("");
+  const [editingClientId, setEditingClientId] = useState("");
+  const [clientFormMessage, setClientFormMessage] = useState("");
   const [serviceTitle, setServiceTitle] = useState("");
   const [servicePrice, setServicePrice] = useState("");
   const [appointmentClient, setAppointmentClient] = useState("");
@@ -593,6 +596,16 @@ export default function App() {
   const [checkpoints, setCheckpoints] = useState([]);
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
   const [anamneseMessage, setAnamneseMessage] = useState("");
+
+  const resetClientForm = () => {
+    setClientName("");
+    setClientPhone("");
+    setClientEmail("");
+    setClientBirthDate("");
+    setClientSex("");
+    setClientAddress("");
+    setEditingClientId("");
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -608,6 +621,8 @@ export default function App() {
       setClients([]);
       setServices([]);
       setAppointments([]);
+      resetClientForm();
+      setClientFormMessage("");
       setSelectedClientId("");
       setAnamneseForm(buildEmptyAnamnese());
       setCheckpoints([]);
@@ -651,6 +666,15 @@ export default function App() {
       setCheckpoints([]);
     }
   }, [clients, selectedClientId]);
+
+  useEffect(() => {
+    if (!editingClientId) {
+      return;
+    }
+    if (!clients.some((client) => client.id === editingClientId)) {
+      resetClientForm();
+    }
+  }, [clients, editingClientId]);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) || null,
@@ -731,28 +755,46 @@ export default function App() {
     }
   };
 
-  const handleAddClient = async (event) => {
+  const handleSaveClient = async (event) => {
     event.preventDefault();
     if (!clientName.trim() || !user) {
       return;
     }
 
-    await addDoc(collection(db, "users", user.uid, "clients"), {
+    const payload = {
       name: clientName.trim(),
       phone: clientPhone.trim(),
       email: clientEmail.trim(),
       birthDate: clientBirthDate,
       sex: clientSex,
       address: clientAddress.trim(),
-      createdAt: serverTimestamp()
-    });
+      updatedAt: serverTimestamp()
+    };
 
-    setClientName("");
-    setClientPhone("");
-    setClientEmail("");
-    setClientBirthDate("");
-    setClientSex("");
-    setClientAddress("");
+    if (editingClientId) {
+      await updateDoc(doc(db, "users", user.uid, "clients", editingClientId), payload);
+      setClientFormMessage("Cadastro da cliente atualizado.");
+    } else {
+      await addDoc(collection(db, "users", user.uid, "clients"), {
+        ...payload,
+        createdAt: serverTimestamp()
+      });
+      setClientFormMessage("Cliente adicionada com sucesso.");
+    }
+
+    resetClientForm();
+    setTimeout(() => setClientFormMessage(""), 2500);
+  };
+
+  const handleEditClient = (client) => {
+    setClientName(client.name || "");
+    setClientPhone(client.phone || "");
+    setClientEmail(client.email || "");
+    setClientBirthDate(client.birthDate || "");
+    setClientSex(client.sex || "");
+    setClientAddress(client.address || "");
+    setEditingClientId(client.id);
+    setClientFormMessage("");
   };
 
   const handleAddService = async (event) => {
@@ -1089,7 +1131,7 @@ export default function App() {
       {activeTab === TABS.CLIENTES ? (
         <section className="card">
           <h3>Clientes</h3>
-          <form className="form grid-form" onSubmit={handleAddClient}>
+          <form className="form grid-form" onSubmit={handleSaveClient}>
             <label>
               Nome
               <input
@@ -1142,9 +1184,21 @@ export default function App() {
                 placeholder="Rua, número, bairro e cidade"
               />
             </label>
+
+            {clientFormMessage ? <p className="success-text full-row">{clientFormMessage}</p> : null}
+
             <button className="primary-btn full-row" type="submit">
-              Adicionar cliente
+              {editingClientId ? "Salvar alterações da cliente" : "Adicionar cliente"}
             </button>
+            {editingClientId ? (
+              <button
+                type="button"
+                className="secondary-btn full-row"
+                onClick={resetClientForm}
+              >
+                Cancelar edição
+              </button>
+            ) : null}
           </form>
 
           <ul className="list">
@@ -1167,6 +1221,13 @@ export default function App() {
                       onClick={() => setSelectedClientId(client.id)}
                     >
                       Anamnese
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => handleEditClient(client)}
+                    >
+                      Editar
                     </button>
                     <button
                       type="button"
