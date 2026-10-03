@@ -87,6 +87,14 @@ const LATERALITY_OPTIONS = [
   { value: "both", label: "Ambos", short: "A" }
 ];
 
+const SEX_OPTIONS = [
+  { value: "", label: "Selecionar" },
+  { value: "female", label: "Feminino" },
+  { value: "male", label: "Masculino" },
+  { value: "other", label: "Outro" },
+  { value: "not_informed", label: "Prefere não informar" }
+];
+
 const HEALTH_CONDITIONS = [
   "Tendinite",
   "Bursite",
@@ -160,6 +168,11 @@ function inferLateralityByCoordinate(x) {
     return "right";
   }
   return "both";
+}
+
+function formatSexLabel(sex) {
+  const option = SEX_OPTIONS.find((item) => item.value === sex);
+  return option ? option.label : "Não informado";
 }
 
 function normalizePainSelections(rawSelections) {
@@ -566,6 +579,7 @@ export default function App() {
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientBirthDate, setClientBirthDate] = useState("");
+  const [clientSex, setClientSex] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [serviceTitle, setServiceTitle] = useState("");
   const [servicePrice, setServicePrice] = useState("");
@@ -728,6 +742,7 @@ export default function App() {
       phone: clientPhone.trim(),
       email: clientEmail.trim(),
       birthDate: clientBirthDate,
+      sex: clientSex,
       address: clientAddress.trim(),
       createdAt: serverTimestamp()
     });
@@ -736,6 +751,7 @@ export default function App() {
     setClientPhone("");
     setClientEmail("");
     setClientBirthDate("");
+    setClientSex("");
     setClientAddress("");
   };
 
@@ -1108,6 +1124,16 @@ export default function App() {
                 onChange={(event) => setClientBirthDate(event.target.value)}
               />
             </label>
+            <label>
+              Sexo
+              <select value={clientSex} onChange={(event) => setClientSex(event.target.value)}>
+                {SEX_OPTIONS.map((option) => (
+                  <option key={option.value || "empty"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="full-row">
               Endereço
               <input
@@ -1132,6 +1158,7 @@ export default function App() {
                     <p>{client.phone || "Sem telefone"}</p>
                     {client.email ? <p>{client.email}</p> : null}
                     {client.birthDate ? <p>Nascimento: {formatDatePt(client.birthDate)}</p> : null}
+                    {client.sex ? <p>Sexo: {formatSexLabel(client.sex)}</p> : null}
                   </div>
                   <div className="inline-actions">
                     <button
@@ -1184,6 +1211,9 @@ export default function App() {
                   <p>
                     <strong>Nascimento:</strong>{" "}
                     {selectedClient.birthDate ? formatDatePt(selectedClient.birthDate) : "Não informado"}
+                  </p>
+                  <p>
+                    <strong>Sexo:</strong> {formatSexLabel(selectedClient.sex)}
                   </p>
                   <p className="full-row">
                     <strong>Endereço:</strong> {selectedClient.address || "Não informado"}
@@ -1299,47 +1329,55 @@ export default function App() {
                   />
                 </label>
 
-                <h5>Para mulheres</h5>
-                <div className="grid-form">
-                  <label>
-                    Período menstrual
-                    <input
-                      value={anamneseForm.menstrualPeriod}
-                      onChange={(event) => handleAnamneseFieldChange("menstrualPeriod", event.target.value)}
-                      placeholder="Regular, irregular, etc."
-                    />
-                  </label>
-                  <label>
-                    Gestante?
-                    <select
-                      value={anamneseForm.pregnant}
-                      onChange={(event) => handleAnamneseFieldChange("pregnant", event.target.value)}
-                    >
-                      <option value="">Selecionar</option>
-                      <option value="sim">Sim</option>
-                      <option value="nao">Não</option>
-                    </select>
-                  </label>
-                  <label>
-                    Tempo de gestação (se aplicável)
-                    <input
-                      value={anamneseForm.gestatingTime}
-                      onChange={(event) => handleAnamneseFieldChange("gestatingTime", event.target.value)}
-                      placeholder="Ex: 24 semanas"
-                    />
-                  </label>
-                  <label>
-                    Lactante?
-                    <select
-                      value={anamneseForm.lactating}
-                      onChange={(event) => handleAnamneseFieldChange("lactating", event.target.value)}
-                    >
-                      <option value="">Selecionar</option>
-                      <option value="sim">Sim</option>
-                      <option value="nao">Não</option>
-                    </select>
-                  </label>
-                </div>
+                {selectedClient.sex === "female" ? (
+                  <>
+                    <h5>Para mulheres</h5>
+                    <div className="grid-form">
+                      <label>
+                        Período menstrual
+                        <input
+                          value={anamneseForm.menstrualPeriod}
+                          onChange={(event) =>
+                            handleAnamneseFieldChange("menstrualPeriod", event.target.value)
+                          }
+                          placeholder="Regular, irregular, etc."
+                        />
+                      </label>
+                      <label>
+                        Gestante?
+                        <select
+                          value={anamneseForm.pregnant}
+                          onChange={(event) => handleAnamneseFieldChange("pregnant", event.target.value)}
+                        >
+                          <option value="">Selecionar</option>
+                          <option value="sim">Sim</option>
+                          <option value="nao">Não</option>
+                        </select>
+                      </label>
+                      <label>
+                        Tempo de gestação (se aplicável)
+                        <input
+                          value={anamneseForm.gestatingTime}
+                          onChange={(event) =>
+                            handleAnamneseFieldChange("gestatingTime", event.target.value)
+                          }
+                          placeholder="Ex: 24 semanas"
+                        />
+                      </label>
+                      <label>
+                        Lactante?
+                        <select
+                          value={anamneseForm.lactating}
+                          onChange={(event) => handleAnamneseFieldChange("lactating", event.target.value)}
+                        >
+                          <option value="">Selecionar</option>
+                          <option value="sim">Sim</option>
+                          <option value="nao">Não</option>
+                        </select>
+                      </label>
+                    </div>
+                  </>
+                ) : null}
 
                 <h5>Conclusão da ficha</h5>
                 <label>
