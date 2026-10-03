@@ -81,6 +81,12 @@ const BACK_PAIN_REGIONS = [
   { label: "Planta do pé", x: 57.5, y: 96.0 }
 ];
 
+const LATERALITY_OPTIONS = [
+  { value: "left", label: "Esquerdo", short: "E" },
+  { value: "right", label: "Direito", short: "D" },
+  { value: "both", label: "Ambos", short: "A" }
+];
+
 const HEALTH_CONDITIONS = [
   "Tendinite",
   "Bursite",
@@ -124,16 +130,36 @@ function getTodayISODate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function getDefaultPainSelection(label) {
+function getDefaultPainSelection(label, laterality = "both") {
   const frontRegion = FRONT_PAIN_REGIONS.find((region) => region.label === label);
   if (frontRegion) {
-    return { label, side: "front", x: frontRegion.x, y: frontRegion.y };
+    return { label, side: "front", x: frontRegion.x, y: frontRegion.y, laterality };
   }
   const backRegion = BACK_PAIN_REGIONS.find((region) => region.label === label);
   if (backRegion) {
-    return { label, side: "back", x: backRegion.x, y: backRegion.y };
+    return { label, side: "back", x: backRegion.x, y: backRegion.y, laterality };
   }
   return null;
+}
+
+function formatLateralityLabel(laterality) {
+  const option = LATERALITY_OPTIONS.find((item) => item.value === laterality);
+  return option ? option.label : "Ambos";
+}
+
+function formatLateralityShort(laterality) {
+  const option = LATERALITY_OPTIONS.find((item) => item.value === laterality);
+  return option ? option.short : "A";
+}
+
+function inferLateralityByCoordinate(x) {
+  if (x < 47.5) {
+    return "left";
+  }
+  if (x > 52.5) {
+    return "right";
+  }
+  return "both";
 }
 
 function normalizePainSelections(rawSelections) {
@@ -153,6 +179,9 @@ function normalizePainSelections(rawSelections) {
     if (selection.side !== "front" && selection.side !== "back") {
       return;
     }
+    const laterality = LATERALITY_OPTIONS.some((item) => item.value === selection.laterality)
+      ? selection.laterality
+      : "both";
     const x = Number(selection.x);
     const y = Number(selection.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
@@ -163,7 +192,8 @@ function normalizePainSelections(rawSelections) {
       label: selection.label,
       side: selection.side,
       x: Number(Math.min(100, Math.max(0, x)).toFixed(2)),
-      y: Number(Math.min(100, Math.max(0, y)).toFixed(2))
+      y: Number(Math.min(100, Math.max(0, y)).toFixed(2)),
+      laterality
     });
   });
 
@@ -221,6 +251,8 @@ function formatDatePt(dateValue) {
 }
 
 function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
+  const [pendingSelection, setPendingSelection] = useState(null);
+
   const getClosestRegion = (x, y, regions) => {
     let closestRegion = null;
     let closestDistance = Number.POSITIVE_INFINITY;
@@ -245,12 +277,22 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
     if (!selectedRegion) {
       return;
     }
-    onSelectRegion({
+    setPendingSelection({
       label: selectedRegion.label,
       side,
       x: Number(x.toFixed(2)),
-      y: Number(y.toFixed(2))
+      y: Number(y.toFixed(2)),
+      laterality: inferLateralityByCoordinate(x)
     });
+  };
+
+  const handleConfirmSelection = (laterality) => {
+    if (!pendingSelection) {
+      return;
+    }
+
+    onSelectRegion({ ...pendingSelection, laterality });
+    setPendingSelection(null);
   };
 
   const selectedFrontRegions = painSelections.filter(
@@ -263,7 +305,8 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
   return (
     <div className="pain-map-section">
       <p className="muted-text">
-        Toque na região do corpo para marcar dor. Toque novamente no ponto verde para desmarcar.
+        Toque na região do corpo para marcar dor, escolha lateralidade (esquerdo/direito/ambos)
+        e toque na bolinha para desmarcar.
       </p>
       <div className="pain-map-grid">
         <figure className="pain-map-card">
@@ -282,10 +325,10 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
                   event.stopPropagation();
                   onRemoveRegion(selection.label);
                 }}
-                title={`${selection.label} selecionado`}
+                title={`${selection.label} (${formatLateralityLabel(selection.laterality)})`}
                 aria-label={`Desmarcar ${selection.label}`}
               >
-                <span>{selection.label}</span>
+                <span className="pain-dot-label">{formatLateralityShort(selection.laterality)}</span>
               </button>
             ))}
           </div>
@@ -307,16 +350,47 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
                   event.stopPropagation();
                   onRemoveRegion(selection.label);
                 }}
-                title={`${selection.label} selecionado`}
+                title={`${selection.label} (${formatLateralityLabel(selection.laterality)})`}
                 aria-label={`Desmarcar ${selection.label}`}
               >
-                <span>{selection.label}</span>
+                <span className="pain-dot-label">{formatLateralityShort(selection.laterality)}</span>
               </button>
             ))}
           </div>
           <figcaption>Costas</figcaption>
         </figure>
       </div>
+
+      {pendingSelection ? (
+        <div className="laterality-picker">
+          <p>
+            Região selecionada: <strong>{pendingSelection.label}</strong>. Escolha a lateralidade:
+          </p>
+          <div className="laterality-actions">
+            {LATERALITY_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={
+                  pendingSelection.laterality === option.value
+                    ? "secondary-btn active-laterality"
+                    : "secondary-btn"
+                }
+                onClick={() => handleConfirmSelection(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="danger-btn"
+              onClick={() => setPendingSelection(null)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {painSelections.length > 0 ? (
         <div className="selected-areas">
@@ -328,7 +402,7 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
               onClick={() => onRemoveRegion(selection.label)}
               title={`Remover ${selection.label}`}
             >
-              {selection.label} ×
+              {selection.label} ({formatLateralityLabel(selection.laterality)}) ×
             </button>
           ))}
         </div>

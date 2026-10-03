@@ -345,13 +345,51 @@ h5 {
 }
 
 .pain-dot span {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pain-dot-label {
+  pointer-events: none;
 }
 
 .selected-areas {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.laterality-picker {
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+  background: #fbfcfd;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.laterality-picker p {
+  margin: 0;
+  font-size: 14px;
+  color: #2f4957;
+}
+
+.laterality-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.active-laterality {
+  background: #24695c;
+  color: #ffffff;
 }
 
 .selected-area-chip {
