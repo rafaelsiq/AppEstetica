@@ -81,8 +81,6 @@ const BACK_PAIN_REGIONS = [
   { label: "Planta do pé", x: 57.5, y: 96.0 }
 ];
 
-const PAIN_REGION_CLICK_DISTANCE = 4.8;
-
 const HEALTH_CONDITIONS = [
   "Tendinite",
   "Bursite",
@@ -126,6 +124,52 @@ function getTodayISODate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getDefaultPainSelection(label) {
+  const frontRegion = FRONT_PAIN_REGIONS.find((region) => region.label === label);
+  if (frontRegion) {
+    return { label, side: "front", x: frontRegion.x, y: frontRegion.y };
+  }
+  const backRegion = BACK_PAIN_REGIONS.find((region) => region.label === label);
+  if (backRegion) {
+    return { label, side: "back", x: backRegion.x, y: backRegion.y };
+  }
+  return null;
+}
+
+function normalizePainSelections(rawSelections) {
+  if (!Array.isArray(rawSelections)) {
+    return [];
+  }
+
+  const deduplicatedByLabel = new Map();
+
+  rawSelections.forEach((selection) => {
+    if (!selection || typeof selection !== "object") {
+      return;
+    }
+    if (!PAIN_AREAS.includes(selection.label)) {
+      return;
+    }
+    if (selection.side !== "front" && selection.side !== "back") {
+      return;
+    }
+    const x = Number(selection.x);
+    const y = Number(selection.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+
+    deduplicatedByLabel.set(selection.label, {
+      label: selection.label,
+      side: selection.side,
+      x: Number(Math.min(100, Math.max(0, x)).toFixed(2)),
+      y: Number(Math.min(100, Math.max(0, y)).toFixed(2))
+    });
+  });
+
+  return Array.from(deduplicatedByLabel.values());
+}
+
 function buildEmptyAnamnese(client) {
   return {
     fullName: client?.name || "",
@@ -134,6 +178,7 @@ function buildEmptyAnamnese(client) {
     phone: client?.phone || "",
     email: "",
     painAreas: [],
+    painSelections: [],
     localPain: "",
     painRadiates: "",
     firstPainEpisode: "",
@@ -181,7 +226,7 @@ function formatDatePt(dateValue) {
   return parsed.toLocaleDateString("pt-BR");
 }
 
-function PainMapSelector({ selectedAreas, onToggleArea }) {
+function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
   const getClosestRegion = (x, y, regions) => {
     let closestRegion = null;
     let closestDistance = Number.POSITIVE_INFINITY;
@@ -194,13 +239,10 @@ function PainMapSelector({ selectedAreas, onToggleArea }) {
       }
     });
 
-    if (closestDistance <= PAIN_REGION_CLICK_DISTANCE) {
-      return closestRegion;
-    }
-    return null;
+    return closestRegion;
   };
 
-  const handleMapClick = (event, regions) => {
+  const handleMapClick = (event, regions, side) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
@@ -209,14 +251,19 @@ function PainMapSelector({ selectedAreas, onToggleArea }) {
     if (!selectedRegion) {
       return;
     }
-    onToggleArea(selectedRegion.label);
+    onSelectRegion({
+      label: selectedRegion.label,
+      side,
+      x: Number(x.toFixed(2)),
+      y: Number(y.toFixed(2))
+    });
   };
 
-  const selectedFrontRegions = FRONT_PAIN_REGIONS.filter((region) =>
-    selectedAreas.includes(region.label)
+  const selectedFrontRegions = painSelections.filter(
+    (selection) => selection.side === "front"
   );
-  const selectedBackRegions = BACK_PAIN_REGIONS.filter((region) =>
-    selectedAreas.includes(region.label)
+  const selectedBackRegions = painSelections.filter(
+    (selection) => selection.side === "back"
   );
 
   return (
@@ -228,23 +275,23 @@ function PainMapSelector({ selectedAreas, onToggleArea }) {
         <figure className="pain-map-card">
           <div
             className="pain-map-canvas"
-            onClick={(event) => handleMapClick(event, FRONT_PAIN_REGIONS)}
+            onClick={(event) => handleMapClick(event, FRONT_PAIN_REGIONS, "front")}
           >
             <img src="/pain-map-front.jpg" alt="Mapa corporal frontal para seleção de dor" />
-            {selectedFrontRegions.map((region) => (
+            {selectedFrontRegions.map((selection) => (
               <button
-                key={`front-selected-${region.label}`}
+                key={`front-selected-${selection.label}`}
                 type="button"
                 className="pain-dot selected"
-                style={{ left: `${region.x}%`, top: `${region.y}%` }}
+                style={{ left: `${selection.x}%`, top: `${selection.y}%` }}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onToggleArea(region.label);
+                  onRemoveRegion(selection.label);
                 }}
-                title={`${region.label} selecionado`}
-                aria-label={`Desmarcar ${region.label}`}
+                title={`${selection.label} selecionado`}
+                aria-label={`Desmarcar ${selection.label}`}
               >
-                <span>{region.label}</span>
+                <span>{selection.label}</span>
               </button>
             ))}
           </div>
@@ -253,23 +300,23 @@ function PainMapSelector({ selectedAreas, onToggleArea }) {
         <figure className="pain-map-card">
           <div
             className="pain-map-canvas"
-            onClick={(event) => handleMapClick(event, BACK_PAIN_REGIONS)}
+            onClick={(event) => handleMapClick(event, BACK_PAIN_REGIONS, "back")}
           >
             <img src="/pain-map-back.jpg" alt="Mapa corporal traseiro para seleção de dor" />
-            {selectedBackRegions.map((region) => (
+            {selectedBackRegions.map((selection) => (
               <button
-                key={`back-selected-${region.label}`}
+                key={`back-selected-${selection.label}`}
                 type="button"
                 className="pain-dot selected"
-                style={{ left: `${region.x}%`, top: `${region.y}%` }}
+                style={{ left: `${selection.x}%`, top: `${selection.y}%` }}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onToggleArea(region.label);
+                  onRemoveRegion(selection.label);
                 }}
-                title={`${region.label} selecionado`}
-                aria-label={`Desmarcar ${region.label}`}
+                title={`${selection.label} selecionado`}
+                aria-label={`Desmarcar ${selection.label}`}
               >
-                <span>{region.label}</span>
+                <span>{selection.label}</span>
               </button>
             ))}
           </div>
@@ -277,17 +324,17 @@ function PainMapSelector({ selectedAreas, onToggleArea }) {
         </figure>
       </div>
 
-      {selectedAreas.length > 0 ? (
+      {painSelections.length > 0 ? (
         <div className="selected-areas">
-          {selectedAreas.map((area) => (
+          {painSelections.map((selection) => (
             <button
-              key={area}
+              key={`chip-${selection.label}`}
               type="button"
               className="selected-area-chip"
-              onClick={() => onToggleArea(area)}
-              title={`Remover ${area}`}
+              onClick={() => onRemoveRegion(selection.label)}
+              title={`Remover ${selection.label}`}
             >
-              {area} ×
+              {selection.label} ×
             </button>
           ))}
         </div>
@@ -542,12 +589,23 @@ export default function App() {
       }
 
       const data = snapshot.data();
+      const normalizedPainSelections = normalizePainSelections(data.painSelections);
+      const fallbackSelectionsFromLegacyPainAreas = Array.isArray(data.painAreas)
+        ? data.painAreas
+            .filter((area) => PAIN_AREAS.includes(area))
+            .map((area) => getDefaultPainSelection(area))
+            .filter(Boolean)
+        : [];
+      const resolvedPainSelections =
+        normalizedPainSelections.length > 0
+          ? normalizedPainSelections
+          : fallbackSelectionsFromLegacyPainAreas;
+
       setAnamneseForm({
         ...buildEmptyAnamnese(selectedClient),
         ...data,
-        painAreas: Array.isArray(data.painAreas)
-          ? data.painAreas.filter((area) => PAIN_AREAS.includes(area))
-          : [],
+        painSelections: resolvedPainSelections,
+        painAreas: resolvedPainSelections.map((selection) => selection.label),
         healthConditions: Array.isArray(data.healthConditions) ? data.healthConditions : []
       });
     });
@@ -667,6 +725,35 @@ export default function App() {
     });
   };
 
+  const handleUpsertPainSelection = (newSelection) => {
+    setAnamneseForm((previous) => {
+      const currentSelections = normalizePainSelections(previous.painSelections);
+      const selectionsWithoutCurrentLabel = currentSelections.filter(
+        (selection) => selection.label !== newSelection.label
+      );
+      const nextSelections = [...selectionsWithoutCurrentLabel, newSelection];
+      return {
+        ...previous,
+        painSelections: nextSelections,
+        painAreas: nextSelections.map((selection) => selection.label)
+      };
+    });
+  };
+
+  const handleRemovePainSelection = (label) => {
+    setAnamneseForm((previous) => {
+      const currentSelections = normalizePainSelections(previous.painSelections);
+      const nextSelections = currentSelections.filter(
+        (selection) => selection.label !== label
+      );
+      return {
+        ...previous,
+        painSelections: nextSelections,
+        painAreas: nextSelections.map((selection) => selection.label)
+      };
+    });
+  };
+
   const handleSaveAnamnese = async (event) => {
     event.preventDefault();
     if (!user || !selectedClient) {
@@ -674,10 +761,13 @@ export default function App() {
     }
 
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
+    const normalizedPainSelections = normalizePainSelections(anamneseForm.painSelections);
     const payload = {
       ...anamneseForm,
       fullName: anamneseForm.fullName || selectedClient.name || "",
       phone: anamneseForm.phone || selectedClient.phone || "",
+      painSelections: normalizedPainSelections,
+      painAreas: normalizedPainSelections.map((selection) => selection.label),
       clientId: selectedClient.id,
       clientName: selectedClient.name || "",
       updatedAt: serverTimestamp()
@@ -1020,8 +1110,9 @@ export default function App() {
 
                 <h5>Círculo das dores principais</h5>
                 <PainMapSelector
-                  selectedAreas={anamneseForm.painAreas}
-                  onToggleArea={(area) => toggleArrayValue("painAreas", area)}
+                  painSelections={anamneseForm.painSelections}
+                  onSelectRegion={handleUpsertPainSelection}
+                  onRemoveRegion={handleRemovePainSelection}
                 />
 
                 <h5>Perguntas-chave</h5>
