@@ -290,26 +290,37 @@ h5 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  position: relative;
+  overflow: visible;
 }
 
 .pain-map-card {
+  position: relative;
   margin: 0;
   border: 1px solid #d7dde3;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   background: #ffffff;
+  z-index: 1;
+}
+
+.pain-map-card.has-tooltip {
+  z-index: 30;
 }
 
 .pain-map-canvas {
   position: relative;
   line-height: 0;
   cursor: crosshair;
+  overflow: visible;
 }
 
 .pain-map-card img {
   display: block;
   width: 100%;
   height: auto;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
 }
 
 .pain-map-card figcaption {
@@ -384,7 +395,7 @@ h5 {
   display: grid;
   gap: 6px;
   min-width: 240px;
-  z-index: 4;
+  z-index: 60;
 }
 
 .laterality-tooltip::after {

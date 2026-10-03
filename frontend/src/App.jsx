@@ -371,7 +371,11 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
         ponto clicado. Toque na bolinha para desmarcar.
       </p>
       <div className="pain-map-grid">
-        <figure className="pain-map-card">
+        <figure
+          className={`pain-map-card ${
+            pendingSelection?.side === "front" ? "has-tooltip" : ""
+          }`}
+        >
           <div
             className="pain-map-canvas"
             onClick={(event) => handleMapClick(event, FRONT_PAIN_REGIONS, "front")}
@@ -397,7 +401,11 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
           </div>
           <figcaption>Frente</figcaption>
         </figure>
-        <figure className="pain-map-card">
+        <figure
+          className={`pain-map-card ${
+            pendingSelection?.side === "back" ? "has-tooltip" : ""
+          }`}
+        >
           <div
             className="pain-map-canvas"
             onClick={(event) => handleMapClick(event, BACK_PAIN_REGIONS, "back")}
