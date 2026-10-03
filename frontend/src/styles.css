@@ -364,6 +364,22 @@ h5 {
   cursor: pointer;
 }
 
+.static-client-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fbfcfd;
+}
+
+.static-client-grid p {
+  margin: 2px 0;
+  font-size: 14px;
+  color: #2f4957;
+}
+
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -464,6 +480,10 @@ h5 {
   }
 
   .pain-map-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .static-client-grid {
     grid-template-columns: 1fr;
   }
 

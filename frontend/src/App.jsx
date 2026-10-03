@@ -172,14 +172,8 @@ function normalizePainSelections(rawSelections) {
 
 function buildEmptyAnamnese(client) {
   return {
-    fullName: client?.name || "",
-    birthDate: "",
-    address: "",
-    phone: client?.phone || "",
-    email: "",
     painAreas: [],
     painSelections: [],
-    localPain: "",
     painRadiates: "",
     firstPainEpisode: "",
     painType: "",
@@ -496,6 +490,9 @@ export default function App() {
 
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientBirthDate, setClientBirthDate] = useState("");
+  const [clientAddress, setClientAddress] = useState("");
   const [serviceTitle, setServiceTitle] = useState("");
   const [servicePrice, setServicePrice] = useState("");
   const [appointmentClient, setAppointmentClient] = useState("");
@@ -655,11 +652,17 @@ export default function App() {
     await addDoc(collection(db, "users", user.uid, "clients"), {
       name: clientName.trim(),
       phone: clientPhone.trim(),
+      email: clientEmail.trim(),
+      birthDate: clientBirthDate,
+      address: clientAddress.trim(),
       createdAt: serverTimestamp()
     });
 
     setClientName("");
     setClientPhone("");
+    setClientEmail("");
+    setClientBirthDate("");
+    setClientAddress("");
   };
 
   const handleAddService = async (event) => {
@@ -764,8 +767,6 @@ export default function App() {
     const normalizedPainSelections = normalizePainSelections(anamneseForm.painSelections);
     const payload = {
       ...anamneseForm,
-      fullName: anamneseForm.fullName || selectedClient.name || "",
-      phone: anamneseForm.phone || selectedClient.phone || "",
       painSelections: normalizedPainSelections,
       painAreas: normalizedPainSelections.map((selection) => selection.label),
       clientId: selectedClient.id,
@@ -998,7 +999,7 @@ export default function App() {
       {activeTab === TABS.CLIENTES ? (
         <section className="card">
           <h3>Clientes</h3>
-          <form className="form" onSubmit={handleAddClient}>
+          <form className="form grid-form" onSubmit={handleAddClient}>
             <label>
               Nome
               <input
@@ -1016,7 +1017,32 @@ export default function App() {
                 placeholder="(00) 00000-0000"
               />
             </label>
-            <button className="primary-btn" type="submit">
+            <label>
+              E-mail
+              <input
+                type="email"
+                value={clientEmail}
+                onChange={(event) => setClientEmail(event.target.value)}
+                placeholder="cliente@email.com"
+              />
+            </label>
+            <label>
+              Data de nascimento
+              <input
+                type="date"
+                value={clientBirthDate}
+                onChange={(event) => setClientBirthDate(event.target.value)}
+              />
+            </label>
+            <label className="full-row">
+              Endereço
+              <input
+                value={clientAddress}
+                onChange={(event) => setClientAddress(event.target.value)}
+                placeholder="Rua, número, bairro e cidade"
+              />
+            </label>
+            <button className="primary-btn full-row" type="submit">
               Adicionar cliente
             </button>
           </form>
@@ -1030,6 +1056,8 @@ export default function App() {
                   <div>
                     <strong>{client.name}</strong>
                     <p>{client.phone || "Sem telefone"}</p>
+                    {client.email ? <p>{client.email}</p> : null}
+                    {client.birthDate ? <p>Nascimento: {formatDatePt(client.birthDate)}</p> : null}
                   </div>
                   <div className="inline-actions">
                     <button
@@ -1058,6 +1086,9 @@ export default function App() {
                 <div>
                   <h4>Ficha de Anamnese - {selectedClient.name}</h4>
                   <p>Registre as informações clínicas e acompanhe evolução por sessão.</p>
+                  <p className="muted-text">
+                    Dados pessoais ficam no cadastro da cliente e são fixos.
+                  </p>
                 </div>
                 <button type="button" className="secondary-btn" onClick={() => setSelectedClientId("")}>
                   Fechar
@@ -1065,47 +1096,24 @@ export default function App() {
               </div>
 
               <form className="form" onSubmit={handleSaveAnamnese}>
-                <h5>Dados Pessoais</h5>
-                <div className="grid-form">
-                  <label>
-                    Nome
-                    <input
-                      value={anamneseForm.fullName}
-                      onChange={(event) => handleAnamneseFieldChange("fullName", event.target.value)}
-                      placeholder="Nome da cliente"
-                    />
-                  </label>
-                  <label>
-                    Data de nascimento
-                    <input
-                      type="date"
-                      value={anamneseForm.birthDate}
-                      onChange={(event) => handleAnamneseFieldChange("birthDate", event.target.value)}
-                    />
-                  </label>
-                  <label className="full-row">
-                    Endereço
-                    <input
-                      value={anamneseForm.address}
-                      onChange={(event) => handleAnamneseFieldChange("address", event.target.value)}
-                      placeholder="Rua, número, bairro e cidade"
-                    />
-                  </label>
-                  <label>
-                    Telefone
-                    <input
-                      value={anamneseForm.phone}
-                      onChange={(event) => handleAnamneseFieldChange("phone", event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    E-mail
-                    <input
-                      type="email"
-                      value={anamneseForm.email}
-                      onChange={(event) => handleAnamneseFieldChange("email", event.target.value)}
-                    />
-                  </label>
+                <h5>Dados pessoais (cadastro)</h5>
+                <div className="static-client-grid">
+                  <p>
+                    <strong>Nome:</strong> {selectedClient.name}
+                  </p>
+                  <p>
+                    <strong>Telefone:</strong> {selectedClient.phone || "Não informado"}
+                  </p>
+                  <p>
+                    <strong>E-mail:</strong> {selectedClient.email || "Não informado"}
+                  </p>
+                  <p>
+                    <strong>Nascimento:</strong>{" "}
+                    {selectedClient.birthDate ? formatDatePt(selectedClient.birthDate) : "Não informado"}
+                  </p>
+                  <p className="full-row">
+                    <strong>Endereço:</strong> {selectedClient.address || "Não informado"}
+                  </p>
                 </div>
 
                 <h5>Círculo das dores principais</h5>
