@@ -187,43 +187,47 @@ function PainMapSelector({ selectedAreas, onToggleArea }) {
       </p>
       <div className="pain-map-grid">
         <figure className="pain-map-card">
-          <img src="/pain-map-front.jpg" alt="Mapa corporal frontal para seleção de dor" />
-          {FRONT_PAIN_REGIONS.map((region) => {
-            const isSelected = selectedAreas.includes(region.label);
-            return (
-              <button
-                key={`front-${region.label}`}
-                type="button"
-                className={`pain-dot ${isSelected ? "selected" : ""}`}
-                style={{ left: `${region.x}%`, top: `${region.y}%` }}
-                onClick={() => onToggleArea(region.label)}
-                title={region.label}
-                aria-label={`Selecionar ${region.label}`}
-              >
-                <span>{region.label}</span>
-              </button>
-            );
-          })}
+          <div className="pain-map-canvas">
+            <img src="/pain-map-front.jpg" alt="Mapa corporal frontal para seleção de dor" />
+            {FRONT_PAIN_REGIONS.map((region) => {
+              const isSelected = selectedAreas.includes(region.label);
+              return (
+                <button
+                  key={`front-${region.label}`}
+                  type="button"
+                  className={`pain-dot ${isSelected ? "selected" : ""}`}
+                  style={{ left: `${region.x}%`, top: `${region.y}%` }}
+                  onClick={() => onToggleArea(region.label)}
+                  title={region.label}
+                  aria-label={`Selecionar ${region.label}`}
+                >
+                  <span>{region.label}</span>
+                </button>
+              );
+            })}
+          </div>
           <figcaption>Frente</figcaption>
         </figure>
         <figure className="pain-map-card">
-          <img src="/pain-map-back.jpg" alt="Mapa corporal traseiro para seleção de dor" />
-          {BACK_PAIN_REGIONS.map((region) => {
-            const isSelected = selectedAreas.includes(region.label);
-            return (
-              <button
-                key={`back-${region.label}`}
-                type="button"
-                className={`pain-dot ${isSelected ? "selected" : ""}`}
-                style={{ left: `${region.x}%`, top: `${region.y}%` }}
-                onClick={() => onToggleArea(region.label)}
-                title={region.label}
-                aria-label={`Selecionar ${region.label}`}
-              >
-                <span>{region.label}</span>
-              </button>
-            );
-          })}
+          <div className="pain-map-canvas">
+            <img src="/pain-map-back.jpg" alt="Mapa corporal traseiro para seleção de dor" />
+            {BACK_PAIN_REGIONS.map((region) => {
+              const isSelected = selectedAreas.includes(region.label);
+              return (
+                <button
+                  key={`back-${region.label}`}
+                  type="button"
+                  className={`pain-dot ${isSelected ? "selected" : ""}`}
+                  style={{ left: `${region.x}%`, top: `${region.y}%` }}
+                  onClick={() => onToggleArea(region.label)}
+                  title={region.label}
+                  aria-label={`Selecionar ${region.label}`}
+                >
+                  <span>{region.label}</span>
+                </button>
+              );
+            })}
+          </div>
           <figcaption>Costas</figcaption>
         </figure>
       </div>

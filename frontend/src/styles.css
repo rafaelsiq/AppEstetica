@@ -293,12 +293,16 @@ h5 {
 }
 
 .pain-map-card {
-  position: relative;
   margin: 0;
   border: 1px solid #d7dde3;
   border-radius: 12px;
   overflow: hidden;
   background: #ffffff;
+}
+
+.pain-map-canvas {
+  position: relative;
+  line-height: 0;
 }
 
 .pain-map-card img {
@@ -318,13 +322,14 @@ h5 {
 .pain-dot {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   border: 2px solid #57752a;
   background: rgba(200, 220, 122, 0.6);
   cursor: pointer;
   padding: 0;
+  z-index: 2;
   transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
