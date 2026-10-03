@@ -344,6 +344,13 @@ h5 {
   box-shadow: 0 0 0 3px rgba(45, 143, 61, 0.25);
 }
 
+.pain-dot.pending {
+  background: #f6cc6c;
+  border-color: #b37b10;
+  box-shadow: 0 0 0 3px rgba(246, 204, 108, 0.3);
+  pointer-events: none;
+}
+
 .pain-dot span {
   display: inline-flex;
   align-items: center;
@@ -366,22 +373,49 @@ h5 {
   gap: 8px;
 }
 
-.laterality-picker {
+.laterality-tooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 16px));
   border: 1px solid #d7dde3;
   border-radius: 12px;
-  background: #fbfcfd;
-  padding: 10px 12px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(16, 29, 44, 0.15);
+  padding: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  min-width: 240px;
+  z-index: 4;
 }
 
-.laterality-picker p {
+.laterality-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #ffffff;
+}
+
+.laterality-tooltip.below {
+  transform: translate(-50%, 16px);
+}
+
+.laterality-tooltip.below::after {
+  bottom: auto;
+  top: -8px;
+  border-top: none;
+  border-bottom: 8px solid #ffffff;
+}
+
+.laterality-tooltip p {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #2f4957;
 }
 
-.laterality-actions {
+.laterality-tooltip-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

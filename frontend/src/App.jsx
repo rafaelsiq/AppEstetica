@@ -309,6 +309,54 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
     setPendingSelection(null);
   };
 
+  const renderLateralityTooltip = (side) => {
+    if (!pendingSelection || pendingSelection.side !== side) {
+      return null;
+    }
+
+    return (
+      <>
+        <span
+          className="pain-dot pending"
+          style={{ left: `${pendingSelection.x}%`, top: `${pendingSelection.y}%` }}
+          aria-hidden
+        />
+        <div
+          className={`laterality-tooltip ${pendingSelection.y < 18 ? "below" : ""}`}
+          style={{ left: `${pendingSelection.x}%`, top: `${pendingSelection.y}%` }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <p>
+            <strong>{pendingSelection.label}</strong> - qual lado?
+          </p>
+          <div className="laterality-tooltip-actions">
+            {LATERALITY_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={
+                  pendingSelection.laterality === option.value
+                    ? "secondary-btn active-laterality"
+                    : "secondary-btn"
+                }
+                onClick={() => handleConfirmSelection(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="danger-btn"
+              onClick={() => setPendingSelection(null)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  };
+
   const selectedFrontRegions = painSelections.filter(
     (selection) => selection.side === "front"
   );
@@ -319,8 +367,8 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
   return (
     <div className="pain-map-section">
       <p className="muted-text">
-        Toque na região do corpo para marcar dor, escolha lateralidade (esquerdo/direito/ambos)
-        e toque na bolinha para desmarcar.
+        Toque na região do corpo para marcar dor. A lateralidade aparecerá em um tooltip no
+        ponto clicado. Toque na bolinha para desmarcar.
       </p>
       <div className="pain-map-grid">
         <figure className="pain-map-card">
@@ -345,6 +393,7 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
                 <span className="pain-dot-label">{formatLateralityShort(selection.laterality)}</span>
               </button>
             ))}
+            {renderLateralityTooltip("front")}
           </div>
           <figcaption>Frente</figcaption>
         </figure>
@@ -370,41 +419,11 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
                 <span className="pain-dot-label">{formatLateralityShort(selection.laterality)}</span>
               </button>
             ))}
+            {renderLateralityTooltip("back")}
           </div>
           <figcaption>Costas</figcaption>
         </figure>
       </div>
-
-      {pendingSelection ? (
-        <div className="laterality-picker">
-          <p>
-            Região selecionada: <strong>{pendingSelection.label}</strong>. Escolha a lateralidade:
-          </p>
-          <div className="laterality-actions">
-            {LATERALITY_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={
-                  pendingSelection.laterality === option.value
-                    ? "secondary-btn active-laterality"
-                    : "secondary-btn"
-                }
-                onClick={() => handleConfirmSelection(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="danger-btn"
-              onClick={() => setPendingSelection(null)}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {painSelections.length > 0 ? (
         <div className="selected-areas">
