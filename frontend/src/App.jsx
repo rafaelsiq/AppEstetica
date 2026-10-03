@@ -610,6 +610,7 @@ export default function App() {
   const [clientSex, setClientSex] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [editingClientId, setEditingClientId] = useState("");
+  const [isClientFormOpen, setIsClientFormOpen] = useState(false);
   const [clientFormMessage, setClientFormMessage] = useState("");
   const [serviceTitle, setServiceTitle] = useState("");
   const [servicePrice, setServicePrice] = useState("");
@@ -632,6 +633,7 @@ export default function App() {
     setClientSex("");
     setClientAddress("");
     setEditingClientId("");
+    setIsClientFormOpen(false);
   };
 
   useEffect(() => {
@@ -813,6 +815,18 @@ export default function App() {
     setTimeout(() => setClientFormMessage(""), 2500);
   };
 
+  const handleStartCreateClient = () => {
+    setClientName("");
+    setClientPhone("");
+    setClientEmail("");
+    setClientBirthDate("");
+    setClientSex("");
+    setClientAddress("");
+    setEditingClientId("");
+    setIsClientFormOpen(true);
+    setClientFormMessage("");
+  };
+
   const handleEditClient = (client) => {
     setClientName(client.name || "");
     setClientPhone(client.phone || "");
@@ -821,6 +835,7 @@ export default function App() {
     setClientSex(client.sex || "");
     setClientAddress(client.address || "");
     setEditingClientId(client.id);
+    setIsClientFormOpen(true);
     setClientFormMessage("");
   };
 
@@ -1157,76 +1172,14 @@ export default function App() {
 
       {activeTab === TABS.CLIENTES ? (
         <section className="card">
-          <h3>Clientes</h3>
-          <form className="form grid-form" onSubmit={handleSaveClient}>
-            <label>
-              Nome
-              <input
-                value={clientName}
-                onChange={(event) => setClientName(event.target.value)}
-                placeholder="Nome completo"
-                required
-              />
-            </label>
-            <label>
-              Telefone
-              <input
-                value={clientPhone}
-                onChange={(event) => setClientPhone(event.target.value)}
-                placeholder="(00) 00000-0000"
-              />
-            </label>
-            <label>
-              E-mail
-              <input
-                type="email"
-                value={clientEmail}
-                onChange={(event) => setClientEmail(event.target.value)}
-                placeholder="cliente@email.com"
-              />
-            </label>
-            <label>
-              Data de nascimento
-              <input
-                type="date"
-                value={clientBirthDate}
-                onChange={(event) => setClientBirthDate(event.target.value)}
-              />
-            </label>
-            <label>
-              Sexo
-              <select value={clientSex} onChange={(event) => setClientSex(event.target.value)}>
-                {SEX_OPTIONS.map((option) => (
-                  <option key={option.value || "empty"} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="full-row">
-              Endereço
-              <input
-                value={clientAddress}
-                onChange={(event) => setClientAddress(event.target.value)}
-                placeholder="Rua, número, bairro e cidade"
-              />
-            </label>
-
-            {clientFormMessage ? <p className="success-text full-row">{clientFormMessage}</p> : null}
-
-            <button className="primary-btn full-row" type="submit">
-              {editingClientId ? "Salvar alterações da cliente" : "Adicionar cliente"}
+          <div className="section-header">
+            <h3>Clientes</h3>
+            <button type="button" className="primary-btn" onClick={handleStartCreateClient}>
+              Nova cliente
             </button>
-            {editingClientId ? (
-              <button
-                type="button"
-                className="secondary-btn full-row"
-                onClick={resetClientForm}
-              >
-                Cancelar edição
-              </button>
-            ) : null}
-          </form>
+          </div>
+
+          {clientFormMessage ? <p className="success-text">{clientFormMessage}</p> : null}
 
           <ul className="list">
             {clients.length === 0 ? (
@@ -1268,6 +1221,77 @@ export default function App() {
               ))
             )}
           </ul>
+
+          {isClientFormOpen ? (
+            <section className="client-form-panel">
+              <h4>{editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}</h4>
+              <form className="form grid-form" onSubmit={handleSaveClient}>
+                <label>
+                  Nome
+                  <input
+                    value={clientName}
+                    onChange={(event) => setClientName(event.target.value)}
+                    placeholder="Nome completo"
+                    required
+                  />
+                </label>
+                <label>
+                  Telefone
+                  <input
+                    value={clientPhone}
+                    onChange={(event) => setClientPhone(event.target.value)}
+                    placeholder="(00) 00000-0000"
+                  />
+                </label>
+                <label>
+                  E-mail
+                  <input
+                    type="email"
+                    value={clientEmail}
+                    onChange={(event) => setClientEmail(event.target.value)}
+                    placeholder="cliente@email.com"
+                  />
+                </label>
+                <label>
+                  Data de nascimento
+                  <input
+                    type="date"
+                    value={clientBirthDate}
+                    onChange={(event) => setClientBirthDate(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Sexo
+                  <select value={clientSex} onChange={(event) => setClientSex(event.target.value)}>
+                    {SEX_OPTIONS.map((option) => (
+                      <option key={option.value || "empty"} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="full-row">
+                  Endereço
+                  <input
+                    value={clientAddress}
+                    onChange={(event) => setClientAddress(event.target.value)}
+                    placeholder="Rua, número, bairro e cidade"
+                  />
+                </label>
+
+                <button className="primary-btn full-row" type="submit">
+                  {editingClientId ? "Salvar alterações da cliente" : "Adicionar cliente"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn full-row"
+                  onClick={resetClientForm}
+                >
+                  Cancelar
+                </button>
+              </form>
+            </section>
+          ) : null}
 
           {selectedClient ? (
             <section className="anamnese-panel">

@@ -180,6 +180,17 @@ select:focus {
   color: #54656f;
 }
 
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-header h3 {
+  margin: 0;
+}
+
 .tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -235,6 +246,18 @@ select:focus {
   padding-top: 18px;
   display: grid;
   gap: 12px;
+}
+
+.client-form-panel {
+  margin-top: 16px;
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+  background: #fbfcfd;
+  padding: 14px;
+}
+
+.client-form-panel h4 {
+  margin: 0 0 12px 0;
 }
 
 .panel-header {
@@ -552,6 +575,11 @@ h5 {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .checkbox-grid {

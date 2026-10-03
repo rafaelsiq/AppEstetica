@@ -17,6 +17,8 @@ Aplicação web em React + Vite com autenticação Firebase e persistência no F
   - Bloco "Para mulheres" exibido de forma condicional conforme sexo da cliente
   - Sessões de acompanhamento
 - Cadastro de cliente com edição (atualização de dados sem recriar registro)
+  - Lista de clientes exibida antes do formulário
+  - Formulário exibido somente em ações de "Nova cliente" ou "Editar"
 - Gráficos de evolução por cliente:
   - Dor x estresse
   - Sono por sessão
