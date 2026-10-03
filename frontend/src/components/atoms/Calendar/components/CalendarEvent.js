@@ -1,51 +1,41 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 
-export const CalendarEvent = (event) => {
-    const {
-        startTime,
-        endTime,
-        description,
-        subdescription,
-        id
-    } = event?.events
+export const CalendarEvent = ({ events }) => {
+    const { startTime, endTime, description, subdescription, id } = events;
 
     const diferencaEmMinutos = (dataInicio, dataFim) => {
         const diffEmMilissegundos = dataFim - dataInicio;
-        let diffEmMinutos = diffEmMilissegundos / (1000 * 60);
-        if (diffEmMinutos < 0)
-            diffEmMinutos = diffEmMinutos * -1
-        let aux = diffEmMinutos / 1.5;
-        return aux
-    }
-    const diferencaMarginTop = (startTime) => {
-        return initalMargin = 39 * startTime.getMinutes() / 100
-    }
-    const heightTotal = diferencaEmMinutos(startTime, endTime) - 1;
-    const marginTopAdjust = diferencaMarginTop(startTime)
-    onEventPress = (evt) => {
+        const diffEmMinutos = Math.abs(diffEmMilissegundos / (1000 * 60));
+        return diffEmMinutos / 1.5;
     };
 
-    const [pastedEvent, setPastedEvent] = useState(false);
+    const diferencaMarginTop = (start) => 39 * start.getMinutes() / 100;
+
+    const heightTotal = diferencaEmMinutos(startTime, endTime) - 1;
+    const marginTopAdjust = diferencaMarginTop(startTime);
+    const onEventPress = () => { };
+
+    const [passedEvent, setPassedEvent] = useState(false);
 
     useEffect(() => {
-        const updateCurrentTimePosition = () => {
+        const updatePassed = () => {
             const now = new Date();
             const eventTime = endTime.getHours() * 60 + endTime.getMinutes();
-            const nowTime = now.getHours() * 60 + now.getMinutes()
-            setPastedEvent(eventTime > nowTime)
+            const nowTime = now.getHours() * 60 + now.getMinutes();
+            setPassedEvent(eventTime < nowTime);
         };
-        const intervalId = setInterval(updateCurrentTimePosition, 2000);
-        updateCurrentTimePosition();
+        const intervalId = setInterval(updatePassed, 60000);
+        updatePassed();
         return () => clearInterval(intervalId);
-    }, []);
+    }, [endTime]);
     return (
         <View style={[styles.eventsContainer, { zIndex: startTime.getHours() }]}>
             {
                 <View
                     key={id}
                     style={[
-                        pastedEvent ? styles.eventRow : styles.eventRowPasted,
+                        passedEvent ? styles.eventRowPasted : styles.eventRow,
                         {
                             display: 'flex',
                             height: heightTotal,

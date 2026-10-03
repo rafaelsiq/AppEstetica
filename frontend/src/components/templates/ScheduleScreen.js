@@ -23,10 +23,7 @@ const ScheduleScreen = () => {
     const hideKeyboard = () => {
         Keyboard.dismiss();
     };
-    
-    scrollViewRef = (ref) => {
-        this.timetableRef = ref; 
-    };
+
 
     return (
         <SafeAreaView onTouchStart={hideKeyboard} style={styles.container}>

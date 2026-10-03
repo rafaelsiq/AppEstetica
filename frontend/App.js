@@ -3,6 +3,10 @@ import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import StackNavigator from './StackNavigator';
 import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+import { View } from 'react-native';
+
+SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -18,9 +22,11 @@ export default function App() {
     return null;
   }
   return (
-    <NavigationContainer>
-      <StackNavigator />
-      <StatusBar style='dark' />
-    </NavigationContainer>
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <NavigationContainer>
+        <StackNavigator />
+        <StatusBar style='dark' />
+      </NavigationContainer>
+    </View>
   );
 }
