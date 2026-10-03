@@ -281,6 +281,83 @@ h5 {
   margin: 0;
 }
 
+.pain-map-section {
+  display: grid;
+  gap: 10px;
+}
+
+.pain-map-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pain-map-card {
+  position: relative;
+  margin: 0;
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.pain-map-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.pain-map-card figcaption {
+  text-align: center;
+  font-size: 13px;
+  color: #4a5d68;
+  padding: 6px 8px 8px;
+  border-top: 1px solid #e4e9ee;
+}
+
+.pain-dot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #57752a;
+  background: rgba(200, 220, 122, 0.6);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pain-dot:hover {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.pain-dot.selected {
+  background: #2d8f3d;
+  border-color: #1f692b;
+  box-shadow: 0 0 0 3px rgba(45, 143, 61, 0.25);
+}
+
+.pain-dot span {
+  display: none;
+}
+
+.selected-areas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-area-chip {
+  border: 1px solid #2d8f3d;
+  color: #1f692b;
+  border-radius: 999px;
+  background: #eaf8eb;
+  font-size: 13px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -377,6 +454,10 @@ h5 {
   }
 
   .charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pain-map-grid {
     grid-template-columns: 1fr;
   }
 

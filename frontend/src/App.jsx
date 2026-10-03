@@ -24,20 +24,23 @@ const TABS = {
 
 const PAIN_AREAS = [
   "Cabeça",
+  "Articulação temporomandibular",
   "Pescoço",
   "Ombro",
   "Braço",
   "Antebraço",
   "Mão",
   "Dedos",
-  "Peitoral",
+  "Peito",
   "Abdômen",
   "Cintura",
   "Quadril",
   "Coxa",
+  "Coxa posterior",
   "Joelho",
   "Perna",
   "Tornozelo",
+  "Pé",
   "Cervical",
   "Escápula",
   "Cotovelo",
@@ -45,6 +48,37 @@ const PAIN_AREAS = [
   "Glúteo",
   "Panturrilha",
   "Planta do pé"
+];
+
+const FRONT_PAIN_REGIONS = [
+  { label: "Cabeça", x: 50.2, y: 6.2 },
+  { label: "Articulação temporomandibular", x: 57.8, y: 12.8 },
+  { label: "Pescoço", x: 57.8, y: 18.1 },
+  { label: "Ombro", x: 38.3, y: 27.7 },
+  { label: "Braço", x: 35.6, y: 37.0 },
+  { label: "Antebraço", x: 30.9, y: 47.0 },
+  { label: "Mão", x: 31.1, y: 56.9 },
+  { label: "Dedos", x: 35.0, y: 61.2 },
+  { label: "Peito", x: 57.8, y: 27.0 },
+  { label: "Abdômen", x: 51.7, y: 48.0 },
+  { label: "Cintura", x: 61.0, y: 48.0 },
+  { label: "Quadril", x: 64.6, y: 58.5 },
+  { label: "Coxa", x: 58.5, y: 67.7 },
+  { label: "Joelho", x: 62.6, y: 75.8 },
+  { label: "Perna", x: 45.1, y: 83.4 },
+  { label: "Tornozelo", x: 41.5, y: 92.4 },
+  { label: "Pé", x: 60.6, y: 96.0 }
+];
+
+const BACK_PAIN_REGIONS = [
+  { label: "Cervical", x: 50.0, y: 16.7 },
+  { label: "Escápula", x: 59.3, y: 28.0 },
+  { label: "Cotovelo", x: 66.7, y: 39.1 },
+  { label: "Lombar", x: 49.3, y: 48.2 },
+  { label: "Glúteo", x: 55.8, y: 55.7 },
+  { label: "Coxa posterior", x: 40.2, y: 68.4 },
+  { label: "Panturrilha", x: 38.7, y: 79.5 },
+  { label: "Planta do pé", x: 57.5, y: 96.0 }
 ];
 
 const HEALTH_CONDITIONS = [
@@ -143,6 +177,76 @@ function formatDatePt(dateValue) {
     return dateValue;
   }
   return parsed.toLocaleDateString("pt-BR");
+}
+
+function PainMapSelector({ selectedAreas, onToggleArea }) {
+  return (
+    <div className="pain-map-section">
+      <p className="muted-text">
+        Toque nos pontos do mapa corporal para marcar/desmarcar regiões de dor.
+      </p>
+      <div className="pain-map-grid">
+        <figure className="pain-map-card">
+          <img src="/pain-map-front.jpg" alt="Mapa corporal frontal para seleção de dor" />
+          {FRONT_PAIN_REGIONS.map((region) => {
+            const isSelected = selectedAreas.includes(region.label);
+            return (
+              <button
+                key={`front-${region.label}`}
+                type="button"
+                className={`pain-dot ${isSelected ? "selected" : ""}`}
+                style={{ left: `${region.x}%`, top: `${region.y}%` }}
+                onClick={() => onToggleArea(region.label)}
+                title={region.label}
+                aria-label={`Selecionar ${region.label}`}
+              >
+                <span>{region.label}</span>
+              </button>
+            );
+          })}
+          <figcaption>Frente</figcaption>
+        </figure>
+        <figure className="pain-map-card">
+          <img src="/pain-map-back.jpg" alt="Mapa corporal traseiro para seleção de dor" />
+          {BACK_PAIN_REGIONS.map((region) => {
+            const isSelected = selectedAreas.includes(region.label);
+            return (
+              <button
+                key={`back-${region.label}`}
+                type="button"
+                className={`pain-dot ${isSelected ? "selected" : ""}`}
+                style={{ left: `${region.x}%`, top: `${region.y}%` }}
+                onClick={() => onToggleArea(region.label)}
+                title={region.label}
+                aria-label={`Selecionar ${region.label}`}
+              >
+                <span>{region.label}</span>
+              </button>
+            );
+          })}
+          <figcaption>Costas</figcaption>
+        </figure>
+      </div>
+
+      {selectedAreas.length > 0 ? (
+        <div className="selected-areas">
+          {selectedAreas.map((area) => (
+            <button
+              key={area}
+              type="button"
+              className="selected-area-chip"
+              onClick={() => onToggleArea(area)}
+              title={`Remover ${area}`}
+            >
+              {area} ×
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="muted-text">Nenhuma região selecionada.</p>
+      )}
+    </div>
+  );
 }
 
 function ProgressLineChart({ title, points, firstMetric, secondMetric, maxValue }) {
@@ -392,7 +496,9 @@ export default function App() {
       setAnamneseForm({
         ...buildEmptyAnamnese(selectedClient),
         ...data,
-        painAreas: Array.isArray(data.painAreas) ? data.painAreas : [],
+        painAreas: Array.isArray(data.painAreas)
+          ? data.painAreas.filter((area) => PAIN_AREAS.includes(area))
+          : [],
         healthConditions: Array.isArray(data.healthConditions) ? data.healthConditions : []
       });
     });
@@ -864,18 +970,10 @@ export default function App() {
                 </div>
 
                 <h5>Círculo das dores principais</h5>
-                <div className="checkbox-grid">
-                  {PAIN_AREAS.map((area) => (
-                    <label key={area} className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        checked={anamneseForm.painAreas.includes(area)}
-                        onChange={() => toggleArrayValue("painAreas", area)}
-                      />
-                      {area}
-                    </label>
-                  ))}
-                </div>
+                <PainMapSelector
+                  selectedAreas={anamneseForm.painAreas}
+                  onToggleArea={(area) => toggleArrayValue("painAreas", area)}
+                />
 
                 <h5>Perguntas-chave</h5>
                 <div className="form">

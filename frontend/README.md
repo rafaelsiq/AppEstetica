@@ -11,7 +11,7 @@ Aplicação web em React + Vite com autenticação Firebase e persistência no F
   - Serviços
 - Ficha de anamnese por cliente com:
   - Dados pessoais
-  - Mapa de dores
+  - Mapa de dores interativo (frente e costas com seleção por imagem)
   - Perguntas-chave
   - Condições de saúde
   - Sessões de acompanhamento
