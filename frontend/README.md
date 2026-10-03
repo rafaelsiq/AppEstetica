@@ -9,6 +9,15 @@ Aplicação web em React + Vite com autenticação Firebase e persistência no F
   - Agenda
   - Clientes
   - Serviços
+- Ficha de anamnese por cliente com:
+  - Dados pessoais
+  - Mapa de dores
+  - Perguntas-chave
+  - Condições de saúde
+  - Sessões de acompanhamento
+- Gráficos de evolução por cliente:
+  - Dor x estresse
+  - Sono por sessão
 - PWA habilitada (instalável no navegador)
 
 ## Como rodar

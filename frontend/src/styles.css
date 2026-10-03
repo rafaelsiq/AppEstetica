@@ -94,7 +94,29 @@ input {
   font-size: 15px;
 }
 
+textarea,
+select {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #c6d0d7;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-family: inherit;
+  background: #ffffff;
+}
+
+textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
 input:focus {
+  outline: 2px solid rgba(36, 105, 92, 0.35);
+  border-color: #24695c;
+}
+
+textarea:focus,
+select:focus {
   outline: 2px solid rgba(36, 105, 92, 0.35);
   border-color: #24695c;
 }
@@ -128,6 +150,13 @@ input:focus {
   color: #b62525;
   font-size: 14px;
   margin: 0;
+}
+
+.success-text {
+  color: #1e734e;
+  font-size: 14px;
+  margin: 0;
+  font-weight: 600;
 }
 
 .app-page {
@@ -194,6 +223,145 @@ input:focus {
   color: #54656f;
 }
 
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.anamnese-panel {
+  margin-top: 18px;
+  border-top: 1px solid #d7dde3;
+  padding-top: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.panel-header h4 {
+  margin: 0;
+}
+
+.panel-header p {
+  margin: 6px 0 0;
+  color: #54656f;
+}
+
+h5 {
+  margin: 8px 0 4px;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #2f4957;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.muted-text {
+  color: #54656f;
+  margin: 0;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chart-card {
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fbfcfd;
+}
+
+.chart-card h5 {
+  margin-top: 0;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+}
+
+.chart-grid {
+  stroke: #d2dbe2;
+  stroke-width: 1;
+}
+
+.chart-axis,
+.chart-axis-x {
+  fill: #6a7a84;
+  font-size: 10px;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.chart-line-primary {
+  stroke: #24695c;
+}
+
+.chart-line-secondary {
+  stroke: #cc6e22;
+}
+
+.chart-point-primary {
+  fill: #24695c;
+}
+
+.chart-point-secondary {
+  fill: #cc6e22;
+}
+
+.chart-legend {
+  margin-top: 8px;
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.legend-primary {
+  background: #24695c;
+}
+
+.legend-secondary {
+  background: #cc6e22;
+}
+
+.chart-bar {
+  fill: #4a85c7;
+}
+
 @media (max-width: 640px) {
   .grid-form {
     grid-template-columns: 1fr;
@@ -202,5 +370,22 @@ input:focus {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .checkbox-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-header {
+    flex-direction: column;
+  }
+
+  .inline-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
