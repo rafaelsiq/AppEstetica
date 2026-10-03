@@ -6,42 +6,44 @@ const types = gql`
     name: String!
     phone: String!
     address: String
-    treatments: [Treatment]
   }
-  
+
   type Worker {
     id: ID!
     name: String!
-    vacation: [Vacations]
-  }
-  
-  type Events {
-    eventId: ID!,
-    startTime: String,
-    endTime: String,
-    description: String,
-    subdescription: String
+    phone: String
+    address: String
   }
 
-  type Treatment {
-    id: ID!
-    service: Service!
-    date: String!
-    worker: Worker
-    conter: Int
-  }
-  
   type Service {
     id: ID!
     title: String!
     description: String
     price: Float!
   }
-  
+
+  type Treatment {
+    id: ID!
+    clientId: ID
+    serviceId: ID
+    date: String
+    conter: Int
+  }
+
   type Vacations {
     id: ID!
-    startDate: String!
-    endDate: String!
-  }  
+    workerId: ID
+    startDate: String
+    endDate: String
+  }
+
+  type Events {
+    id: ID!
+    eventId: ID
+    startTime: String
+    endTime: String
+    description: String
+    subdescription: String
+  }
 `;
 module.exports = types;

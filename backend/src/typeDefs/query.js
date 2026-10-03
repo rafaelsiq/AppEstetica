@@ -2,42 +2,51 @@ const { gql } = require("apollo-server");
 
 const query = gql`
   type Query {
-    client: [Client]
-    service: [Service]
-    vacations: [Vacations]
-    treatment: [Treatment]
-    vacationsWorker: [Vacations]
-    worker: [Worker]
-    event: [Events]
-    events: [Events]
+    clients: [Client!]!
+    client(id: ID!): Client
+
+    services: [Service!]!
+    service(id: ID!): Service
+
+    workers: [Worker!]!
+    worker(id: ID!): Worker
+
+    treatments: [Treatment!]!
+    treatment(id: ID!): Treatment
+
+    vacations: [Vacations!]!
+    vacation(id: ID!): Vacations
+
+    events: [Events!]!
+    event(id: ID!): Events
   }
 
   input ClientInput {
     name: String
     phone: String
     address: String
-    treatment: [TreatmentInput]
   }
+
   input EventInput {
-    startTime: String,
-    endTime: String,
-    description: String,
+    eventId: ID
+    startTime: String
+    endTime: String
+    description: String
     subdescription: String
   }
 
   input WorkerInput {
-    eventId: ID
     name: String
     phone: String
     address: String
-    treatment: [TreatmentInput]
   }
 
   input TreatmentInput {
+    clientId: ID
     serviceId: ID
     date: String
     conter: Int
-  }
+  } 
 
   input VacationsInput {
     workerId: ID

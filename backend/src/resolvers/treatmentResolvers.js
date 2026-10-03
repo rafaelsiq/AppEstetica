@@ -1,13 +1,14 @@
-const Treatment = require('../models/Treatment');
+const Treatment = require("../models/Treatment");
 
 const treatmentResolvers = {
   Query: {
-    treatment: () => Treatment.find(),
+    treatments: () => Treatment.find(),
     treatment: (_, { id }) => Treatment.findById(id),
   },
   Mutation: {
     createTreatment: (_, { input }) => Treatment.create(input),
-    updateTreatment: (_, { id, input }) => Treatment.findByIdAndUpdate(id, input, { new: true }),
+    updateTreatment: (_, { id, input }) =>
+      Treatment.findByIdAndUpdate(id, input, { new: true }),
     deleteTreatment: (_, { id }) => Treatment.findByIdAndRemove(id),
   },
 };

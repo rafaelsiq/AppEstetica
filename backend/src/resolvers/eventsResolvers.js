@@ -1,13 +1,14 @@
-const Events = require('../models/Events'); 
+const Events = require("../models/Events");
 
 const eventsResolvers = {
   Query: {
-    event: () => Events.find(),
-    events: (_, { atendenteID }) => Events.find({ atendenteID }),
+    events: () => Events.find(),
+    event: (_, { id }) => Events.findById(id),
   },
   Mutation: {
     createEvent: (_, { input }) => Events.create(input),
-    updateEvent: (_, { id, input }) => Events.findByIdAndUpdate(id, input, { new: true }),
+    updateEvent: (_, { id, input }) =>
+      Events.findByIdAndUpdate(id, input, { new: true }),
     deleteEvent: (_, { id }) => Events.findByIdAndRemove(id),
   },
 };

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const vacationsSchema = new mongoose.Schema({
-  clienteId: mongoose.Types.ObjectId,
+  workerId: mongoose.Types.ObjectId,
   startDate: String,
   endDate: String,
 });
