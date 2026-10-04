@@ -25,6 +25,8 @@ const TABS = {
   SERVICOS: "servicos"
 };
 
+const UNDETERMINED_SERVICE_LABEL = "Serviço indeterminado";
+
 const CLIENT_VIEWS = {
   ANAMNESE: "anamnese",
   FOLLOWUP: "followup",
@@ -1767,6 +1769,11 @@ export default function App() {
   const [savedAppointmentClientNames, setSavedAppointmentClientNames] = useState([]);
   const clientCreatePromisesRef = useRef(new Map());
   const [appointmentService, setAppointmentService] = useState("");
+  const [isAppointmentServiceListOpen, setIsAppointmentServiceListOpen] = useState(false);
+  const [isCreatingAppointmentService, setIsCreatingAppointmentService] = useState(false);
+  const [appointmentServiceNotice, setAppointmentServiceNotice] = useState("");
+  const [savedAppointmentServiceTitles, setSavedAppointmentServiceTitles] = useState([]);
+  const serviceCreatePromisesRef = useRef(new Map());
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [appointmentNotes, setAppointmentNotes] = useState("");
@@ -2450,14 +2457,24 @@ export default function App() {
       return;
     }
 
+    const rawServiceName = appointmentService.trim();
+    const serviceName =
+      rawServiceName.toLowerCase() === UNDETERMINED_SERVICE_LABEL.toLowerCase()
+        ? UNDETERMINED_SERVICE_LABEL
+        : rawServiceName;
     const clientReady = await createAppointmentClient(clientName);
     if (!clientReady) {
       return;
     }
 
+    const serviceReady = await createAppointmentService(serviceName);
+    if (!serviceReady) {
+      return;
+    }
+
     await addDoc(collection(db, "users", user.uid, "appointments"), {
       client: clientName,
-      service: appointmentService.trim(),
+      service: serviceName,
       date: appointmentDate,
       time: appointmentTime,
       notes: appointmentNotes.trim(),
@@ -2470,7 +2487,93 @@ export default function App() {
     setAppointmentTime("");
     setAppointmentNotes("");
     setAppointmentClientNotice("");
+    setAppointmentServiceNotice("");
     setIsAppointmentClientListOpen(false);
+    setIsAppointmentServiceListOpen(false);
+  };
+
+  const normalizedAppointmentService = appointmentService.trim().toLowerCase();
+  const isUndeterminedAppointmentService =
+    normalizedAppointmentService === UNDETERMINED_SERVICE_LABEL.toLowerCase();
+  const appointmentServiceExists =
+    Boolean(normalizedAppointmentService) &&
+    (isUndeterminedAppointmentService ||
+      savedAppointmentServiceTitles.includes(normalizedAppointmentService) ||
+      services.some(
+        (service) => (service.title || "").trim().toLowerCase() === normalizedAppointmentService
+      ));
+  const appointmentServiceSuggestions = [
+    ...(isUndeterminedAppointmentService
+      ? []
+      : [{ id: "undetermined-service", title: UNDETERMINED_SERVICE_LABEL, undetermined: true }]),
+    ...services.filter((service) => {
+      const serviceTitle = (service.title || "").trim().toLowerCase();
+      if (!serviceTitle || serviceTitle === normalizedAppointmentService) {
+        return false;
+      }
+      return !normalizedAppointmentService || serviceTitle.includes(normalizedAppointmentService);
+    }).map((service) => ({
+      id: service.id,
+      title: service.title,
+      undetermined: false
+    }))
+  ];
+
+  const createAppointmentService = (rawTitle) => {
+    const title = rawTitle.trim();
+    const normalizedTitle = title.toLowerCase();
+    if (!user || !title) {
+      return Promise.resolve(false);
+    }
+
+    if (normalizedTitle === UNDETERMINED_SERVICE_LABEL.toLowerCase()) {
+      setAppointmentService(UNDETERMINED_SERVICE_LABEL);
+      setIsAppointmentServiceListOpen(false);
+      return Promise.resolve(true);
+    }
+
+    const alreadySaved =
+      savedAppointmentServiceTitles.includes(normalizedTitle) ||
+      services.some((service) => (service.title || "").trim().toLowerCase() === normalizedTitle);
+    if (alreadySaved) {
+      setAppointmentService(title);
+      return Promise.resolve(true);
+    }
+
+    const pendingCreate = serviceCreatePromisesRef.current.get(normalizedTitle);
+    if (pendingCreate) {
+      return pendingCreate;
+    }
+
+    const createPromise = (async () => {
+      setIsCreatingAppointmentService(true);
+      setSavedAppointmentServiceTitles((previous) =>
+        previous.includes(normalizedTitle) ? previous : [...previous, normalizedTitle]
+      );
+      try {
+        await addDoc(collection(db, "users", user.uid, "services"), {
+          title,
+          price: 0,
+          createdAt: serverTimestamp()
+        });
+        setAppointmentService(title);
+        setAppointmentServiceNotice("Serviço adicionado. O preço pode ser preenchido depois.");
+        setIsAppointmentServiceListOpen(false);
+        return true;
+      } catch {
+        setSavedAppointmentServiceTitles((previous) =>
+          previous.filter((savedTitle) => savedTitle !== normalizedTitle)
+        );
+        setAppointmentServiceNotice("Não foi possível adicionar o serviço.");
+        return false;
+      } finally {
+        setIsCreatingAppointmentService(false);
+        serviceCreatePromisesRef.current.delete(normalizedTitle);
+      }
+    })();
+
+    serviceCreatePromisesRef.current.set(normalizedTitle, createPromise);
+    return createPromise;
   };
 
   const handleDeleteByCollection = async (collectionName, itemId) => {
@@ -3395,7 +3498,7 @@ export default function App() {
           <form className="form grid-form" onSubmit={handleAddAppointment}>
             <label>
               Cliente
-              <div className="client-picker">
+              <div className={`client-picker ${isAppointmentClientListOpen ? "is-open" : ""}`}>
                 <div className="client-picker-field">
                   <input
                     value={appointmentClient}
@@ -3403,8 +3506,12 @@ export default function App() {
                       setAppointmentClient(event.target.value);
                       setAppointmentClientNotice("");
                       setIsAppointmentClientListOpen(true);
+                      setIsAppointmentServiceListOpen(false);
                     }}
-                    onFocus={() => setIsAppointmentClientListOpen(true)}
+                    onFocus={() => {
+                      setIsAppointmentClientListOpen(true);
+                      setIsAppointmentServiceListOpen(false);
+                    }}
                     onBlur={() => setIsAppointmentClientListOpen(false)}
                     placeholder="Digite o nome da cliente"
                     autoComplete="off"
@@ -3447,12 +3554,60 @@ export default function App() {
             </label>
             <label>
               Serviço
-              <input
-                value={appointmentService}
-                onChange={(event) => setAppointmentService(event.target.value)}
-                placeholder="Serviço"
-                required
-              />
+              <div className={`client-picker ${isAppointmentServiceListOpen ? "is-open" : ""}`}>
+                <div className="client-picker-field">
+                  <input
+                    value={appointmentService}
+                    onChange={(event) => {
+                      setAppointmentService(event.target.value);
+                      setAppointmentServiceNotice("");
+                      setIsAppointmentServiceListOpen(true);
+                      setIsAppointmentClientListOpen(false);
+                    }}
+                    onFocus={() => {
+                      setIsAppointmentServiceListOpen(true);
+                      setIsAppointmentClientListOpen(false);
+                    }}
+                    onBlur={() => setIsAppointmentServiceListOpen(false)}
+                    placeholder="Digite ou escolha o serviço"
+                    autoComplete="off"
+                    required
+                  />
+                  {appointmentService.trim() && !appointmentServiceExists ? (
+                    <button
+                      type="button"
+                      className="client-picker-add"
+                      aria-label={`Adicionar ${appointmentService.trim()}`}
+                      disabled={isCreatingAppointmentService}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => createAppointmentService(appointmentService)}
+                    >
+                      +
+                    </button>
+                  ) : null}
+                </div>
+                {isAppointmentServiceListOpen && appointmentServiceSuggestions.length > 0 ? (
+                  <ul className="client-picker-suggestions">
+                    {appointmentServiceSuggestions.map((service) => (
+                      <li key={`appointment-service-${service.id}`}>
+                        <button
+                          type="button"
+                          className={service.undetermined ? "is-special" : ""}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            setAppointmentService(service.title || "");
+                            setAppointmentServiceNotice("");
+                            setIsAppointmentServiceListOpen(false);
+                          }}
+                        >
+                          {service.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+              {appointmentServiceNotice ? <p className="muted-text">{appointmentServiceNotice}</p> : null}
             </label>
             <label>
               Data

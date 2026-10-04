@@ -417,6 +417,10 @@ select:focus {
   position: relative;
 }
 
+.client-picker.is-open {
+  z-index: 7;
+}
+
 .client-picker-field {
   position: relative;
 }
@@ -453,6 +457,8 @@ select:focus {
   left: 0;
   right: 0;
   z-index: 6;
+  max-height: 220px;
+  overflow: auto;
   margin: 0;
   padding: 6px;
   list-style: none;
@@ -478,6 +484,10 @@ select:focus {
 
 .client-picker-suggestions button:hover {
   background: #f4f7f8;
+}
+
+.client-picker-suggestions button.is-special {
+  color: #24695c;
 }
 
 .clients-toolbar {
