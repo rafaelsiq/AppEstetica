@@ -1833,20 +1833,6 @@ export default function App() {
                   </p>
                 </div>
                 <div className="inline-actions">
-                  <button
-                    type="button"
-                    className={isAnamneseViewOpen ? "primary-btn" : "secondary-btn"}
-                    onClick={() => setSelectedClientView(CLIENT_VIEWS.ANAMNESE)}
-                  >
-                    Anamnese
-                  </button>
-                  <button
-                    type="button"
-                    className={isFollowupViewOpen ? "primary-btn" : "secondary-btn"}
-                    onClick={() => setSelectedClientView(CLIENT_VIEWS.FOLLOWUP)}
-                  >
-                    Acompanhamento
-                  </button>
                   <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
                     Fechar
                   </button>
