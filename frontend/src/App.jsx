@@ -197,13 +197,8 @@ const HEALTH_CONDITIONS = [
 ];
 
 const SESSION_TYPES = ["Miofascial", "Relaxante", "Facial", "Drenagem", "Esportiva"];
-const PHOTO_POSITION_OPTIONS = [
-  "Frente",
-  "Costas",
-  "Perfil esquerdo",
-  "Perfil direito",
-  "Outro"
-];
+const PHOTO_POSITION_OPTIONS = ["Frente", "Costas", "Perfil esquerdo", "Perfil direito"];
+const PHOTO_POSITION_OTHER = "Outra posição";
 const MEASUREMENT_COLORS = ["#24695c", "#c06b19", "#3a5ac7", "#9b3d6b", "#1f7a8c", "#6b4c9a"];
 
 function sortAppointments(items) {
@@ -614,8 +609,12 @@ function getStoredMeasurements(analysis) {
   return [];
 }
 
+function isCustomPhotoPosition(positionLabel) {
+  return positionLabel === PHOTO_POSITION_OTHER || positionLabel === "Outro";
+}
+
 function resolvePhotoPositionLabel(positionLabel, positionCustom) {
-  if (positionLabel === "Outro") {
+  if (isCustomPhotoPosition(positionLabel)) {
     return positionCustom.trim();
   }
   return positionLabel.trim();
@@ -2662,8 +2661,8 @@ export default function App() {
     const positionLabel = resolvePhotoPositionLabel(photoForm.positionLabel, photoForm.positionCustom);
     if (!positionLabel) {
       showPhotoFeedback(
-        photoForm.positionLabel === "Outro"
-          ? "Descreva qual é a posição da foto."
+        isCustomPhotoPosition(photoForm.positionLabel)
+          ? "Escreva qual foi a posição da foto."
           : "Selecione a posição da foto.",
         "error"
       );
@@ -3743,7 +3742,7 @@ export default function App() {
                               setPhotoForm((previous) => ({
                                 ...previous,
                                 positionLabel: value,
-                                positionCustom: value === "Outro" ? previous.positionCustom : ""
+                                positionCustom: isCustomPhotoPosition(value) ? previous.positionCustom : ""
                               }));
                             }}
                             required
@@ -3754,19 +3753,22 @@ export default function App() {
                                 {option}
                               </option>
                             ))}
+                            <option value={PHOTO_POSITION_OTHER}>{PHOTO_POSITION_OTHER}</option>
                           </select>
+                          {isCustomPhotoPosition(photoForm.positionLabel) ? (
+                            <>
+                              <input
+                                value={photoForm.positionCustom}
+                                onChange={(event) => handlePhotoFieldChange("positionCustom", event.target.value)}
+                                placeholder="Escreva qual foi a posição"
+                                aria-label="Posição personalizada da foto"
+                                autoFocus
+                                required
+                              />
+                              <span className="muted-text">Informe a posição que não está na lista.</span>
+                            </>
+                          ) : null}
                         </label>
-                        {photoForm.positionLabel === "Outro" ? (
-                          <label className="full-row">
-                            Qual posição?
-                            <input
-                              value={photoForm.positionCustom}
-                              onChange={(event) => handlePhotoFieldChange("positionCustom", event.target.value)}
-                              placeholder="Descreva a posição da foto"
-                              required
-                            />
-                          </label>
-                        ) : null}
                       </div>
 
                       <label>
