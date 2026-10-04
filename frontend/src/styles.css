@@ -240,8 +240,69 @@ select:focus {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+}
+
+.home-page {
+  display: grid;
+  gap: 14px;
+}
+
+.home-hero {
+  border-radius: 24px;
+  background: #24695c;
+  color: #ffffff;
+  padding: 22px;
+  display: grid;
+  gap: 8px;
+  box-shadow: 0 14px 28px rgba(36, 105, 92, 0.22);
+}
+
+.home-hero h3,
+.home-hero p {
+  margin: 0;
+}
+
+.home-kicker {
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.home-hero .primary-btn {
+  justify-self: start;
+  margin-top: 8px;
+  background: #ffffff;
+  color: #24695c;
+}
+
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-stats button {
+  border: 1px solid #e6eef1;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 16px 10px;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(16, 29, 44, 0.05);
+}
+
+.home-stats strong {
+  font-size: 28px;
+  color: #24695c;
+}
+
+.home-stats span {
+  color: #54656f;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .bottom-nav {
@@ -1257,7 +1318,7 @@ h5 {
 
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     position: fixed;
     left: 12px;
     right: 12px;
@@ -1278,7 +1339,7 @@ h5 {
     justify-items: center;
     gap: 3px;
     padding: 4px 0 2px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     cursor: pointer;
   }

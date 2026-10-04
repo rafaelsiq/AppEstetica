@@ -19,6 +19,7 @@ import {
 import { auth, db } from "./firebase";
 
 const TABS = {
+  INICIO: "inicio",
   AGENDA: "agenda",
   CLIENTES: "clientes",
   SERVICOS: "servicos"
@@ -1741,7 +1742,7 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
 
-  const [activeTab, setActiveTab] = useState(TABS.AGENDA);
+  const [activeTab, setActiveTab] = useState(TABS.INICIO);
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -2970,6 +2971,11 @@ export default function App() {
   const currentPhotoDraft = photoDraftHasProgress(photoForm) ? buildPhotoDraft(photoForm) : null;
   const pendingPhotoCount = draftPhotos.length + (currentPhotoDraft && !currentPhotoDraft.error ? 1 : 0);
 
+  const todayIsoDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
+  const todayAppointments = appointments.filter((appointment) => appointment.date === todayIsoDate);
+
   if (isLoadingAuth) {
     return <main className="page loading">Carregando...</main>;
   }
@@ -3060,6 +3066,13 @@ export default function App() {
       <nav className="tabs" aria-label="Seções">
         <button
           type="button"
+          className={activeTab === TABS.INICIO ? "active" : ""}
+          onClick={() => setActiveTab(TABS.INICIO)}
+        >
+          Início
+        </button>
+        <button
+          type="button"
           className={activeTab === TABS.AGENDA ? "active" : ""}
           onClick={() => setActiveTab(TABS.AGENDA)}
         >
@@ -3082,6 +3095,19 @@ export default function App() {
       </nav>
 
       <nav className="bottom-nav" aria-label="Menu principal">
+        <button
+          type="button"
+          className={activeTab === TABS.INICIO ? "active" : ""}
+          onClick={() => setActiveTab(TABS.INICIO)}
+        >
+          <span className="bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 11.5 12 4l8 7.5" />
+              <path d="M7 10.5V20h10v-9.5" />
+            </svg>
+          </span>
+          <span>Início</span>
+        </button>
         <button
           type="button"
           className={activeTab === TABS.AGENDA ? "active" : ""}
@@ -3126,6 +3152,64 @@ export default function App() {
           <span>Serviços</span>
         </button>
       </nav>
+
+      {activeTab === TABS.INICIO ? (
+        <section className="home-page">
+          <article className="home-hero">
+            <p className="home-kicker">Olá, {currentUserDisplayName}</p>
+            <h3>{currentClinicName}</h3>
+            <p>
+              {todayAppointments.length === 0
+                ? "Nenhum horário marcado para hoje."
+                : `${todayAppointments.length} horário${todayAppointments.length > 1 ? "s" : ""} na agenda de hoje.`}
+            </p>
+            <button className="primary-btn" type="button" onClick={() => setActiveTab(TABS.AGENDA)}>
+              Abrir agenda
+            </button>
+          </article>
+
+          <div className="home-stats">
+            <button type="button" onClick={() => setActiveTab(TABS.AGENDA)}>
+              <strong>{todayAppointments.length}</strong>
+              <span>Hoje</span>
+            </button>
+            <button type="button" onClick={() => setActiveTab(TABS.CLIENTES)}>
+              <strong>{clients.length}</strong>
+              <span>Clientes</span>
+            </button>
+            <button type="button" onClick={() => setActiveTab(TABS.SERVICOS)}>
+              <strong>{services.length}</strong>
+              <span>Serviços</span>
+            </button>
+          </div>
+
+          <article className="card">
+            <div className="section-header">
+              <h3>Agenda de hoje</h3>
+              <button className="secondary-btn" type="button" onClick={() => setActiveTab(TABS.AGENDA)}>
+                Ver tudo
+              </button>
+            </div>
+            <ul className="list">
+              {todayAppointments.length === 0 ? (
+                <li className="empty">Nada marcado para hoje.</li>
+              ) : (
+                todayAppointments.map((appointment) => (
+                  <li key={`home-${appointment.id}`}>
+                    <div>
+                      <strong>
+                        {appointment.time || "--:--"} · {appointment.client}
+                      </strong>
+                      <p>{appointment.service}</p>
+                      {appointment.notes ? <p>{appointment.notes}</p> : null}
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+          </article>
+        </section>
+      ) : null}
 
       {activeTab === TABS.AGENDA ? (
         <section className="card">
