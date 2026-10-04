@@ -717,9 +717,9 @@ h5 {
 }
 
 .pain-dot.selected {
-  background: #2d8f3d;
-  border-color: #1f692b;
-  box-shadow: 0 0 0 3px rgba(45, 143, 61, 0.25);
+  background: #d92d20;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px #9f1c14;
 }
 
 .pain-dot.pending {
@@ -805,10 +805,10 @@ h5 {
 }
 
 .selected-area-chip {
-  border: 1px solid #2d8f3d;
-  color: #1f692b;
+  border: 1px solid #d92d20;
+  color: #9f1c14;
   border-radius: 999px;
-  background: #eaf8eb;
+  background: #fff1f0;
   font-size: 13px;
   padding: 6px 10px;
   cursor: pointer;
