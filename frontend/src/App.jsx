@@ -1611,12 +1611,12 @@ export default function App() {
 
   const handleAddAppointment = async (event) => {
     event.preventDefault();
-    if (!user || !appointmentClient.trim() || !appointmentService.trim() || !appointmentDate) {
+    if (!user || !appointmentClient || !appointmentService.trim() || !appointmentDate) {
       return;
     }
 
     await addDoc(collection(db, "users", user.uid, "appointments"), {
-      client: appointmentClient.trim(),
+      client: appointmentClient,
       service: appointmentService.trim(),
       date: appointmentDate,
       time: appointmentTime,
@@ -1963,12 +1963,19 @@ export default function App() {
           <form className="form grid-form" onSubmit={handleAddAppointment}>
             <label>
               Cliente
-              <input
+              <select
                 value={appointmentClient}
                 onChange={(event) => setAppointmentClient(event.target.value)}
-                placeholder="Nome da cliente"
+                disabled={clients.length === 0}
                 required
-              />
+              >
+                <option value="">Selecionar cliente</option>
+                {clients.map((client) => (
+                  <option key={`appointment-client-${client.id}`} value={client.name}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Serviço
@@ -2008,6 +2015,9 @@ export default function App() {
               Adicionar horário
             </button>
           </form>
+          {clients.length === 0 ? (
+            <p className="muted-text">Cadastre ao menos uma cliente para agendar horário.</p>
+          ) : null}
 
           <ul className="list">
             {appointments.length === 0 ? (
