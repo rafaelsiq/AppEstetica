@@ -4384,12 +4384,12 @@ export default function App() {
                         )}
                       </svg>
                     </button>
-                    <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
-                      Fechar
-                    </button>
                     {isRecordMenuOpen ? (
                       <div className="record-menu-dropdown" role="dialog" aria-label="Menu da cliente">
                         <div className="record-menu-actions">
+                          <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
+                            Fechar
+                          </button>
                           {clientHasAnamnese && !isEditingAnamnese ? (
                             <button
                               type="button"
