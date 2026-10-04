@@ -4308,8 +4308,23 @@ export default function App() {
           </ul>
 
           {isClientFormOpen ? (
-            <section className="client-form-panel">
-              <h4>{editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}</h4>
+            <div className="client-modal-backdrop" onClick={resetClientForm}>
+            <section
+              className="profile-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label={editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="profile-modal-header">
+                <div>
+                  <h4>{editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}</h4>
+                  <p>Os dados ficam no cadastro da cliente.</p>
+                </div>
+                <button type="button" className="secondary-btn" onClick={resetClientForm}>
+                  Fechar
+                </button>
+              </header>
               <form className="form grid-form" onSubmit={handleSaveClient}>
                 <label>
                   Nome
@@ -4376,6 +4391,7 @@ export default function App() {
                 </button>
               </form>
             </section>
+            </div>
           ) : null}
 
           {selectedClient && selectedClientView ? (

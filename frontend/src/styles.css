@@ -942,18 +942,6 @@ select:focus {
   opacity: 0.78;
 }
 
-.client-form-panel {
-  margin-top: 16px;
-  border: 1px solid #d7dde3;
-  border-radius: 12px;
-  background: #fbfcfd;
-  padding: 14px;
-}
-
-.client-form-panel h4 {
-  margin: 0 0 12px 0;
-}
-
 .panel-header {
   display: flex;
   justify-content: space-between;
