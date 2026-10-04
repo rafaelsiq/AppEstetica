@@ -1743,6 +1743,9 @@ export default function App() {
   const [authError, setAuthError] = useState("");
 
   const [activeTab, setActiveTab] = useState(TABS.INICIO);
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [isHeaderAlertsOpen, setIsHeaderAlertsOpen] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState("");
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -2975,6 +2978,27 @@ export default function App() {
     .toISOString()
     .slice(0, 10);
   const todayAppointments = appointments.filter((appointment) => appointment.date === todayIsoDate);
+  const greetingName = currentUserDisplayName.split(" ")[0] || currentUserDisplayName;
+  const dayPeriod = new Date().getHours();
+  const greetingLabel = dayPeriod < 12 ? "Bom dia" : dayPeriod < 18 ? "Boa tarde" : "Boa noite";
+  const activeTabLabel =
+    activeTab === TABS.AGENDA
+      ? "Agenda"
+      : activeTab === TABS.CLIENTES
+        ? "Clientes"
+        : activeTab === TABS.SERVICOS
+          ? "Serviços"
+          : "Início";
+  const normalizedHeaderSearch = headerSearch.trim().toLowerCase();
+  const headerSearchResults = normalizedHeaderSearch
+    ? clients
+        .filter((client) =>
+          [client.name, client.phone, client.email]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(normalizedHeaderSearch))
+        )
+        .slice(0, 6)
+    : [];
 
   if (isLoadingAuth) {
     return <main className="page loading">Carregando...</main>;
@@ -3040,27 +3064,138 @@ export default function App() {
 
   return (
     <main className="page app-page">
+      {(isHeaderMenuOpen || isHeaderAlertsOpen) ? (
+        <button
+          type="button"
+          className="topbar-backdrop"
+          aria-label="Fechar menu"
+          onClick={() => {
+            setIsHeaderMenuOpen(false);
+            setIsHeaderAlertsOpen(false);
+          }}
+        />
+      ) : null}
+
       <header className="topbar">
-        <div className="topbar-brand">
-          <div className="topbar-logo" aria-hidden>
-            CE
-          </div>
-          <div>
-            <h2>{currentClinicName}</h2>
-            <p>Olá, {currentUserDisplayName}</p>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          {userProfile?.professionalRole ? (
-            <span className="topbar-role-chip">{userProfile.professionalRole}</span>
-          ) : null}
-          <button className="secondary-btn" type="button" onClick={handleOpenProfileModal}>
-            Meu cadastro
+        <div className="topbar-row">
+          <button
+            type="button"
+            className="topbar-icon-btn"
+            aria-label="Abrir menu"
+            aria-expanded={isHeaderMenuOpen}
+            onClick={() => {
+              setIsHeaderMenuOpen((previous) => !previous);
+              setIsHeaderAlertsOpen(false);
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="4" width="6.5" height="6.5" rx="1.6" />
+              <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6" />
+              <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6" />
+              <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6" />
+            </svg>
           </button>
-          <button className="secondary-btn" type="button" onClick={() => signOut(auth)}>
-            Sair
+          <h2>{activeTabLabel}</h2>
+          <button
+            type="button"
+            className="topbar-icon-btn"
+            aria-label="Horários de hoje"
+            aria-expanded={isHeaderAlertsOpen}
+            onClick={() => {
+              setIsHeaderAlertsOpen((previous) => !previous);
+              setIsHeaderMenuOpen(false);
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 9.5a6 6 0 1 1 12 0c0 4 1.5 5.2 1.5 5.2H4.5S6 13.5 6 9.5Z" />
+              <path d="M10 18.5a2 2 0 0 0 4 0" />
+            </svg>
+            {todayAppointments.length > 0 ? <span className="topbar-badge" /> : null}
           </button>
         </div>
+
+        {isHeaderMenuOpen ? (
+          <div className="topbar-popover topbar-popover-left">
+            <p className="topbar-popover-title">{currentClinicName}</p>
+            {userProfile?.professionalRole ? <p>{userProfile.professionalRole}</p> : null}
+            <button
+              type="button"
+              onClick={() => {
+                setIsHeaderMenuOpen(false);
+                handleOpenProfileModal();
+              }}
+            >
+              Meu cadastro
+            </button>
+            <button type="button" onClick={() => signOut(auth)}>
+              Sair
+            </button>
+          </div>
+        ) : null}
+
+        {isHeaderAlertsOpen ? (
+          <div className="topbar-popover topbar-popover-right">
+            <p className="topbar-popover-title">Hoje</p>
+            {todayAppointments.length === 0 ? (
+              <p>Nenhum horário marcado.</p>
+            ) : (
+              todayAppointments.map((appointment) => (
+                <button
+                  key={`alert-${appointment.id}`}
+                  type="button"
+                  onClick={() => {
+                    setIsHeaderAlertsOpen(false);
+                    setActiveTab(TABS.AGENDA);
+                  }}
+                >
+                  {appointment.time || "--:--"} · {appointment.client}
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
+
+        <div className="topbar-greeting">
+          <h3>Olá, {greetingName}!</h3>
+          <p>{greetingLabel}</p>
+        </div>
+
+        <label className="topbar-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6" />
+            <path d="m16 16 4 4" />
+          </svg>
+          <input
+            value={headerSearch}
+            onChange={(event) => setHeaderSearch(event.target.value)}
+            placeholder="Buscar"
+            aria-label="Buscar cliente"
+          />
+        </label>
+        {normalizedHeaderSearch ? (
+          <ul className="topbar-search-results">
+            {headerSearchResults.length === 0 ? (
+              <li className="empty">Nenhuma cliente encontrada.</li>
+            ) : (
+              headerSearchResults.map((client) => (
+                <li key={`header-search-${client.id}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHeaderSearch("");
+                      setClientSearchTerm(client.name || "");
+                      setActiveTab(TABS.CLIENTES);
+                      handleOpenClientModal(client.id);
+                    }}
+                  >
+                    <strong>{client.name}</strong>
+                    {client.phone ? <span>{client.phone}</span> : null}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        ) : null}
       </header>
 
       <nav className="tabs" aria-label="Seções">
@@ -3156,8 +3291,7 @@ export default function App() {
       {activeTab === TABS.INICIO ? (
         <section className="home-page">
           <article className="home-hero">
-            <p className="home-kicker">Olá, {currentUserDisplayName}</p>
-            <h3>{currentClinicName}</h3>
+            <h3>Resumo de hoje</h3>
             <p>
               {todayAppointments.length === 0
                 ? "Nenhum horário marcado para hoje."

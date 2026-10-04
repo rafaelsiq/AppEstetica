@@ -171,60 +171,182 @@ select:focus {
 }
 
 .topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid #d7dde3;
-  border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
-  box-shadow: 0 6px 18px rgba(10, 29, 46, 0.07);
+  position: relative;
+  z-index: 36;
+  display: grid;
+  gap: 16px;
+  padding: 8px 4px 0;
+  background: transparent;
 }
 
-.topbar-brand {
-  display: flex;
-  gap: 12px;
+.topbar-backdrop {
+  position: fixed;
+  inset: 0;
+  border: none;
+  background: transparent;
+  z-index: 35;
+  cursor: default;
+}
+
+.topbar-row {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
   align-items: center;
 }
 
-.topbar-logo {
+.topbar-row h2 {
+  margin: 0;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1d2b33;
+}
+
+.topbar-icon-btn {
+  position: relative;
   width: 42px;
   height: 42px;
-  border-radius: 12px;
-  background: #24695c;
-  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #24343d;
   display: grid;
   place-items: center;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
+  cursor: pointer;
 }
 
-.topbar h2 {
+.topbar-icon-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.topbar-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e23b3b;
+  box-shadow: 0 0 0 2px #eef3f4;
+}
+
+.topbar-greeting h3 {
   margin: 0;
-  font-size: 38px;
+  font-size: 32px;
+  line-height: 1.1;
+  color: #1d3550;
 }
 
-.topbar p {
+.topbar-greeting p {
   margin: 4px 0 0;
-  color: #54656f;
+  color: #8b98a5;
+  font-size: 16px;
 }
 
-.topbar-actions {
+.topbar-search {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  background: #f4f6f8;
+  border-radius: 16px;
+  padding: 0 14px;
+  min-height: 52px;
 }
 
-.topbar-role-chip {
-  border: 1px solid #c4d4df;
-  border-radius: 999px;
-  background: #f0f6fa;
-  color: #355260;
-  font-size: 12px;
+.topbar-search svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: #8b98a5;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.topbar-search input {
+  border: none;
+  background: transparent;
+  padding: 14px 0;
+  font-size: 16px;
+}
+
+.topbar-search input:focus {
+  outline: none;
+}
+
+.topbar-popover {
+  position: absolute;
+  top: 52px;
+  z-index: 2;
+  width: min(260px, calc(100vw - 48px));
+  background: #ffffff;
+  border: 1px solid #e6eef1;
+  border-radius: 16px;
+  box-shadow: 0 12px 28px rgba(16, 29, 44, 0.12);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.topbar-popover-left {
+  left: 0;
+}
+
+.topbar-popover-right {
+  right: 0;
+}
+
+.topbar-popover p {
+  margin: 0;
+  color: #54656f;
+  font-size: 13px;
+}
+
+.topbar-popover-title {
+  color: #1d2b33 !important;
   font-weight: 700;
-  padding: 7px 10px;
+}
+
+.topbar-popover button {
+  border: none;
+  background: #f4f7f8;
+  color: #24343d;
+  border-radius: 10px;
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.topbar-search-results {
+  list-style: none;
+  margin: -8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.topbar-search-results button {
+  width: 100%;
+  border: 1px solid #e6eef1;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: grid;
+  text-align: left;
+  cursor: pointer;
+}
+
+.topbar-search-results span {
+  color: #54656f;
+  font-size: 13px;
 }
 
 .section-header {
@@ -262,11 +384,6 @@ select:focus {
 .home-hero h3,
 .home-hero p {
   margin: 0;
-}
-
-.home-kicker {
-  font-size: 14px;
-  opacity: 0.85;
 }
 
 .home-hero .primary-btn {
@@ -1371,52 +1488,8 @@ h5 {
     color: #ffffff;
   }
 
-  .topbar {
-    flex-direction: row;
-    align-items: center;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-    padding: 2px 2px 0;
-  }
-
-  .topbar-brand {
-    width: auto;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .topbar h2 {
-    font-size: 22px;
-    line-height: 1.15;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .topbar p {
-    font-size: 13px;
-  }
-
-  .topbar-logo {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-  }
-
-  .topbar-actions {
-    width: auto;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-  }
-
-  .topbar-actions .secondary-btn {
-    padding: 8px 10px;
-    font-size: 12px;
-  }
-
-  .topbar-role-chip {
-    display: none;
+  .topbar-greeting h3 {
+    font-size: 28px;
   }
 
   .list li {
