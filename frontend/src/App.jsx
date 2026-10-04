@@ -657,6 +657,15 @@ function buildEmptyCheckpoint() {
   };
 }
 
+function buildEmptyUserProfile() {
+  return {
+    fullName: "",
+    clinicName: "",
+    phone: "",
+    professionalRole: ""
+  };
+}
+
 function formatDatePt(dateValue) {
   if (!dateValue) {
     return "--";
@@ -1273,6 +1282,11 @@ export default function App() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedClientView, setSelectedClientView] = useState(null);
   const [openClientMenuId, setOpenClientMenuId] = useState("");
+  const [userProfile, setUserProfile] = useState(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState(buildEmptyUserProfile());
+  const [profileMessage, setProfileMessage] = useState("");
+  const [profileError, setProfileError] = useState("");
   const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [clientSexFilter, setClientSexFilter] = useState("all");
   const [clientSortMode, setClientSortMode] = useState("name_asc");
@@ -1314,6 +1328,11 @@ export default function App() {
       setSelectedClientId("");
       setSelectedClientView(null);
       setOpenClientMenuId("");
+      setUserProfile(null);
+      setIsProfileModalOpen(false);
+      setProfileForm(buildEmptyUserProfile());
+      setProfileMessage("");
+      setProfileError("");
       setClientSearchTerm("");
       setClientSexFilter("all");
       setClientSortMode("name_asc");
@@ -1384,6 +1403,23 @@ export default function App() {
       setCheckpoints([]);
     }
   }, [clients, selectedClientId]);
+
+  useEffect(() => {
+    if (!user) {
+      return undefined;
+    }
+
+    const profileRef = doc(db, "users", user.uid, "settings", "profile");
+    const unsubscribe = onSnapshot(profileRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        setUserProfile(null);
+        return;
+      }
+      setUserProfile({ id: snapshot.id, ...snapshot.data() });
+    });
+
+    return unsubscribe;
+  }, [user]);
 
   useEffect(() => {
     if (!editingClientId) {
@@ -1490,6 +1526,20 @@ export default function App() {
     return user.email.split("@")[0];
   }, [user]);
 
+  const currentUserDisplayName = useMemo(() => {
+    if (userProfile?.fullName && userProfile.fullName.trim()) {
+      return userProfile.fullName.trim();
+    }
+    return formattedUserName;
+  }, [userProfile, formattedUserName]);
+
+  const currentClinicName = useMemo(() => {
+    if (userProfile?.clinicName && userProfile.clinicName.trim()) {
+      return userProfile.clinicName.trim();
+    }
+    return "Clínica Estética";
+  }, [userProfile]);
+
   const handleAuthSubmit = async (event) => {
     event.preventDefault();
     setAuthError("");
@@ -1498,7 +1548,21 @@ export default function App() {
       if (authMode === "login") {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       } else {
-        await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        const userCredential = await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        const defaultName = authEmail.split("@")[0];
+        await setDoc(
+          doc(db, "users", userCredential.user.uid, "settings", "profile"),
+          {
+            fullName: defaultName,
+            clinicName: "Clínica Estética",
+            phone: "",
+            professionalRole: "",
+            email: authEmail,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
       }
 
       setAuthEmail("");
@@ -1506,6 +1570,85 @@ export default function App() {
     } catch (error) {
       setAuthError("Não foi possível concluir a autenticação. Verifique os dados.");
     }
+  };
+
+  const handleOpenProfileModal = () => {
+    setProfileError("");
+    setProfileMessage("");
+    setProfileForm({
+      fullName: userProfile?.fullName || formattedUserName || "",
+      clinicName: userProfile?.clinicName || "Clínica Estética",
+      phone: userProfile?.phone || "",
+      professionalRole: userProfile?.professionalRole || ""
+    });
+    setIsProfileModalOpen(true);
+  };
+
+  const handleCloseProfileModal = () => {
+    setIsProfileModalOpen(false);
+    setProfileError("");
+    setProfileMessage("");
+  };
+
+  const handleProfileFieldChange = (fieldName, value) => {
+    setProfileForm((previous) => ({ ...previous, [fieldName]: value }));
+  };
+
+  const handleSaveProfile = async (event) => {
+    event.preventDefault();
+    if (!user) {
+      return;
+    }
+    if (!profileForm.fullName.trim()) {
+      setProfileError("Informe seu nome para salvar o cadastro.");
+      return;
+    }
+
+    setProfileError("");
+    const profileRef = doc(db, "users", user.uid, "settings", "profile");
+    const payload = {
+      fullName: profileForm.fullName.trim(),
+      clinicName: profileForm.clinicName.trim() || "Clínica Estética",
+      phone: profileForm.phone.trim(),
+      professionalRole: profileForm.professionalRole.trim(),
+      email: user.email || "",
+      updatedAt: serverTimestamp()
+    };
+
+    await setDoc(
+      profileRef,
+      {
+        ...payload,
+        ...(userProfile ? {} : { createdAt: serverTimestamp() })
+      },
+      { merge: true }
+    );
+
+    setProfileMessage(userProfile ? "Cadastro atualizado com sucesso." : "Cadastro criado com sucesso.");
+    setTimeout(() => {
+      setIsProfileModalOpen(false);
+      setProfileMessage("");
+    }, 1200);
+  };
+
+  const handleDeleteProfile = async () => {
+    if (!user || !userProfile) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Deseja excluir seu cadastro de perfil? Essa ação remove os dados de perfil do cabeçalho."
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await deleteDoc(doc(db, "users", user.uid, "settings", "profile"));
+    setProfileMessage("Cadastro removido com sucesso.");
+    setTimeout(() => {
+      setIsProfileModalOpen(false);
+      setProfileMessage("");
+    }, 1000);
   };
 
   const handleSaveClient = async (event) => {
@@ -1924,13 +2067,26 @@ export default function App() {
   return (
     <main className="page app-page">
       <header className="topbar">
-        <div>
-          <h2>Clínica Estética</h2>
-          <p>Olá, {formattedUserName}</p>
+        <div className="topbar-brand">
+          <div className="topbar-logo" aria-hidden>
+            CE
+          </div>
+          <div>
+            <h2>{currentClinicName}</h2>
+            <p>Olá, {currentUserDisplayName}</p>
+          </div>
         </div>
-        <button className="secondary-btn" type="button" onClick={() => signOut(auth)}>
-          Sair
-        </button>
+        <div className="topbar-actions">
+          {userProfile?.professionalRole ? (
+            <span className="topbar-role-chip">{userProfile.professionalRole}</span>
+          ) : null}
+          <button className="secondary-btn" type="button" onClick={handleOpenProfileModal}>
+            Meu cadastro
+          </button>
+          <button className="secondary-btn" type="button" onClick={() => signOut(auth)}>
+            Sair
+          </button>
+        </div>
       </header>
 
       <nav className="tabs">
@@ -2926,6 +3082,86 @@ export default function App() {
             )}
           </ul>
         </section>
+      ) : null}
+
+      {isProfileModalOpen ? (
+        <div className="client-modal-backdrop" onClick={handleCloseProfileModal}>
+          <section
+            className="profile-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Cadastro do profissional"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>Meu cadastro</h4>
+                <p>Gerencie os dados do seu perfil profissional.</p>
+              </div>
+              <button type="button" className="secondary-btn" onClick={handleCloseProfileModal}>
+                Fechar
+              </button>
+            </header>
+
+            <form className="form grid-form" onSubmit={handleSaveProfile}>
+              <label>
+                Nome completo
+                <input
+                  value={profileForm.fullName}
+                  onChange={(event) => handleProfileFieldChange("fullName", event.target.value)}
+                  placeholder="Seu nome"
+                  required
+                />
+              </label>
+              <label>
+                Nome da clínica
+                <input
+                  value={profileForm.clinicName}
+                  onChange={(event) => handleProfileFieldChange("clinicName", event.target.value)}
+                  placeholder="Ex: Clínica Estética"
+                />
+              </label>
+              <label>
+                Telefone
+                <input
+                  value={profileForm.phone}
+                  onChange={(event) => handleProfileFieldChange("phone", event.target.value)}
+                  placeholder="(00) 00000-0000"
+                />
+              </label>
+              <label>
+                Função / especialidade
+                <input
+                  value={profileForm.professionalRole}
+                  onChange={(event) =>
+                    handleProfileFieldChange("professionalRole", event.target.value)
+                  }
+                  placeholder="Ex: Esteticista"
+                />
+              </label>
+              <label className="full-row">
+                E-mail da conta
+                <input value={user?.email || ""} readOnly />
+              </label>
+
+              {profileError ? <p className="error-text full-row">{profileError}</p> : null}
+              {profileMessage ? <p className="success-text full-row">{profileMessage}</p> : null}
+
+              <button className="primary-btn full-row" type="submit">
+                {userProfile ? "Salvar alterações do cadastro" : "Criar meu cadastro"}
+              </button>
+              {userProfile ? (
+                <button
+                  type="button"
+                  className="danger-btn full-row"
+                  onClick={handleDeleteProfile}
+                >
+                  Excluir meu cadastro
+                </button>
+              ) : null}
+            </form>
+          </section>
+        </div>
       ) : null}
     </main>
   );
