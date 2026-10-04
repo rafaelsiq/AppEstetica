@@ -1745,7 +1745,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(TABS.INICIO);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [isHeaderAlertsOpen, setIsHeaderAlertsOpen] = useState(false);
-  const [headerSearch, setHeaderSearch] = useState("");
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -2989,16 +2988,6 @@ export default function App() {
         : activeTab === TABS.SERVICOS
           ? "Serviços"
           : "Início";
-  const normalizedHeaderSearch = headerSearch.trim().toLowerCase();
-  const headerSearchResults = normalizedHeaderSearch
-    ? clients
-        .filter((client) =>
-          [client.name, client.phone, client.email]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(normalizedHeaderSearch))
-        )
-        .slice(0, 6)
-    : [];
 
   if (isLoadingAuth) {
     return <main className="page loading">Carregando...</main>;
@@ -3159,43 +3148,6 @@ export default function App() {
           <h3>Olá, {greetingName}!</h3>
           <p>{greetingLabel}</p>
         </div>
-
-        <label className="topbar-search">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="6" />
-            <path d="m16 16 4 4" />
-          </svg>
-          <input
-            value={headerSearch}
-            onChange={(event) => setHeaderSearch(event.target.value)}
-            placeholder="Buscar"
-            aria-label="Buscar cliente"
-          />
-        </label>
-        {normalizedHeaderSearch ? (
-          <ul className="topbar-search-results">
-            {headerSearchResults.length === 0 ? (
-              <li className="empty">Nenhuma cliente encontrada.</li>
-            ) : (
-              headerSearchResults.map((client) => (
-                <li key={`header-search-${client.id}`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHeaderSearch("");
-                      setClientSearchTerm(client.name || "");
-                      setActiveTab(TABS.CLIENTES);
-                      handleOpenClientModal(client.id);
-                    }}
-                  >
-                    <strong>{client.name}</strong>
-                    {client.phone ? <span>{client.phone}</span> : null}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        ) : null}
       </header>
 
       <nav className="tabs" aria-label="Seções">
