@@ -2026,6 +2026,7 @@ export default function App() {
   const [shareBusy, setShareBusy] = useState("");
   const [evolutionComment, setEvolutionComment] = useState("");
   const importingLinksRef = useRef(new Set());
+  const shareLinksRef = useRef([]);
   const shareBusyRef = useRef(false);
 
   const resetClientForm = () => {
@@ -2103,22 +2104,10 @@ export default function App() {
       setAppointments(sortAppointments(loadedAppointments));
     });
 
-    const shareLinksRef = collection(db, "users", user.uid, "shareLinks");
-    const unsubscribeShareLinks = onSnapshot(shareLinksRef, (snapshot) => {
+    const shareLinksCollection = collection(db, "users", user.uid, "shareLinks");
+    const unsubscribeShareLinks = onSnapshot(shareLinksCollection, (snapshot) => {
       const links = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       setShareLinks(links);
-      links.forEach((link) => {
-        if (link.status !== "respondido" || link.imported || importingLinksRef.current.has(link.id)) {
-          return;
-        }
-        importingLinksRef.current.add(link.id);
-        importSubmittedLink(user.uid, link, {
-          defaultPain: getDefaultPainSelection,
-          nextSession: getNextSessionNumber
-        }).catch(() => {
-          importingLinksRef.current.delete(link.id);
-        });
-      });
     });
 
     return () => {
@@ -2219,6 +2208,47 @@ export default function App() {
   useEffect(() => {
     setEvolutionComment(evolutionLink?.comments || "");
   }, [selectedClientId, evolutionLink?.id]);
+
+  const pendingClientLinkIds = useMemo(
+    () => shareLinks
+      .filter((link) => !link.imported && link.status !== "importado" && (link.type === "anamnese" || link.type === "acompanhamento"))
+      .map((link) => link.id)
+      .sort()
+      .join(","),
+    [shareLinks]
+  );
+
+  useEffect(() => {
+    shareLinksRef.current = shareLinks;
+  }, [shareLinks]);
+
+  useEffect(() => {
+    if (!user || !pendingClientLinkIds) {
+      return undefined;
+    }
+    const unsubscribers = pendingClientLinkIds.split(",").map((id) => onSnapshot(doc(db, "clientLinks", id), (snapshot) => {
+      if (!snapshot.exists() || snapshot.data().status !== "respondido") {
+        return;
+      }
+      if (importingLinksRef.current.has(id)) {
+        return;
+      }
+      const link = shareLinksRef.current.find((item) => item.id === id);
+      if (!link || link.imported) {
+        return;
+      }
+      importingLinksRef.current.add(id);
+      importSubmittedLink(user.uid, link, {
+        defaultPain: getDefaultPainSelection,
+        nextSession: getNextSessionNumber
+      }).catch(() => {
+        importingLinksRef.current.delete(id);
+      });
+    }));
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [user, pendingClientLinkIds]);
 
   const lastAppointmentByClientName = useMemo(() => {
     const summaryMap = new Map();
