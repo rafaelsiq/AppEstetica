@@ -444,8 +444,14 @@ function formatDateTimePt(dateValue) {
   });
 }
 
-function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
+function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEditable }) {
   const [pendingSelection, setPendingSelection] = useState(null);
+
+  useEffect(() => {
+    if (!isEditable) {
+      setPendingSelection(null);
+    }
+  }, [isEditable]);
 
   const getClosestRegion = (x, y, regions) => {
     let closestRegion = null;
@@ -463,6 +469,10 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
   };
 
   const handleMapClick = (event, regions, side) => {
+    if (!isEditable) {
+      return;
+    }
+
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
@@ -481,6 +491,10 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
   };
 
   const handleConfirmSelection = (laterality) => {
+    if (!isEditable) {
+      return;
+    }
+
     if (!pendingSelection) {
       return;
     }
@@ -519,7 +533,10 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
                     ? "secondary-btn active-laterality"
                     : "secondary-btn"
                 }
-                onClick={() => handleConfirmSelection(option.value)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleConfirmSelection(option.value);
+                }}
               >
                 {option.label}
               </button>
@@ -527,7 +544,10 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
             <button
               type="button"
               className="danger-btn"
-              onClick={() => setPendingSelection(null)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPendingSelection(null);
+              }}
             >
               Cancelar
             </button>
@@ -547,8 +567,9 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
   return (
     <div className="pain-map-section">
       <p className="muted-text">
-        Toque na região do corpo para marcar dor. A lateralidade aparecerá em um tooltip no
-        ponto clicado. Toque na bolinha para desmarcar.
+        {isEditable
+          ? "Toque na região do corpo para marcar dor. A lateralidade aparecerá em um tooltip no ponto clicado. Toque na bolinha para desmarcar."
+          : "Mapa em modo visualização. Clique em Editar ficha para alterar os pontos de dor."}
       </p>
       <div className="pain-map-grid">
         <figure
@@ -558,6 +579,9 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
         >
           <div
             className="pain-map-canvas"
+            data-editable={isEditable ? "true" : "false"}
+            role={isEditable ? "button" : undefined}
+            tabIndex={isEditable ? 0 : -1}
             onClick={(event) => handleMapClick(event, FRONT_PAIN_REGIONS, "front")}
           >
             <img src="/pain-map-front.jpg" alt="Mapa corporal frontal para seleção de dor" />
@@ -569,6 +593,9 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
                 style={{ left: `${selection.x}%`, top: `${selection.y}%` }}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (!isEditable) {
+                    return;
+                  }
                   onRemoveRegion(selection.label);
                 }}
                 title={`${selection.label} (${formatLateralityLabel(selection.laterality)})`}
@@ -588,6 +615,9 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
         >
           <div
             className="pain-map-canvas"
+            data-editable={isEditable ? "true" : "false"}
+            role={isEditable ? "button" : undefined}
+            tabIndex={isEditable ? 0 : -1}
             onClick={(event) => handleMapClick(event, BACK_PAIN_REGIONS, "back")}
           >
             <img src="/pain-map-back.jpg" alt="Mapa corporal traseiro para seleção de dor" />
@@ -599,6 +629,9 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
                 style={{ left: `${selection.x}%`, top: `${selection.y}%` }}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (!isEditable) {
+                    return;
+                  }
                   onRemoveRegion(selection.label);
                 }}
                 title={`${selection.label} (${formatLateralityLabel(selection.laterality)})`}
@@ -620,7 +653,12 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
               key={`chip-${selection.label}`}
               type="button"
               className="selected-area-chip"
-              onClick={() => onRemoveRegion(selection.label)}
+              onClick={() => {
+                if (!isEditable) {
+                  return;
+                }
+                onRemoveRegion(selection.label);
+              }}
               title={`Remover ${selection.label}`}
             >
               {selection.label} ({formatLateralityLabel(selection.laterality)}) ×
@@ -2019,6 +2057,7 @@ export default function App() {
                   painSelections={anamneseForm.painSelections}
                   onSelectRegion={handleUpsertPainSelection}
                   onRemoveRegion={handleRemovePainSelection}
+                  isEditable={isEditingAnamnese}
                 />
 
                 <h5>Perguntas-chave</h5>

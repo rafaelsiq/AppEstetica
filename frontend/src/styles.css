@@ -433,6 +433,10 @@ h5 {
   overflow: visible;
 }
 
+.pain-map-canvas[data-editable="false"] {
+  cursor: not-allowed;
+}
+
 .pain-map-card img {
   display: block;
   width: 100%;
