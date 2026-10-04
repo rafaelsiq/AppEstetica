@@ -1200,6 +1200,135 @@ h5 {
   gap: 10px;
 }
 
+.photo-composer-backdrop {
+  z-index: 90;
+}
+
+.session-open-btn {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.session-open-btn p {
+  margin: 4px 0 0;
+  color: #54656f;
+}
+
+.session-photo-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.session-draft-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.session-draft-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e6eef1;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.session-draft-list button {
+  border: none;
+  background: transparent;
+  color: #9e2525;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.session-detail-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.session-detail-metrics span {
+  background: #f4f7f8;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #24343d;
+}
+
+.scale-slider {
+  display: grid;
+  gap: 8px;
+}
+
+.scale-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.scale-slider-header strong {
+  font-size: 18px;
+}
+
+.scale-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  margin: 8px 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2f6fed 0%, #f08a24 50%, #d92d20 100%);
+  outline: none;
+}
+
+.scale-slider input[type="range"]:focus {
+  outline: none;
+}
+
+.scale-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--scale-color, #2f6fed);
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(16, 29, 44, 0.28);
+  cursor: pointer;
+}
+
+.scale-slider input[type="range"]::-moz-range-track {
+  height: 8px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2f6fed 0%, #f08a24 50%, #d92d20 100%);
+}
+
+.scale-slider input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: var(--scale-color, #2f6fed);
+  box-shadow: 0 1px 4px rgba(16, 29, 44, 0.28);
+  cursor: pointer;
+}
+
 .photo-measurement-editor {
   display: grid;
   gap: 8px;

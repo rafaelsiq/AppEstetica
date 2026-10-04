@@ -464,11 +464,63 @@ function buildEmptyCheckpoint() {
     date: getTodayISODate(),
     sessionNumber: "",
     sessionType: "",
-    painLevel: "",
-    stressLevel: "",
+    painLevel: "0",
+    stressLevel: "0",
     sleepHours: "",
     observations: ""
   };
+}
+
+function getNextSessionNumber(items) {
+  const numericSessionNumbers = items
+    .map((item) => Number(item.sessionNumber))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (numericSessionNumbers.length > 0) {
+    return Math.max(...numericSessionNumbers) + 1;
+  }
+  return items.length + 1;
+}
+
+function hexToRgb(hex) {
+  const value = hex.replace("#", "");
+  return [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16));
+}
+
+function mixHex(startHex, endHex, amount) {
+  const start = hexToRgb(startHex);
+  const end = hexToRgb(endHex);
+  const mixed = start.map((channel, index) => Math.round(channel + (end[index] - channel) * amount));
+  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
+}
+
+function scaleToneColor(value) {
+  const safe = Math.min(10, Math.max(0, Number(value) || 0));
+  if (safe <= 5) {
+    return mixHex("#2f6fed", "#f08a24", safe / 5);
+  }
+  return mixHex("#f08a24", "#d92d20", (safe - 5) / 5);
+}
+
+function ScaleSlider({ label, value, onChange }) {
+  const numeric = Math.min(10, Math.max(0, Number(value) || 0));
+  const color = scaleToneColor(numeric);
+  return (
+    <label className="scale-slider">
+      <span className="scale-slider-header">
+        <span>{label}</span>
+        <strong style={{ color }}>{numeric}</strong>
+      </span>
+      <input
+        type="range"
+        min="0"
+        max="10"
+        step="1"
+        value={numeric}
+        style={{ "--scale-color": color }}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
 }
 
 function buildEmptyPhotoAnalysis() {
@@ -1322,6 +1374,55 @@ function PhotoMeasurementEditor({
   );
 }
 
+function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
+  if (!checkpoint) {
+    return (
+      <>
+        <button type="button" className="secondary-btn" onClick={onBack}>
+          Voltar
+        </button>
+        <p className="muted-text">Esta sessão não está mais disponível.</p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="panel-header">
+        <div>
+          <h4>
+            {formatDatePt(checkpoint.date)}
+            {checkpoint.sessionNumber ? ` · Sessão ${checkpoint.sessionNumber}` : ""}
+          </h4>
+          <p>{checkpoint.sessionType || "Tipo não informado"}</p>
+        </div>
+        <button type="button" className="secondary-btn" onClick={onBack}>
+          Voltar
+        </button>
+      </div>
+      <div className="session-detail-metrics">
+        <span>Dor {checkpoint.painLevel ?? 0}</span>
+        <span>Estresse {checkpoint.stressLevel ?? 0}</span>
+        <span>Sono {checkpoint.sleepHours ?? 0}h</span>
+      </div>
+      {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
+      <h5>Fotos</h5>
+      {photos.length === 0 ? (
+        <p className="muted-text">Nenhuma foto nesta sessão.</p>
+      ) : (
+        <ul className="list photo-analysis-list">
+          {photos.map((analysis) => (
+            <PhotoAnalysisSummary key={analysis.id} analysis={analysis} />
+          ))}
+        </ul>
+      )}
+      <button type="button" className="danger-btn" onClick={() => onDelete(checkpoint.id)}>
+        Excluir sessão
+      </button>
+    </>
+  );
+}
+
 function PhotoAnalysisSummary({ analysis, onRemove, removeLabel = "Excluir" }) {
   const measurements = getStoredMeasurements(analysis);
   return (
@@ -1853,6 +1954,9 @@ export default function App() {
   const [photoForm, setPhotoForm] = useState(buildEmptyPhotoAnalysis());
   const [draftPhotos, setDraftPhotos] = useState([]);
   const [isSavingCheckpoint, setIsSavingCheckpoint] = useState(false);
+  const [followupScreen, setFollowupScreen] = useState("list");
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState("");
+  const [isPhotoComposerOpen, setIsPhotoComposerOpen] = useState(false);
   const [photoMessage, setPhotoMessage] = useState("");
   const [photoMessageTone, setPhotoMessageTone] = useState("success");
   const [anamneseMessage, setAnamneseMessage] = useState("");
@@ -2400,6 +2504,9 @@ export default function App() {
     setSelectedClientId("");
     setSelectedClientView(null);
     setAnamneseMessage("");
+    setFollowupScreen("list");
+    setSelectedCheckpointId("");
+    setIsPhotoComposerOpen(false);
   };
 
   const handleStartEditAnamnese = () => {
@@ -2977,7 +3084,7 @@ export default function App() {
 
   const handleAddCheckpoint = async (event) => {
     event.preventDefault();
-    if (!user || !selectedClient || !checkpointForm.date || checkpointForm.painLevel === "" || isSavingCheckpoint) {
+    if (!user || !selectedClient || !checkpointForm.date || isSavingCheckpoint) {
       return;
     }
 
@@ -2999,7 +3106,7 @@ export default function App() {
       );
       batch.set(checkpointRef, {
         date: checkpointForm.date,
-        sessionNumber: checkpointForm.sessionNumber.trim(),
+        sessionNumber: checkpointForm.sessionNumber.trim() || String(getNextSessionNumber(checkpoints)),
         sessionType: checkpointForm.sessionType,
         painLevel: Number(checkpointForm.painLevel),
         stressLevel: Number(checkpointForm.stressLevel || 0),
@@ -3021,6 +3128,9 @@ export default function App() {
         ...buildEmptyPhotoAnalysis(),
         date: getTodayISODate()
       }));
+      setIsPhotoComposerOpen(false);
+      setFollowupScreen("list");
+      setSelectedCheckpointId("");
       showPhotoFeedback(
         photosToSave.length > 0
           ? "Acompanhamento registrado com as fotos vinculadas."
@@ -3158,6 +3268,7 @@ export default function App() {
       ...buildEmptyPhotoAnalysis(),
       date: checkpointForm.date || previous.date || getTodayISODate()
     }));
+    setIsPhotoComposerOpen(false);
     showPhotoFeedback("Foto incluída neste acompanhamento. Ela será salva ao registrar.", "success", 2500);
   };
 
@@ -4563,13 +4674,119 @@ export default function App() {
 
               {isFollowupViewOpen ? (
                 <section className="followup-panel">
+                  {followupScreen === "list" ? (
+                    <>
+                      <div className="panel-header">
+                        <div>
+                          <h4>Sessões</h4>
+                          <p>Toque em uma sessão para ver os detalhes e as fotos.</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="primary-btn"
+                          onClick={() => {
+                            setCheckpointForm({
+                              ...buildEmptyCheckpoint(),
+                              sessionNumber: String(getNextSessionNumber(checkpoints))
+                            });
+                            setDraftPhotos([]);
+                            setPhotoForm(buildEmptyPhotoAnalysis());
+                            setPhotoMessage("");
+                            setIsPhotoComposerOpen(false);
+                            setFollowupScreen("create");
+                          }}
+                        >
+                          Nova sessão
+                        </button>
+                      </div>
+                      <ul className="list">
+                        {checkpoints.length === 0 ? (
+                          <li className="empty">Nenhuma sessão registrada.</li>
+                        ) : (
+                          [...checkpoints]
+                            .sort((first, second) => {
+                              const dateDiff = String(second.date || "").localeCompare(String(first.date || ""));
+                              if (dateDiff !== 0) {
+                                return dateDiff;
+                              }
+                              return Number(second.sessionNumber || 0) - Number(first.sessionNumber || 0);
+                            })
+                            .map((checkpoint) => (
+                              <li key={checkpoint.id}>
+                                <button
+                                  type="button"
+                                  className="session-open-btn"
+                                  onClick={() => {
+                                    setSelectedCheckpointId(checkpoint.id);
+                                    setFollowupScreen("detail");
+                                  }}
+                                >
+                                  <strong>
+                                    {formatDatePt(checkpoint.date)}
+                                    {checkpoint.sessionNumber ? ` · Sessão ${checkpoint.sessionNumber}` : ""}
+                                  </strong>
+                                  <p>
+                                    {checkpoint.sessionType || "Tipo não informado"} · Dor {checkpoint.painLevel ?? 0} ·
+                                    Estresse {checkpoint.stressLevel ?? 0} · Sono {checkpoint.sleepHours ?? 0}h
+                                  </p>
+                                </button>
+                              </li>
+                            ))
+                        )}
+                      </ul>
+                      {photosByCheckpoint.unlinked.length > 0 ? (
+                        <section className="photo-analysis-section">
+                          <h5>Fotos sem acompanhamento vinculado</h5>
+                          <ul className="list photo-analysis-list">
+                            {photosByCheckpoint.unlinked.map((analysis) => (
+                              <PhotoAnalysisSummary
+                                key={analysis.id}
+                                analysis={{
+                                  ...analysis,
+                                  positionLabel: `${formatDatePt(analysis.date)} • ${analysis.positionLabel || "Posição não informada"}`
+                                }}
+                                onRemove={() => handleDeletePhotoAnalysis(analysis.id)}
+                              />
+                            ))}
+                          </ul>
+                        </section>
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  {followupScreen === "detail" ? (
+                    <SessionDetail
+                      checkpoint={checkpoints.find((item) => item.id === selectedCheckpointId)}
+                      photos={photosByCheckpoint.grouped.get(selectedCheckpointId) || []}
+                      onBack={() => {
+                        setFollowupScreen("list");
+                        setSelectedCheckpointId("");
+                      }}
+                      onDelete={async (checkpointId) => {
+                        await handleDeleteCheckpoint(checkpointId);
+                        setFollowupScreen("list");
+                        setSelectedCheckpointId("");
+                      }}
+                    />
+                  ) : null}
+
+                  {followupScreen === "create" ? (
+                    <>
                   <div className="panel-header">
                     <div>
-                      <h4>Acompanhamento - {selectedClient.name}</h4>
-                      <p>
-                        Histórico de atendimentos independente da anamnese.
-                      </p>
+                      <h4>Nova sessão</h4>
+                      <p>Sessão {checkpointForm.sessionNumber || getNextSessionNumber(checkpoints)}</p>
                     </div>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => {
+                        setIsPhotoComposerOpen(false);
+                        setFollowupScreen("list");
+                      }}
+                    >
+                      Voltar
+                    </button>
                   </div>
 
                   <form
@@ -4587,14 +4804,6 @@ export default function App() {
                       />
                     </label>
                     <label>
-                      Sessão nº
-                      <input
-                        value={checkpointForm.sessionNumber}
-                        readOnly
-                        placeholder="Auto"
-                      />
-                    </label>
-                    <label>
                       Tipo de atendimento
                       <select
                         value={checkpointForm.sessionType}
@@ -4608,27 +4817,16 @@ export default function App() {
                         ))}
                       </select>
                     </label>
-                    <label>
-                      Dor (0-10)
-                      <input
-                        type="number"
-                        min="0"
-                        max="10"
-                        value={checkpointForm.painLevel}
-                        onChange={(event) => handleCheckpointFieldChange("painLevel", event.target.value)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Estresse/Tensão (0-10)
-                      <input
-                        type="number"
-                        min="0"
-                        max="10"
-                        value={checkpointForm.stressLevel}
-                        onChange={(event) => handleCheckpointFieldChange("stressLevel", event.target.value)}
-                      />
-                    </label>
+                    <ScaleSlider
+                      label="Dor (0-10)"
+                      value={checkpointForm.painLevel}
+                      onChange={(value) => handleCheckpointFieldChange("painLevel", value)}
+                    />
+                    <ScaleSlider
+                      label="Estresse/Tensão (0-10)"
+                      value={checkpointForm.stressLevel}
+                      onChange={(value) => handleCheckpointFieldChange("stressLevel", value)}
+                    />
                     <label>
                       Sono (horas)
                       <input
@@ -4649,11 +4847,61 @@ export default function App() {
                     </label>
                   </form>
 
-                  <section className="photo-analysis-section">
-                    <h5>Fotos deste acompanhamento</h5>
-                    <p className="muted-text">
-                      As fotos incluídas aqui ficam vinculadas a este atendimento e são salvas junto com ele.
-                    </p>
+                  <div className="session-photo-actions">
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => setIsPhotoComposerOpen(true)}
+                    >
+                      Adicionar foto
+                    </button>
+                    {draftPhotos.length > 0 ? (
+                      <ul className="session-draft-list">
+                        {draftPhotos.map((analysis) => (
+                          <li key={analysis.localId}>
+                            <span>{analysis.positionLabel || "Foto incluída"}</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDraftPhotos((previous) =>
+                                  previous.filter((item) => item.localId !== analysis.localId)
+                                )
+                              }
+                            >
+                              Remover
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="muted-text">Nenhuma foto incluída nesta sessão.</p>
+                    )}
+                    {photoMessage ? (
+                      <p className={photoMessageTone === "error" ? "error-text" : "success-text"}>{photoMessage}</p>
+                    ) : null}
+                  </div>
+
+                  {isPhotoComposerOpen ? (
+                  <div
+                    className="client-modal-backdrop photo-composer-backdrop"
+                    onClick={() => setIsPhotoComposerOpen(false)}
+                  >
+                  <section
+                    className="appointment-modal photo-analysis-section"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Adicionar foto"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <header className="profile-modal-header">
+                      <div>
+                        <h4>Adicionar foto</h4>
+                        <p>A foto fica vinculada a esta sessão e é salva junto com ela.</p>
+                      </div>
+                      <button type="button" className="secondary-btn" onClick={() => setIsPhotoComposerOpen(false)}>
+                        Fechar
+                      </button>
+                    </header>
                     <form className="form" onSubmit={handleAddPhotoAnalysis}>
                       <div className="grid-form photo-position-fields">
                         <label>
@@ -4747,6 +4995,10 @@ export default function App() {
                         />
                       </label>
 
+                      {photoMessage ? (
+                        <p className={photoMessageTone === "error" ? "error-text" : "success-text"}>{photoMessage}</p>
+                      ) : null}
+
                       <div className="inline-actions">
                         <button className="primary-btn" type="submit">
                           Incluir foto neste acompanhamento
@@ -4765,30 +5017,9 @@ export default function App() {
                         </button>
                       </div>
                     </form>
-
-                    {photoMessage ? (
-                      <p className={photoMessageTone === "error" ? "error-text" : "success-text"}>{photoMessage}</p>
-                    ) : null}
-
-                    {draftPhotos.length > 0 ? (
-                      <ul className="list photo-analysis-list">
-                        {draftPhotos.map((analysis) => (
-                          <PhotoAnalysisSummary
-                            key={analysis.localId}
-                            analysis={analysis}
-                            removeLabel="Remover"
-                            onRemove={() =>
-                              setDraftPhotos((previous) =>
-                                previous.filter((item) => item.localId !== analysis.localId)
-                              )
-                            }
-                          />
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="muted-text">Nenhuma foto incluída neste acompanhamento ainda.</p>
-                    )}
                   </section>
+                  </div>
+                  ) : null}
 
                   <button
                     className="primary-btn followup-submit-btn"
@@ -4799,72 +5030,10 @@ export default function App() {
                     {isSavingCheckpoint
                       ? "Salvando acompanhamento..."
                       : pendingPhotoCount > 0
-                        ? `Registrar acompanhamento com ${pendingPhotoCount} foto${pendingPhotoCount > 1 ? "s" : ""}`
-                        : "Registrar acompanhamento"}
+                        ? `Registrar sessão com ${pendingPhotoCount} foto${pendingPhotoCount > 1 ? "s" : ""}`
+                        : "Registrar sessão"}
                   </button>
-
-                  <ul className="list">
-                    {checkpoints.length === 0 ? (
-                      <li className="empty">Sem sessões registradas para acompanhamento.</li>
-                    ) : (
-                      checkpoints.map((checkpoint) => {
-                        const linkedPhotos = photosByCheckpoint.grouped.get(checkpoint.id) || [];
-                        return (
-                        <li key={checkpoint.id} className="checkpoint-entry">
-                          <div className="checkpoint-entry-body">
-                            <div>
-                              <strong>
-                                {formatDatePt(checkpoint.date)}
-                                {checkpoint.sessionNumber ? ` - Sessão ${checkpoint.sessionNumber}` : ""}
-                              </strong>
-                              <p>
-                                Tipo: {checkpoint.sessionType || "Não informado"} | Dor: {checkpoint.painLevel ?? 0} |
-                                Estresse: {checkpoint.stressLevel ?? 0} | Sono: {checkpoint.sleepHours ?? 0}h
-                              </p>
-                              {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
-                            </div>
-                            {linkedPhotos.length > 0 ? (
-                              <div className="checkpoint-photos">
-                                <p className="muted-text">
-                                  {linkedPhotos.length} foto{linkedPhotos.length > 1 ? "s" : ""} vinculada
-                                  {linkedPhotos.length > 1 ? "s" : ""} a este acompanhamento
-                                </p>
-                                <ul className="list photo-analysis-list">
-                                  {linkedPhotos.map((analysis) => (
-                                    <PhotoAnalysisSummary key={analysis.id} analysis={analysis} />
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-                          </div>
-                          <button
-                            type="button"
-                            className="danger-btn"
-                            onClick={() => handleDeleteCheckpoint(checkpoint.id)}
-                          >
-                            Excluir
-                          </button>
-                        </li>
-                        );
-                      })
-                    )}
-                  </ul>
-                  {photosByCheckpoint.unlinked.length > 0 ? (
-                    <section className="photo-analysis-section">
-                      <h5>Fotos sem acompanhamento vinculado</h5>
-                      <ul className="list photo-analysis-list">
-                        {photosByCheckpoint.unlinked.map((analysis) => (
-                          <PhotoAnalysisSummary
-                            key={analysis.id}
-                            analysis={{
-                              ...analysis,
-                              positionLabel: `${formatDatePt(analysis.date)} • ${analysis.positionLabel || "Posição não informada"}`
-                            }}
-                            onRemove={() => handleDeletePhotoAnalysis(analysis.id)}
-                          />
-                        ))}
-                      </ul>
-                    </section>
+                    </>
                   ) : null}
                 </section>
               ) : null}
