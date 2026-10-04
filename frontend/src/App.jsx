@@ -254,6 +254,237 @@ function formatSexLabel(sex) {
   return option ? option.label : "Não informado";
 }
 
+function formatChoiceLabel(options, value) {
+  const option = options.find((item) => item.value === value);
+  return option ? option.label : "Não informado";
+}
+
+function formatYesNo(value) {
+  if (value === "yes" || value === "sim") {
+    return "Sim";
+  }
+  if (value === "no" || value === "nao") {
+    return "Não";
+  }
+  return "Não informado";
+}
+
+function formatListOrFallback(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return "Não informado";
+  }
+  return values.join(", ");
+}
+
+function formatTextOrFallback(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "Não informado";
+  }
+  return value.trim();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeHtmlWithLineBreaks(value) {
+  return escapeHtml(value).replace(/\n/g, "<br />");
+}
+
+function buildPdfSection(title, rows) {
+  const renderedRows = rows
+    .map(([label, value]) => {
+      const safeValue = escapeHtmlWithLineBreaks(value || "Não informado");
+      return `<tr><th>${escapeHtml(label)}</th><td>${safeValue}</td></tr>`;
+    })
+    .join("");
+
+  return `
+    <section class="pdf-section">
+      <h2>${escapeHtml(title)}</h2>
+      <table>
+        <tbody>
+          ${renderedRows}
+        </tbody>
+      </table>
+    </section>
+  `;
+}
+
+function buildAnamnesePdfHtml(client, anamnese) {
+  const painSelectionsDescription = normalizePainSelections(anamnese.painSelections).map(
+    (selection) =>
+      `${selection.label} (${selection.side === "front" ? "Frente" : "Costas"} - ${formatLateralityLabel(
+        selection.laterality
+      )})`
+  );
+
+  const sections = [
+    buildPdfSection("Dados da cliente", [
+      ["Nome", formatTextOrFallback(client.name)],
+      ["Telefone", formatTextOrFallback(client.phone)],
+      ["E-mail", formatTextOrFallback(client.email)],
+      ["Data de nascimento", client.birthDate ? formatDatePt(client.birthDate) : "Não informado"],
+      ["Sexo", formatSexLabel(client.sex)],
+      ["Endereço", formatTextOrFallback(client.address)]
+    ]),
+    buildPdfSection("Círculo das dores principais", [
+      ["Regiões marcadas", formatListOrFallback(painSelectionsDescription)],
+      ["Intensidade da dor (0 a 10)", formatTextOrFallback(anamnese.painScale)]
+    ]),
+    buildPdfSection("Perguntas-chave", [
+      [
+        "Dor em ponto específico ou irradiada",
+        formatChoiceLabel(PAIN_RADIATION_OPTIONS, anamnese.painRadiatesOption)
+      ],
+      ["Detalhes de localização/irradiação", formatTextOrFallback(anamnese.painRadiatesDetails)],
+      ["Primeiro episódio", formatTextOrFallback(anamnese.firstPainEpisode)],
+      ["Tipos de dor", formatListOrFallback(anamnese.painTypeOptions)],
+      ["Outro tipo de dor", formatTextOrFallback(anamnese.painTypeOther)],
+      ["Situações com maior dor", formatListOrFallback(anamnese.painTriggerOptions)],
+      ["Outra situação que piora", formatTextOrFallback(anamnese.painTriggerOther)],
+      ["Objetivo principal", formatChoiceLabel(GOAL_OPTIONS, anamnese.goalOption)],
+      ["Detalhes do objetivo", formatTextOrFallback(anamnese.goalDetails)],
+      ["Pratica esporte?", formatYesNo(anamnese.playsSport)],
+      ["Esportes", formatListOrFallback(anamnese.sportOptions)],
+      ["Outro esporte", formatTextOrFallback(anamnese.sportOther)],
+      ["Já fez outro tratamento/massagem?", formatYesNo(anamnese.hadPreviousTreatment)],
+      ["Tratamentos anteriores", formatListOrFallback(anamnese.previousTreatmentTypes)],
+      [
+        "Experiência em tratamentos anteriores",
+        formatTextOrFallback(anamnese.previousTreatmentExperience)
+      ],
+      ["Objetivos estéticos", formatListOrFallback(anamnese.aestheticGoalOptions)],
+      ["Outro objetivo estético", formatTextOrFallback(anamnese.aestheticGoalsOther)],
+      ["Hábitos que contribuem para dor", formatListOrFallback(anamnese.habitOptions)],
+      ["Outros hábitos", formatTextOrFallback(anamnese.habitsContributingOther)]
+    ]),
+    buildPdfSection("Condições de saúde", [
+      ["Condições selecionadas", formatListOrFallback(anamnese.healthConditions)],
+      ["Outras observações de saúde", formatTextOrFallback(anamnese.healthOther)]
+    ])
+  ];
+
+  if (client.sex === "female") {
+    sections.push(
+      buildPdfSection("Para mulheres", [
+        ["Período menstrual", formatTextOrFallback(anamnese.menstrualPeriod)],
+        ["Gestante?", formatYesNo(anamnese.pregnant)],
+        ["Tempo de gestação", formatTextOrFallback(anamnese.gestatingTime)],
+        ["Lactante?", formatYesNo(anamnese.lactating)]
+      ])
+    );
+  }
+
+  sections.push(
+    buildPdfSection("Conclusão da ficha", [
+      ["Área com mais atenção", formatTextOrFallback(anamnese.bodyFocus)],
+      ["Observações gerais", formatTextOrFallback(anamnese.observations)],
+      ["Assinatura (nome)", formatTextOrFallback(anamnese.signatureName)]
+    ])
+  );
+
+  return `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Anamnese - ${escapeHtml(client.name || "Cliente")}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #16252b;
+            background: #ffffff;
+            line-height: 1.35;
+          }
+          .pdf-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px;
+          }
+          .pdf-title {
+            border-bottom: 2px solid #24695c;
+            padding-bottom: 10px;
+            margin-bottom: 16px;
+          }
+          .pdf-title h1 {
+            margin: 0;
+            font-size: 24px;
+          }
+          .pdf-title p {
+            margin: 6px 0 0;
+            color: #4a5d68;
+            font-size: 13px;
+          }
+          .pdf-section {
+            margin-bottom: 16px;
+            page-break-inside: avoid;
+          }
+          .pdf-section h2 {
+            margin: 0 0 8px;
+            font-size: 17px;
+            color: #1f4f45;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #d7dde3;
+          }
+          th, td {
+            border-bottom: 1px solid #e4e9ee;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+            font-size: 13px;
+          }
+          th {
+            width: 32%;
+            background: #f7fafc;
+            color: #2f4957;
+          }
+          td {
+            color: #24343d;
+            white-space: pre-wrap;
+            word-break: break-word;
+          }
+          tr:last-child th, tr:last-child td {
+            border-bottom: none;
+          }
+          .pdf-footer {
+            margin-top: 12px;
+            color: #54656f;
+            font-size: 12px;
+          }
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="pdf-container">
+          <header class="pdf-title">
+            <h1>Ficha de Anamnese</h1>
+            <p>Clínica Estética • Gerado em ${escapeHtml(new Date().toLocaleString("pt-BR"))}</p>
+          </header>
+          ${sections.join("")}
+          <p class="pdf-footer">
+            Dica: na janela de impressão, selecione "Salvar como PDF" para exportar o arquivo.
+          </p>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
 function normalizeStringArray(rawValues, allowedValues) {
   if (!Array.isArray(rawValues)) {
     return [];
@@ -1365,6 +1596,30 @@ export default function App() {
     });
   };
 
+  const handleExportAnamnesePdf = () => {
+    if (!selectedClient) {
+      return;
+    }
+
+    const normalizedAnamnese = normalizeAnamneseRecord(anamneseForm, selectedClient);
+    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=960,height=720");
+
+    if (!printWindow) {
+      setAnamneseMessage("Não foi possível abrir a janela de exportação. Libere pop-ups e tente novamente.");
+      setTimeout(() => setAnamneseMessage(""), 3500);
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(buildAnamnesePdfHtml(selectedClient, normalizedAnamnese));
+    printWindow.document.close();
+
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+  };
+
   const handleSaveAnamnese = async (event) => {
     event.preventDefault();
     if (!user || !selectedClient) {
@@ -1834,6 +2089,9 @@ export default function App() {
                       ) : null}
                     </div>
                     <div className="inline-actions">
+                      <button type="button" className="secondary-btn" onClick={handleExportAnamnesePdf}>
+                        Exportar PDF
+                      </button>
                       {clientHasAnamnese && !isEditingAnamnese ? (
                         <button type="button" className="secondary-btn" onClick={handleStartEditAnamnese}>
                           Editar ficha
