@@ -2740,6 +2740,10 @@ export default function App() {
                     </div>
                   </div>
                   <div className="charts-grid">
+                    <WellnessScoreChart
+                      points={checkpointChartData}
+                      className="chart-card-span-2"
+                    />
                     <ProgressLineChart
                       title="Evolução da dor x estresse"
                       points={checkpointChartData}
@@ -2748,10 +2752,6 @@ export default function App() {
                       maxValue={10}
                     />
                     <SleepBarChart points={checkpointChartData} />
-                    <WellnessScoreChart
-                      points={checkpointChartData}
-                      className="chart-card-span-2"
-                    />
                     <SessionTypeDistributionChart points={checkpointChartData} />
                     <InitialVsCurrentChart points={checkpointChartData} />
                   </div>
