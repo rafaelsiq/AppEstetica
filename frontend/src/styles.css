@@ -248,6 +248,14 @@ select:focus {
   gap: 12px;
 }
 
+.followup-panel {
+  margin-top: 18px;
+  border-top: 1px solid #d7dde3;
+  padding-top: 18px;
+  display: grid;
+  gap: 12px;
+}
+
 .anamnese-prefill-box {
   border: 1px dashed #b8c5cf;
   border-radius: 12px;

@@ -1891,11 +1891,12 @@ export default function App() {
           ) : null}
 
           {selectedClient ? (
+            <>
             <section className="anamnese-panel">
               <div className="panel-header">
                 <div>
                   <h4>Ficha de Anamnese - {selectedClient.name}</h4>
-                  <p>Registre as informações clínicas e acompanhe evolução por sessão.</p>
+                  <p>Registre as informações clínicas da ficha base da cliente.</p>
                   <p className="muted-text">
                     Dados pessoais ficam no cadastro da cliente e são fixos.
                   </p>
@@ -2386,10 +2387,18 @@ export default function App() {
                     : "Salvar nova ficha de anamnese"}
                 </button>
               </form>
+            </section>
 
-              <hr />
+            <section className="followup-panel">
+              <div className="panel-header">
+                <div>
+                  <h4>Acompanhamento - {selectedClient.name}</h4>
+                  <p>
+                    Registro de evolução independente da criação de nova ficha de anamnese.
+                  </p>
+                </div>
+              </div>
 
-              <h4>Acompanhamento com gráficos</h4>
               <form className="form grid-form" onSubmit={handleAddCheckpoint}>
                 <label>
                   Data do atendimento
@@ -2511,6 +2520,7 @@ export default function App() {
                 )}
               </ul>
             </section>
+            </>
           ) : null}
         </section>
       ) : null}

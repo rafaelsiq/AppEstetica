@@ -27,6 +27,7 @@ Aplicação web em React + Vite com autenticação Firebase e persistência no F
   - Índice de bem-estar por sessão
   - Distribuição por tipo de atendimento
   - Comparativo inicial x atual
+- Acompanhamento separado da ficha de anamnese (registro independente por sessão)
 - PWA habilitada (instalável no navegador)
 
 ## Como rodar
