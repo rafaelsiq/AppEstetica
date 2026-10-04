@@ -313,6 +313,14 @@ select:focus {
   color: #24695c;
 }
 
+.client-card-open:disabled {
+  cursor: default;
+}
+
+.client-card-open:disabled:hover strong {
+  color: inherit;
+}
+
 .client-card-open:focus-visible {
   outline: 2px solid rgba(36, 105, 92, 0.35);
   outline-offset: 8px;

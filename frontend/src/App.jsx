@@ -1692,6 +1692,8 @@ export default function App() {
     setEditingClientId("");
     setIsClientFormOpen(true);
     setClientFormMessage("");
+    setSelectedClientId("");
+    setSelectedClientView(null);
   };
 
   const handleEditClient = (client) => {
@@ -1705,9 +1707,14 @@ export default function App() {
     setIsClientFormOpen(true);
     setClientFormMessage("");
     setOpenClientMenuId("");
+    setSelectedClientId("");
+    setSelectedClientView(null);
   };
 
   const handleOpenClientModal = (clientId) => {
+    if (isClientFormOpen) {
+      return;
+    }
     setSelectedClientId(clientId);
     setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
     setOpenClientMenuId("");
@@ -2295,6 +2302,7 @@ export default function App() {
                     type="button"
                     className="client-card-open"
                     onClick={() => handleOpenClientModal(client.id)}
+                    disabled={isClientFormOpen}
                   >
                     <div className="client-card-main">
                       <div className="client-card-title-row">
