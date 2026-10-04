@@ -4047,7 +4047,12 @@ export default function App() {
       ) : null}
 
       {isAppointmentModalOpen ? (
-        <div className="client-modal-backdrop" onClick={closeAppointmentModal}>
+        <div
+          className="client-modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) closeAppointmentModal();
+          }}
+        >
           <section
             className="appointment-modal"
             role="dialog"
@@ -4340,7 +4345,12 @@ export default function App() {
           </ul>
 
           {selectedClient && selectedClientView ? (
-            <div className="client-modal-backdrop" onClick={handleCloseClientView}>
+            <div
+              className="client-modal-backdrop"
+              onPointerDown={(event) => {
+                if (event.target === event.currentTarget) handleCloseClientView();
+              }}
+            >
               <section
                 className="client-modal"
                 role="dialog"
@@ -5195,7 +5205,9 @@ export default function App() {
                   {isPhotoComposerOpen ? (
                   <div
                     className="client-modal-backdrop photo-composer-backdrop"
-                    onClick={() => setIsPhotoComposerOpen(false)}
+                    onPointerDown={(event) => {
+                      if (event.target === event.currentTarget) setIsPhotoComposerOpen(false);
+                    }}
                   >
                   <section
                     className="appointment-modal photo-analysis-section"
@@ -5427,7 +5439,12 @@ export default function App() {
       ) : null}
 
       {isProfileModalOpen ? (
-        <div className="client-modal-backdrop" onClick={handleCloseProfileModal}>
+        <div
+          className="client-modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) handleCloseProfileModal();
+          }}
+        >
           <section
             className="profile-modal"
             role="dialog"
@@ -5508,7 +5525,12 @@ export default function App() {
 
 
       {isClientFormOpen ? (
-        <div className="client-modal-backdrop" onClick={resetClientForm}>
+        <div
+          className="client-modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) resetClientForm();
+          }}
+        >
           <section
             className="profile-modal"
             role="dialog"
