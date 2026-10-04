@@ -239,6 +239,16 @@ function formatLateralityShort(laterality) {
   return option ? option.short : "A";
 }
 
+function formatPainSelectionLocation(selection) {
+  const sideLabel = selection.side === "front" ? "Frente" : "Costas";
+  const x = Number(selection.x);
+  const y = Number(selection.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return sideLabel;
+  }
+  return `${sideLabel} (${x.toFixed(1)}%, ${y.toFixed(1)}%)`;
+}
+
 function inferLateralityByCoordinate(x) {
   if (x < 47.5) {
     return "left";
@@ -319,7 +329,7 @@ function buildPdfSection(title, rows) {
 function buildAnamnesePdfHtml(client, anamnese) {
   const painSelectionsDescription = normalizePainSelections(anamnese.painSelections).map(
     (selection) =>
-      `${selection.label} (${selection.side === "front" ? "Frente" : "Costas"} - ${formatLateralityLabel(
+      `${selection.label} (${formatPainSelectionLocation(selection)} - ${formatLateralityLabel(
         selection.laterality
       )})`
   );
@@ -808,7 +818,9 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
                   }
                   onRemoveRegion(selection.label);
                 }}
-                title={`${selection.label} (${formatLateralityLabel(selection.laterality)})`}
+                title={`${selection.label} (${formatLateralityLabel(
+                  selection.laterality
+                )} - ${formatPainSelectionLocation(selection)})`}
                 aria-label={`Desmarcar ${selection.label}`}
               >
                 <span className="pain-dot-label">{formatLateralityShort(selection.laterality)}</span>
@@ -844,7 +856,9 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
                   }
                   onRemoveRegion(selection.label);
                 }}
-                title={`${selection.label} (${formatLateralityLabel(selection.laterality)})`}
+                title={`${selection.label} (${formatLateralityLabel(
+                  selection.laterality
+                )} - ${formatPainSelectionLocation(selection)})`}
                 aria-label={`Desmarcar ${selection.label}`}
               >
                 <span className="pain-dot-label">{formatLateralityShort(selection.laterality)}</span>
@@ -871,7 +885,8 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
               }}
               title={`Remover ${selection.label}`}
             >
-              {selection.label} ({formatLateralityLabel(selection.laterality)}) ×
+              {selection.label} ({formatLateralityLabel(selection.laterality)} -{" "}
+              {formatPainSelectionLocation(selection)}) ×
             </button>
           ))}
         </div>
