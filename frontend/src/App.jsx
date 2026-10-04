@@ -668,6 +668,26 @@ function formatDatePt(dateValue) {
   return parsed.toLocaleDateString("pt-BR");
 }
 
+function getTimestampMillis(value) {
+  if (!value) {
+    return 0;
+  }
+  if (typeof value.toMillis === "function") {
+    return value.toMillis();
+  }
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
 function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEditable }) {
   const [pendingSelection, setPendingSelection] = useState(null);
 
@@ -1253,6 +1273,9 @@ export default function App() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedClientView, setSelectedClientView] = useState(null);
   const [openClientMenuId, setOpenClientMenuId] = useState("");
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [clientSexFilter, setClientSexFilter] = useState("all");
+  const [clientSortMode, setClientSortMode] = useState("name_asc");
   const [anamneseForm, setAnamneseForm] = useState(buildEmptyAnamnese());
   const [anamneseSnapshot, setAnamneseSnapshot] = useState(buildEmptyAnamnese());
   const [isEditingAnamnese, setIsEditingAnamnese] = useState(false);
@@ -1291,6 +1314,9 @@ export default function App() {
       setSelectedClientId("");
       setSelectedClientView(null);
       setOpenClientMenuId("");
+      setClientSearchTerm("");
+      setClientSexFilter("all");
+      setClientSortMode("name_asc");
       setAnamneseForm(buildEmptyAnamnese());
       setAnamneseSnapshot(buildEmptyAnamnese());
       setIsEditingAnamnese(false);
@@ -1372,6 +1398,47 @@ export default function App() {
     () => clients.find((client) => client.id === selectedClientId) || null,
     [clients, selectedClientId]
   );
+
+  const visibleClients = useMemo(() => {
+    const normalizedSearch = clientSearchTerm.trim().toLowerCase();
+
+    const filtered = clients.filter((client) => {
+      if (clientSexFilter !== "all" && (client.sex || "") !== clientSexFilter) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const searchableFields = [client.name, client.phone, client.email, client.address]
+        .filter(Boolean)
+        .map((value) => String(value).toLowerCase());
+
+      return searchableFields.some((value) => value.includes(normalizedSearch));
+    });
+
+    return [...filtered].sort((first, second) => {
+      const firstName = String(first.name || "");
+      const secondName = String(second.name || "");
+
+      if (clientSortMode === "name_desc") {
+        return secondName.localeCompare(firstName, "pt-BR", { sensitivity: "base" });
+      }
+
+      if (clientSortMode === "updated_desc" || clientSortMode === "updated_asc") {
+        const firstTime = getTimestampMillis(first.updatedAt || first.createdAt);
+        const secondTime = getTimestampMillis(second.updatedAt || second.createdAt);
+        const difference = firstTime - secondTime;
+
+        if (difference !== 0) {
+          return clientSortMode === "updated_desc" ? -difference : difference;
+        }
+      }
+
+      return firstName.localeCompare(secondName, "pt-BR", { sensitivity: "base" });
+    });
+  }, [clients, clientSearchTerm, clientSexFilter, clientSortMode]);
 
   useEffect(() => {
     if (!user || !selectedClient) {
@@ -1980,11 +2047,53 @@ export default function App() {
 
           {clientFormMessage ? <p className="success-text">{clientFormMessage}</p> : null}
 
+          <div className="clients-toolbar">
+            <label>
+              Buscar cliente
+              <input
+                value={clientSearchTerm}
+                onChange={(event) => setClientSearchTerm(event.target.value)}
+                placeholder="Nome, telefone, e-mail ou endereço"
+              />
+            </label>
+            <label>
+              Filtrar por sexo
+              <select
+                value={clientSexFilter}
+                onChange={(event) => setClientSexFilter(event.target.value)}
+              >
+                <option value="all">Todos</option>
+                {SEX_OPTIONS.filter((option) => option.value).map((option) => (
+                  <option key={`filter-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Ordenar
+              <select
+                value={clientSortMode}
+                onChange={(event) => setClientSortMode(event.target.value)}
+              >
+                <option value="name_asc">Nome (A-Z)</option>
+                <option value="name_desc">Nome (Z-A)</option>
+                <option value="updated_desc">Atualização mais recente</option>
+                <option value="updated_asc">Atualização mais antiga</option>
+              </select>
+            </label>
+          </div>
+          <p className="muted-text clients-toolbar-summary">
+            Exibindo {visibleClients.length} de {clients.length} cliente(s).
+          </p>
+
           <ul className="list">
             {clients.length === 0 ? (
               <li className="empty">Nenhuma cliente cadastrada.</li>
+            ) : visibleClients.length === 0 ? (
+              <li className="empty">Nenhuma cliente encontrada com os filtros atuais.</li>
             ) : (
-              clients.map((client) => (
+              visibleClients.map((client) => (
                 <li key={client.id} className="client-card">
                   <button
                     type="button"

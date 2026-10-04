@@ -240,6 +240,17 @@ select:focus {
   align-items: center;
 }
 
+.clients-toolbar {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 10px;
+}
+
+.clients-toolbar-summary {
+  margin-top: 8px;
+}
+
 .client-card {
   position: relative;
   align-items: flex-start !important;
@@ -972,6 +983,10 @@ h5 {
   }
 
   .client-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clients-toolbar {
     grid-template-columns: 1fr;
   }
 
