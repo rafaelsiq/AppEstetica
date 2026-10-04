@@ -2308,6 +2308,13 @@ export default function App() {
     setPhotoForm((previous) => ({ ...previous, [fieldName]: value }));
   };
 
+  useEffect(() => {
+    setPhotoForm((previous) => ({
+      ...previous,
+      date: checkpointForm.date || getTodayISODate()
+    }));
+  }, [checkpointForm.date]);
+
   const handlePhotoMeasurementTypeChange = (measurementType) => {
     setPhotoForm((previous) => ({
       ...previous,
@@ -2354,6 +2361,7 @@ export default function App() {
     }
     const maxPoints = photoForm.measurementType === "angle" ? 3 : 2;
     const normalizedPoints = normalizeMeasurementPoints(photoForm.points, photoForm.measurementType);
+    const linkedDate = checkpointForm.date || photoForm.date || getTodayISODate();
     if (normalizedPoints.length < maxPoints) {
       setPhotoMessage(
         photoForm.measurementType === "angle"
@@ -2371,7 +2379,7 @@ export default function App() {
     await addDoc(
       collection(db, "users", user.uid, "anamneses", selectedClient.id, "photoAnalyses"),
       {
-        date: photoForm.date,
+        date: linkedDate,
         positionLabel: photoForm.positionLabel.trim() || "Não informado",
         notes: photoForm.notes.trim(),
         measurementType: photoForm.measurementType,
@@ -2385,7 +2393,10 @@ export default function App() {
       }
     );
 
-    setPhotoForm(buildEmptyPhotoAnalysis());
+    setPhotoForm((previous) => ({
+      ...buildEmptyPhotoAnalysis(),
+      date: checkpointForm.date || previous.date || getTodayISODate()
+    }));
     setPhotoMessage("Foto e análise salvas com sucesso.");
     setTimeout(() => setPhotoMessage(""), 2500);
   };
@@ -3384,12 +3395,11 @@ export default function App() {
                     <form className="form" onSubmit={handleAddPhotoAnalysis}>
                       <div className="grid-form">
                         <label>
-                          Data da foto
+                          Data vinculada ao acompanhamento
                           <input
                             type="date"
                             value={photoForm.date}
-                            onChange={(event) => handlePhotoFieldChange("date", event.target.value)}
-                            required
+                            readOnly
                           />
                         </label>
                         <label>
