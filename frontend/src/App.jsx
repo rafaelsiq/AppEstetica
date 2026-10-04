@@ -1823,27 +1823,11 @@ export default function App() {
 
           {selectedClient && selectedClientView ? (
             <section className="client-detail-panel">
-              <div className="panel-header client-detail-header">
-                <div>
-                  <h4>{selectedClient.name}</h4>
-                  <p>
-                    {isAnamneseViewOpen
-                      ? "Ficha de anamnese única da cliente."
-                      : "Histórico de atendimentos da cliente."}
-                  </p>
-                </div>
-                <div className="inline-actions">
-                  <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
-                    Fechar
-                  </button>
-                </div>
-              </div>
-
               {isAnamneseViewOpen ? (
                 <section className="anamnese-panel">
                   <div className="panel-header">
                     <div>
-                      <h4>Ficha de Anamnese</h4>
+                      <h4>Ficha de Anamnese - {selectedClient.name}</h4>
                       <p>Dados pessoais ficam no cadastro da cliente e são fixos.</p>
                       {!isEditingAnamnese ? (
                         <p className="muted-text">Modo visualização ativado (somente leitura).</p>
@@ -1860,6 +1844,9 @@ export default function App() {
                           Cancelar edição
                         </button>
                       ) : null}
+                      <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
+                        Fechar
+                      </button>
                     </div>
                   </div>
 
@@ -2275,11 +2262,14 @@ export default function App() {
                 <section className="followup-panel">
                   <div className="panel-header">
                     <div>
-                      <h4>Acompanhamento</h4>
+                      <h4>Acompanhamento - {selectedClient.name}</h4>
                       <p>
                         Histórico de atendimentos independente da anamnese.
                       </p>
                     </div>
+                    <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
+                      Fechar
+                    </button>
                   </div>
 
                   <form className="form grid-form" onSubmit={handleAddCheckpoint}>

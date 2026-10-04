@@ -248,13 +248,6 @@ select:focus {
   gap: 12px;
 }
 
-.client-detail-header {
-  border: 1px solid #d7dde3;
-  border-radius: 12px;
-  background: #fbfcfd;
-  padding: 12px;
-}
-
 .anamnese-panel {
   display: grid;
   gap: 12px;
