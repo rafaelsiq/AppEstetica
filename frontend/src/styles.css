@@ -299,6 +299,29 @@ h5 {
   height: 16px;
 }
 
+.checkbox-field input[type="radio"] {
+  width: 16px;
+  height: 16px;
+}
+
+.question-block {
+  display: grid;
+  gap: 8px;
+}
+
+.question-title {
+  margin: 0;
+  font-size: 14px;
+  color: #2f4957;
+  font-weight: 500;
+}
+
+.option-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
 .muted-text {
   color: #54656f;
   margin: 0;

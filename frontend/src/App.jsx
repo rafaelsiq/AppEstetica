@@ -96,6 +96,76 @@ const SEX_OPTIONS = [
   { value: "not_informed", label: "Prefere não informar" }
 ];
 
+const PAIN_RADIATION_OPTIONS = [
+  { value: "specific", label: "Em ponto específico" },
+  { value: "radiates", label: "Irradia para outra área" },
+  { value: "both", label: "As duas situações" }
+];
+
+const PAIN_TYPE_OPTIONS = [
+  "Queimação",
+  "Fisgada",
+  "Pontada",
+  "Constante",
+  "Peso / pressão",
+  "Latejante"
+];
+
+const PAIN_TRIGGER_OPTIONS = [
+  "Ao acordar",
+  "No trabalho",
+  "Ao ficar sentada/o por muito tempo",
+  "Ao treinar / atividade física",
+  "Em períodos de estresse",
+  "Durante o sono",
+  "Ao dirigir",
+  "Após esforço repetitivo"
+];
+
+const GOAL_OPTIONS = [
+  { value: "relaxation", label: "Relaxamento geral" },
+  { value: "specific_tension", label: "Foco em área de tensão específica" },
+  { value: "both", label: "Ambos" }
+];
+
+const SPORT_OPTIONS = [
+  "Musculação",
+  "Corrida",
+  "Ciclismo",
+  "Crossfit",
+  "Pilates",
+  "Yoga",
+  "Natação",
+  "Esportes de quadra"
+];
+
+const PREVIOUS_TREATMENT_OPTIONS = [
+  "Massagem relaxante",
+  "Massagem terapêutica",
+  "Fisioterapia",
+  "Quiropraxia",
+  "Acupuntura",
+  "Drenagem linfática"
+];
+
+const AESTHETIC_GOAL_OPTIONS = [
+  "Redução de medidas",
+  "Melhora da firmeza",
+  "Redução de inchaço",
+  "Melhora de celulite",
+  "Modelagem corporal",
+  "Melhora de circulação"
+];
+
+const HABIT_OPTIONS = [
+  "Postura inadequada",
+  "Sedentarismo",
+  "Estresse elevado",
+  "Sono insuficiente",
+  "Movimentos repetitivos",
+  "Uso excessivo de celular/computador"
+];
+
 const HEALTH_CONDITIONS = [
   "Tendinite",
   "Bursite",
@@ -176,6 +246,15 @@ function formatSexLabel(sex) {
   return option ? option.label : "Não informado";
 }
 
+function normalizeStringArray(rawValues, allowedValues) {
+  if (!Array.isArray(rawValues)) {
+    return [];
+  }
+  return rawValues.filter(
+    (value) => typeof value === "string" && allowedValues.includes(value)
+  );
+}
+
 function normalizePainSelections(rawSelections) {
   if (!Array.isArray(rawSelections)) {
     return [];
@@ -218,17 +297,26 @@ function buildEmptyAnamnese(client) {
   return {
     painAreas: [],
     painSelections: [],
-    painRadiates: "",
+    painRadiatesOption: "",
+    painRadiatesDetails: "",
     firstPainEpisode: "",
-    painType: "",
-    painTriggers: "",
+    painTypeOptions: [],
+    painTypeOther: "",
+    painTriggerOptions: [],
+    painTriggerOther: "",
     painScale: "",
-    goal: "",
-    practicesSport: "",
-    previousTreatment: "",
+    goalOption: "",
+    goalDetails: "",
+    playsSport: "",
+    sportOptions: [],
+    sportOther: "",
+    hadPreviousTreatment: "",
+    previousTreatmentTypes: [],
     previousTreatmentExperience: "",
-    aestheticGoals: "",
-    habitsContributing: "",
+    aestheticGoalOptions: [],
+    aestheticGoalsOther: "",
+    habitOptions: [],
+    habitsContributingOther: "",
     bodyFocus: "",
     healthConditions: [],
     healthOther: "",
@@ -739,11 +827,48 @@ export default function App() {
           ? normalizedPainSelections
           : fallbackSelectionsFromLegacyPainAreas;
 
+      const normalizedPainTypeOptions = normalizeStringArray(
+        data.painTypeOptions,
+        PAIN_TYPE_OPTIONS
+      );
+      const normalizedPainTriggerOptions = normalizeStringArray(
+        data.painTriggerOptions,
+        PAIN_TRIGGER_OPTIONS
+      );
+      const normalizedSportOptions = normalizeStringArray(data.sportOptions, SPORT_OPTIONS);
+      const normalizedTreatmentTypes = normalizeStringArray(
+        data.previousTreatmentTypes,
+        PREVIOUS_TREATMENT_OPTIONS
+      );
+      const normalizedAestheticGoalOptions = normalizeStringArray(
+        data.aestheticGoalOptions,
+        AESTHETIC_GOAL_OPTIONS
+      );
+      const normalizedHabitOptions = normalizeStringArray(data.habitOptions, HABIT_OPTIONS);
+
       setAnamneseForm({
         ...buildEmptyAnamnese(selectedClient),
         ...data,
         painSelections: resolvedPainSelections,
         painAreas: resolvedPainSelections.map((selection) => selection.label),
+        painTypeOptions: normalizedPainTypeOptions,
+        painTypeOther: data.painTypeOther || data.painType || "",
+        painTriggerOptions: normalizedPainTriggerOptions,
+        painTriggerOther: data.painTriggerOther || data.painTriggers || "",
+        painRadiatesOption: data.painRadiatesOption || "",
+        painRadiatesDetails: data.painRadiatesDetails || data.painRadiates || "",
+        goalOption: data.goalOption || "",
+        goalDetails: data.goalDetails || data.goal || "",
+        playsSport: data.playsSport || "",
+        sportOptions: normalizedSportOptions,
+        sportOther: data.sportOther || data.practicesSport || "",
+        hadPreviousTreatment: data.hadPreviousTreatment || "",
+        previousTreatmentTypes: normalizedTreatmentTypes,
+        aestheticGoalOptions: normalizedAestheticGoalOptions,
+        aestheticGoalsOther: data.aestheticGoalsOther || data.aestheticGoals || "",
+        habitOptions: normalizedHabitOptions,
+        habitsContributingOther:
+          data.habitsContributingOther || data.habitsContributing || "",
         healthConditions: Array.isArray(data.healthConditions) ? data.healthConditions : []
       });
     });
@@ -939,10 +1064,83 @@ export default function App() {
 
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
     const normalizedPainSelections = normalizePainSelections(anamneseForm.painSelections);
+    const normalizedPainTypeOptions = normalizeStringArray(
+      anamneseForm.painTypeOptions,
+      PAIN_TYPE_OPTIONS
+    );
+    const normalizedPainTriggerOptions = normalizeStringArray(
+      anamneseForm.painTriggerOptions,
+      PAIN_TRIGGER_OPTIONS
+    );
+    const normalizedSportOptions = normalizeStringArray(
+      anamneseForm.sportOptions,
+      SPORT_OPTIONS
+    );
+    const normalizedTreatmentTypes = normalizeStringArray(
+      anamneseForm.previousTreatmentTypes,
+      PREVIOUS_TREATMENT_OPTIONS
+    );
+    const normalizedAestheticGoalOptions = normalizeStringArray(
+      anamneseForm.aestheticGoalOptions,
+      AESTHETIC_GOAL_OPTIONS
+    );
+    const normalizedHabitOptions = normalizeStringArray(
+      anamneseForm.habitOptions,
+      HABIT_OPTIONS
+    );
+
+    const legacyPainType = [
+      ...normalizedPainTypeOptions,
+      anamneseForm.painTypeOther.trim()
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const legacyPainTrigger = [
+      ...normalizedPainTriggerOptions,
+      anamneseForm.painTriggerOther.trim()
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const legacyGoal = [anamneseForm.goalOption, anamneseForm.goalDetails.trim()]
+      .filter(Boolean)
+      .join(" - ");
+    const legacySport = [
+      anamneseForm.playsSport === "yes" ? "Pratica esporte" : "",
+      ...normalizedSportOptions,
+      anamneseForm.sportOther.trim()
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const legacyAestheticGoal = [
+      ...normalizedAestheticGoalOptions,
+      anamneseForm.aestheticGoalsOther.trim()
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const legacyHabits = [
+      ...normalizedHabitOptions,
+      anamneseForm.habitsContributingOther.trim()
+    ]
+      .filter(Boolean)
+      .join(", ");
+
     const payload = {
       ...anamneseForm,
       painSelections: normalizedPainSelections,
       painAreas: normalizedPainSelections.map((selection) => selection.label),
+      painTypeOptions: normalizedPainTypeOptions,
+      painTriggerOptions: normalizedPainTriggerOptions,
+      sportOptions: normalizedSportOptions,
+      previousTreatmentTypes: normalizedTreatmentTypes,
+      aestheticGoalOptions: normalizedAestheticGoalOptions,
+      habitOptions: normalizedHabitOptions,
+      painType: legacyPainType,
+      painTriggers: legacyPainTrigger,
+      painRadiates: anamneseForm.painRadiatesDetails,
+      goal: legacyGoal,
+      practicesSport: legacySport,
+      aestheticGoals: legacyAestheticGoal,
+      habitsContributing: legacyHabits,
       clientId: selectedClient.id,
       clientName: selectedClient.name || "",
       updatedAt: serverTimestamp()
@@ -1341,11 +1539,34 @@ export default function App() {
 
                 <h5>Perguntas-chave</h5>
                 <div className="form">
+                  <div className="question-block">
+                    <p className="question-title">
+                      A dor está em ponto específico ou irradia para outra área?
+                    </p>
+                    <div className="option-row">
+                      {PAIN_RADIATION_OPTIONS.map((option) => (
+                        <label key={option.value} className="checkbox-field">
+                          <input
+                            type="radio"
+                            name="pain-radiation"
+                            checked={anamneseForm.painRadiatesOption === option.value}
+                            onChange={() =>
+                              handleAnamneseFieldChange("painRadiatesOption", option.value)
+                            }
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label>
-                    A dor está em ponto específico ou irradia para outra área?
+                    Detalhes sobre localização/irradiação
                     <textarea
-                      value={anamneseForm.painRadiates}
-                      onChange={(event) => handleAnamneseFieldChange("painRadiates", event.target.value)}
+                      value={anamneseForm.painRadiatesDetails}
+                      onChange={(event) =>
+                        handleAnamneseFieldChange("painRadiatesDetails", event.target.value)
+                      }
+                      placeholder="Descreva com mais detalhes, se necessário."
                     />
                   </label>
                   <label>
@@ -1355,18 +1576,56 @@ export default function App() {
                       onChange={(event) => handleAnamneseFieldChange("firstPainEpisode", event.target.value)}
                     />
                   </label>
+                  <div className="question-block">
+                    <p className="question-title">
+                      Tipo de dor (queimação, fisgada, pontada, constante)?
+                    </p>
+                    <div className="checkbox-grid">
+                      {PAIN_TYPE_OPTIONS.map((option) => (
+                        <label key={option} className="checkbox-field">
+                          <input
+                            type="checkbox"
+                            checked={anamneseForm.painTypeOptions.includes(option)}
+                            onChange={() => toggleArrayValue("painTypeOptions", option)}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label>
-                    Tipo de dor (queimação, fisgada, pontada, constante)?
-                    <textarea
-                      value={anamneseForm.painType}
-                      onChange={(event) => handleAnamneseFieldChange("painType", event.target.value)}
+                    Outro tipo de dor
+                    <input
+                      value={anamneseForm.painTypeOther}
+                      onChange={(event) =>
+                        handleAnamneseFieldChange("painTypeOther", event.target.value)
+                      }
+                      placeholder="Opcional"
                     />
                   </label>
+                  <div className="question-block">
+                    <p className="question-title">Em quais situações sente mais dor?</p>
+                    <div className="checkbox-grid">
+                      {PAIN_TRIGGER_OPTIONS.map((option) => (
+                        <label key={option} className="checkbox-field">
+                          <input
+                            type="checkbox"
+                            checked={anamneseForm.painTriggerOptions.includes(option)}
+                            onChange={() => toggleArrayValue("painTriggerOptions", option)}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label>
-                    Em quais situações sente mais dor?
-                    <textarea
-                      value={anamneseForm.painTriggers}
-                      onChange={(event) => handleAnamneseFieldChange("painTriggers", event.target.value)}
+                    Outra situação que piora a dor
+                    <input
+                      value={anamneseForm.painTriggerOther}
+                      onChange={(event) =>
+                        handleAnamneseFieldChange("painTriggerOther", event.target.value)
+                      }
+                      placeholder="Opcional"
                     />
                   </label>
                   <label>
@@ -1379,43 +1638,192 @@ export default function App() {
                       onChange={(event) => handleAnamneseFieldChange("painScale", event.target.value)}
                     />
                   </label>
+                  <div className="question-block">
+                    <p className="question-title">
+                      Busca mais relaxamento geral ou foco em tensão específica?
+                    </p>
+                    <div className="option-row">
+                      {GOAL_OPTIONS.map((option) => (
+                        <label key={option.value} className="checkbox-field">
+                          <input
+                            type="radio"
+                            name="goal-option"
+                            checked={anamneseForm.goalOption === option.value}
+                            onChange={() => handleAnamneseFieldChange("goalOption", option.value)}
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label>
-                    Busca mais relaxamento geral ou foco em tensão específica?
+                    Detalhes do objetivo
                     <textarea
-                      value={anamneseForm.goal}
-                      onChange={(event) => handleAnamneseFieldChange("goal", event.target.value)}
+                      value={anamneseForm.goalDetails}
+                      onChange={(event) =>
+                        handleAnamneseFieldChange("goalDetails", event.target.value)
+                      }
+                      placeholder="Opcional"
                     />
                   </label>
+                  <div className="question-block">
+                    <p className="question-title">Pratica esporte? Qual?</p>
+                    <div className="option-row">
+                      <label className="checkbox-field">
+                        <input
+                          type="radio"
+                          name="plays-sport"
+                          checked={anamneseForm.playsSport === "yes"}
+                          onChange={() => handleAnamneseFieldChange("playsSport", "yes")}
+                        />
+                        Sim
+                      </label>
+                      <label className="checkbox-field">
+                        <input
+                          type="radio"
+                          name="plays-sport"
+                          checked={anamneseForm.playsSport === "no"}
+                          onChange={() => handleAnamneseFieldChange("playsSport", "no")}
+                        />
+                        Não
+                      </label>
+                    </div>
+                  </div>
+                  {anamneseForm.playsSport === "yes" ? (
+                    <>
+                      <div className="question-block">
+                        <p className="question-title">Quais esportes?</p>
+                        <div className="checkbox-grid">
+                          {SPORT_OPTIONS.map((option) => (
+                            <label key={option} className="checkbox-field">
+                              <input
+                                type="checkbox"
+                                checked={anamneseForm.sportOptions.includes(option)}
+                                onChange={() => toggleArrayValue("sportOptions", option)}
+                              />
+                              {option}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <label>
+                        Outro esporte
+                        <input
+                          value={anamneseForm.sportOther}
+                          onChange={(event) =>
+                            handleAnamneseFieldChange("sportOther", event.target.value)
+                          }
+                          placeholder="Opcional"
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                  <div className="question-block">
+                    <p className="question-title">Fez outro tratamento/massagem?</p>
+                    <div className="option-row">
+                      <label className="checkbox-field">
+                        <input
+                          type="radio"
+                          name="previous-treatment"
+                          checked={anamneseForm.hadPreviousTreatment === "yes"}
+                          onChange={() =>
+                            handleAnamneseFieldChange("hadPreviousTreatment", "yes")
+                          }
+                        />
+                        Sim
+                      </label>
+                      <label className="checkbox-field">
+                        <input
+                          type="radio"
+                          name="previous-treatment"
+                          checked={anamneseForm.hadPreviousTreatment === "no"}
+                          onChange={() =>
+                            handleAnamneseFieldChange("hadPreviousTreatment", "no")
+                          }
+                        />
+                        Não
+                      </label>
+                    </div>
+                  </div>
+                  {anamneseForm.hadPreviousTreatment === "yes" ? (
+                    <div className="question-block">
+                      <p className="question-title">Quais tratamentos já realizou?</p>
+                      <div className="checkbox-grid">
+                        {PREVIOUS_TREATMENT_OPTIONS.map((option) => (
+                          <label key={option} className="checkbox-field">
+                            <input
+                              type="checkbox"
+                              checked={anamneseForm.previousTreatmentTypes.includes(option)}
+                              onChange={() =>
+                                toggleArrayValue("previousTreatmentTypes", option)
+                              }
+                            />
+                            {option}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <label>
-                    Pratica esporte? Qual?
-                    <textarea
-                      value={anamneseForm.practicesSport}
-                      onChange={(event) => handleAnamneseFieldChange("practicesSport", event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Fez outro tratamento/massagem? Como foi a experiência?
+                    Como foi a experiência em tratamentos anteriores?
                     <textarea
                       value={anamneseForm.previousTreatmentExperience}
                       onChange={(event) =>
                         handleAnamneseFieldChange("previousTreatmentExperience", event.target.value)
                       }
+                      placeholder="Opcional"
                     />
                   </label>
+                  <div className="question-block">
+                    <p className="question-title">Objetivos estéticos com a massagem</p>
+                    <div className="checkbox-grid">
+                      {AESTHETIC_GOAL_OPTIONS.map((option) => (
+                        <label key={option} className="checkbox-field">
+                          <input
+                            type="checkbox"
+                            checked={anamneseForm.aestheticGoalOptions.includes(option)}
+                            onChange={() => toggleArrayValue("aestheticGoalOptions", option)}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label>
-                    Objetivos estéticos com a massagem
-                    <textarea
-                      value={anamneseForm.aestheticGoals}
-                      onChange={(event) => handleAnamneseFieldChange("aestheticGoals", event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Hábitos/atividades que podem estar contribuindo para dor
-                    <textarea
-                      value={anamneseForm.habitsContributing}
+                    Outro objetivo estético
+                    <input
+                      value={anamneseForm.aestheticGoalsOther}
                       onChange={(event) =>
-                        handleAnamneseFieldChange("habitsContributing", event.target.value)
+                        handleAnamneseFieldChange("aestheticGoalsOther", event.target.value)
                       }
+                      placeholder="Opcional"
+                    />
+                  </label>
+                  <div className="question-block">
+                    <p className="question-title">
+                      Hábitos/atividades que podem estar contribuindo para dor
+                    </p>
+                    <div className="checkbox-grid">
+                      {HABIT_OPTIONS.map((option) => (
+                        <label key={option} className="checkbox-field">
+                          <input
+                            type="checkbox"
+                            checked={anamneseForm.habitOptions.includes(option)}
+                            onChange={() => toggleArrayValue("habitOptions", option)}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <label>
+                    Outros hábitos/atividades
+                    <textarea
+                      value={anamneseForm.habitsContributingOther}
+                      onChange={(event) =>
+                        handleAnamneseFieldChange("habitsContributingOther", event.target.value)
+                      }
+                      placeholder="Opcional"
                     />
                   </label>
                 </div>
