@@ -25,7 +25,8 @@ const TABS = {
 
 const CLIENT_VIEWS = {
   ANAMNESE: "anamnese",
-  FOLLOWUP: "followup"
+  FOLLOWUP: "followup",
+  CHARTS: "charts"
 };
 
 const PAIN_AREAS = [
@@ -1251,6 +1252,7 @@ export default function App() {
   const [appointmentNotes, setAppointmentNotes] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedClientView, setSelectedClientView] = useState(null);
+  const [openClientMenuId, setOpenClientMenuId] = useState("");
   const [anamneseForm, setAnamneseForm] = useState(buildEmptyAnamnese());
   const [anamneseSnapshot, setAnamneseSnapshot] = useState(buildEmptyAnamnese());
   const [isEditingAnamnese, setIsEditingAnamnese] = useState(false);
@@ -1288,6 +1290,7 @@ export default function App() {
       setClientFormMessage("");
       setSelectedClientId("");
       setSelectedClientView(null);
+      setOpenClientMenuId("");
       setAnamneseForm(buildEmptyAnamnese());
       setAnamneseSnapshot(buildEmptyAnamnese());
       setIsEditingAnamnese(false);
@@ -1347,6 +1350,7 @@ export default function App() {
     if (!clients.some((client) => client.id === selectedClientId)) {
       setSelectedClientId("");
       setSelectedClientView(null);
+      setOpenClientMenuId("");
       setAnamneseForm(buildEmptyAnamnese());
       setAnamneseSnapshot(buildEmptyAnamnese());
       setIsEditingAnamnese(false);
@@ -1490,18 +1494,18 @@ export default function App() {
     setEditingClientId(client.id);
     setIsClientFormOpen(true);
     setClientFormMessage("");
+    setOpenClientMenuId("");
   };
 
-  const handleOpenClientAnamnese = (clientId) => {
+  const handleOpenClientView = (clientId, view) => {
     setSelectedClientId(clientId);
-    setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
+    setSelectedClientView(view);
+    setOpenClientMenuId("");
     setAnamneseMessage("");
   };
 
-  const handleOpenClientFollowup = (clientId) => {
-    setSelectedClientId(clientId);
-    setSelectedClientView(CLIENT_VIEWS.FOLLOWUP);
-    setAnamneseMessage("");
+  const handleToggleClientMenu = (clientId) => {
+    setOpenClientMenuId((previous) => (previous === clientId ? "" : clientId));
   };
 
   const handleCloseClientView = () => {
@@ -1786,6 +1790,7 @@ export default function App() {
 
   const isAnamneseViewOpen = selectedClientView === CLIENT_VIEWS.ANAMNESE;
   const isFollowupViewOpen = selectedClientView === CLIENT_VIEWS.FOLLOWUP;
+  const isChartsViewOpen = selectedClientView === CLIENT_VIEWS.CHARTS;
 
   if (isLoadingAuth) {
     return <main className="page loading">Carregando...</main>;
@@ -1980,43 +1985,80 @@ export default function App() {
               <li className="empty">Nenhuma cliente cadastrada.</li>
             ) : (
               clients.map((client) => (
-                <li key={client.id}>
-                  <div>
-                    <strong>{client.name}</strong>
-                    <p>{client.phone || "Sem telefone"}</p>
-                    {client.email ? <p>{client.email}</p> : null}
-                    {client.birthDate ? <p>Nascimento: {formatDatePt(client.birthDate)}</p> : null}
-                    {client.sex ? <p>Sexo: {formatSexLabel(client.sex)}</p> : null}
-                  </div>
-                  <div className="inline-actions">
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => handleOpenClientAnamnese(client.id)}
-                    >
-                      Anamnese
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => handleOpenClientFollowup(client.id)}
-                    >
-                      Acompanhamento
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => handleEditClient(client)}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-btn"
-                      onClick={() => handleDeleteByCollection("clients", client.id)}
-                    >
-                      Excluir
-                    </button>
+                <li key={client.id} className="client-card">
+                  <button
+                    type="button"
+                    className="client-menu-trigger"
+                    aria-label={`Abrir opções de ${client.name}`}
+                    onClick={() => handleToggleClientMenu(client.id)}
+                  >
+                    ☰
+                  </button>
+                  {openClientMenuId === client.id ? (
+                    <div className="client-menu-dropdown">
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => handleEditClient(client)}
+                      >
+                        Editar cadastro
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        onClick={() => {
+                          setOpenClientMenuId("");
+                          handleDeleteByCollection("clients", client.id);
+                        }}
+                      >
+                        Excluir cliente
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="client-card-content">
+                    <div>
+                      <strong>{client.name}</strong>
+                      <p>{client.phone || "Sem telefone"}</p>
+                      {client.email ? <p>{client.email}</p> : null}
+                      {client.birthDate ? <p>Nascimento: {formatDatePt(client.birthDate)}</p> : null}
+                      {client.sex ? <p>Sexo: {formatSexLabel(client.sex)}</p> : null}
+                    </div>
+                    <div className="client-tab-actions" role="tablist" aria-label={`Abrir prontuário de ${client.name}`}>
+                      <button
+                        type="button"
+                        className={
+                          selectedClientId === client.id && isAnamneseViewOpen
+                            ? "client-tab-btn active"
+                            : "client-tab-btn"
+                        }
+                        onClick={() => handleOpenClientView(client.id, CLIENT_VIEWS.ANAMNESE)}
+                      >
+                        Anamnese
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          selectedClientId === client.id && isFollowupViewOpen
+                            ? "client-tab-btn active"
+                            : "client-tab-btn"
+                        }
+                        onClick={() => handleOpenClientView(client.id, CLIENT_VIEWS.FOLLOWUP)}
+                      >
+                        Acompanhamentos
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          selectedClientId === client.id && isChartsViewOpen
+                            ? "client-tab-btn active"
+                            : "client-tab-btn"
+                        }
+                        onClick={() => handleOpenClientView(client.id, CLIENT_VIEWS.CHARTS)}
+                      >
+                        Gráficos
+                      </button>
+                    </div>
                   </div>
                 </li>
               ))
@@ -2095,7 +2137,47 @@ export default function App() {
           ) : null}
 
           {selectedClient && selectedClientView ? (
-            <section className="client-detail-panel">
+            <div className="client-modal-backdrop" onClick={handleCloseClientView}>
+              <section
+                className="client-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Prontuário de ${selectedClient.name}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <header className="client-modal-header">
+                  <div>
+                    <h4>{selectedClient.name}</h4>
+                    <p>Prontuário da cliente</p>
+                  </div>
+                  <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
+                    Fechar
+                  </button>
+                </header>
+                <div className="client-modal-tabs" role="tablist" aria-label="Abas do prontuário">
+                  <button
+                    type="button"
+                    className={isAnamneseViewOpen ? "client-modal-tab active" : "client-modal-tab"}
+                    onClick={() => setSelectedClientView(CLIENT_VIEWS.ANAMNESE)}
+                  >
+                    Anamnese
+                  </button>
+                  <button
+                    type="button"
+                    className={isFollowupViewOpen ? "client-modal-tab active" : "client-modal-tab"}
+                    onClick={() => setSelectedClientView(CLIENT_VIEWS.FOLLOWUP)}
+                  >
+                    Acompanhamentos
+                  </button>
+                  <button
+                    type="button"
+                    className={isChartsViewOpen ? "client-modal-tab active" : "client-modal-tab"}
+                    onClick={() => setSelectedClientView(CLIENT_VIEWS.CHARTS)}
+                  >
+                    Gráficos
+                  </button>
+                </div>
+                <div className="client-modal-content">
               {isAnamneseViewOpen ? (
                 <section className="anamnese-panel">
                   <div className="panel-header">
@@ -2120,9 +2202,6 @@ export default function App() {
                           Cancelar edição
                         </button>
                       ) : null}
-                      <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
-                        Fechar
-                      </button>
                     </div>
                   </div>
 
@@ -2543,9 +2622,6 @@ export default function App() {
                         Histórico de atendimentos independente da anamnese.
                       </p>
                     </div>
-                    <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
-                      Fechar
-                    </button>
                   </div>
 
                   <form className="form grid-form" onSubmit={handleAddCheckpoint}>
@@ -2624,20 +2700,6 @@ export default function App() {
                     </button>
                   </form>
 
-                  <div className="charts-grid">
-                    <ProgressLineChart
-                      title="Evolução da dor x estresse"
-                      points={checkpointChartData}
-                      firstMetric={{ field: "painLevel", label: "Dor" }}
-                      secondMetric={{ field: "stressLevel", label: "Estresse" }}
-                      maxValue={10}
-                    />
-                    <SleepBarChart points={checkpointChartData} />
-                    <WellnessScoreChart points={checkpointChartData} />
-                    <SessionTypeDistributionChart points={checkpointChartData} />
-                    <InitialVsCurrentChart points={checkpointChartData} />
-                  </div>
-
                   <ul className="list">
                     {checkpoints.length === 0 ? (
                       <li className="empty">Sem sessões registradas para acompanhamento.</li>
@@ -2668,7 +2730,33 @@ export default function App() {
                   </ul>
                 </section>
               ) : null}
-            </section>
+
+              {isChartsViewOpen ? (
+                <section className="followup-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h4>Gráficos de Evolução - {selectedClient.name}</h4>
+                      <p>Visualização da evolução com base no histórico dos atendimentos.</p>
+                    </div>
+                  </div>
+                  <div className="charts-grid">
+                    <ProgressLineChart
+                      title="Evolução da dor x estresse"
+                      points={checkpointChartData}
+                      firstMetric={{ field: "painLevel", label: "Dor" }}
+                      secondMetric={{ field: "stressLevel", label: "Estresse" }}
+                      maxValue={10}
+                    />
+                    <SleepBarChart points={checkpointChartData} />
+                    <WellnessScoreChart points={checkpointChartData} />
+                    <SessionTypeDistributionChart points={checkpointChartData} />
+                    <InitialVsCurrentChart points={checkpointChartData} />
+                  </div>
+                </section>
+              ) : null}
+                </div>
+              </section>
+            </div>
           ) : null}
         </section>
       ) : null}
