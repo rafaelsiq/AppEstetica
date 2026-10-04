@@ -678,6 +678,190 @@ function SleepBarChart({ points }) {
   );
 }
 
+function WellnessScoreChart({ points }) {
+  if (points.length < 2) {
+    return (
+      <div className="chart-card">
+        <h5>Índice de bem-estar por sessão</h5>
+        <p className="muted-text">Cadastre pelo menos 2 avaliações para gerar o gráfico.</p>
+      </div>
+    );
+  }
+
+  const scorePoints = points.map((item) => {
+    const pain = Math.min(Math.max(Number(item.painLevel) || 0, 0), 10);
+    const stress = Math.min(Math.max(Number(item.stressLevel) || 0, 0), 10);
+    const sleep = Math.min(Math.max(Number(item.sleepHours) || 0, 0), 10);
+    const score = Math.round(((10 - pain) * 0.4 + (10 - stress) * 0.3 + sleep * 0.3) * 10);
+    return { ...item, score };
+  });
+
+  const width = 420;
+  const height = 200;
+  const padding = 30;
+  const maxValue = 100;
+  const plotWidth = width - padding * 2;
+  const plotHeight = height - padding * 2;
+  const yLabels = [0, 50, 100];
+
+  const getX = (index) =>
+    scorePoints.length === 1
+      ? padding
+      : padding + (index * plotWidth) / (scorePoints.length - 1);
+
+  const getY = (value) =>
+    padding + (1 - Math.min(Math.max(Number(value) || 0, 0), maxValue) / maxValue) * plotHeight;
+
+  const linePath = scorePoints
+    .map((item, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(item.score)}`)
+    .join(" ");
+
+  return (
+    <div className="chart-card">
+      <h5>Índice de bem-estar por sessão</h5>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="chart-svg"
+        role="img"
+        aria-label="Evolução do índice de bem-estar"
+      >
+        {yLabels.map((marker) => {
+          const y = getY(marker);
+          return (
+            <g key={marker}>
+              <line x1={padding} y1={y} x2={width - padding} y2={y} className="chart-grid" />
+              <text x={4} y={y + 4} className="chart-axis">
+                {marker}
+              </text>
+            </g>
+          );
+        })}
+
+        <path d={linePath} className="chart-line chart-line-tertiary" />
+
+        {scorePoints.map((item, index) => (
+          <g key={`${item.date}-${index}`}>
+            <circle cx={getX(index)} cy={getY(item.score)} r="3" className="chart-point-tertiary" />
+            <text x={getX(index)} y={height - 8} textAnchor="middle" className="chart-axis-x">
+              {formatDatePt(item.date)}
+            </text>
+          </g>
+        ))}
+      </svg>
+      <p className="muted-text chart-footnote">
+        Índice estimado (0-100) combinando dor, estresse e sono para acompanhamento visual.
+      </p>
+    </div>
+  );
+}
+
+function SessionTypeDistributionChart({ points }) {
+  if (points.length < 1) {
+    return (
+      <div className="chart-card">
+        <h5>Distribuição por tipo de atendimento</h5>
+        <p className="muted-text">Sem sessões registradas para montar distribuição.</p>
+      </div>
+    );
+  }
+
+  const typeCountMap = points.reduce((accumulator, item) => {
+    const normalizedType = SESSION_TYPES.includes(item.sessionType)
+      ? item.sessionType
+      : "Não informado";
+    accumulator[normalizedType] = (accumulator[normalizedType] || 0) + 1;
+    return accumulator;
+  }, {});
+
+  const rows = Object.entries(typeCountMap).sort(([, a], [, b]) => b - a);
+  const maxCount = Math.max(...rows.map(([, count]) => count), 1);
+
+  return (
+    <div className="chart-card">
+      <h5>Distribuição por tipo de atendimento</h5>
+      <div className="distribution-chart">
+        {rows.map(([type, count]) => (
+          <div key={type} className="distribution-row">
+            <div className="distribution-label">{type}</div>
+            <div className="distribution-track">
+              <div
+                className="distribution-fill"
+                style={{ width: `${Math.round((count / maxCount) * 100)}%` }}
+              />
+            </div>
+            <div className="distribution-count">{count}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InitialVsCurrentChart({ points }) {
+  if (points.length < 2) {
+    return (
+      <div className="chart-card">
+        <h5>Comparativo inicial x atual</h5>
+        <p className="muted-text">Cadastre pelo menos 2 sessões para gerar comparativo.</p>
+      </div>
+    );
+  }
+
+  const first = points[0];
+  const last = points[points.length - 1];
+
+  const metricRows = [
+    { label: "Dor", field: "painLevel", max: 10, improveWhen: "down" },
+    { label: "Estresse", field: "stressLevel", max: 10, improveWhen: "down" },
+    { label: "Sono (h)", field: "sleepHours", max: 12, improveWhen: "up" }
+  ].map((metric) => {
+    const firstValue = Number(first[metric.field]) || 0;
+    const lastValue = Number(last[metric.field]) || 0;
+    const firstPercent = Math.min(Math.max((firstValue / metric.max) * 100, 0), 100);
+    const lastPercent = Math.min(Math.max((lastValue / metric.max) * 100, 0), 100);
+    const deltaRaw = Number((lastValue - firstValue).toFixed(1));
+    const improved =
+      metric.improveWhen === "down" ? deltaRaw <= 0 : deltaRaw >= 0;
+
+    return {
+      ...metric,
+      firstValue,
+      lastValue,
+      firstPercent,
+      lastPercent,
+      deltaRaw,
+      improved
+    };
+  });
+
+  return (
+    <div className="chart-card">
+      <h5>Comparativo inicial x atual</h5>
+      <div className="comparison-chart">
+        {metricRows.map((metric) => (
+          <div key={metric.field} className="comparison-row">
+            <div className="comparison-header">
+              <strong>{metric.label}</strong>
+              <span className={metric.improved ? "delta-good" : "delta-alert"}>
+                Δ {metric.deltaRaw > 0 ? "+" : ""}
+                {metric.deltaRaw}
+              </span>
+            </div>
+            <div className="comparison-track">
+              <div className="comparison-fill comparison-fill-initial" style={{ width: `${metric.firstPercent}%` }} />
+            </div>
+            <div className="comparison-meta">Início: {metric.firstValue}</div>
+            <div className="comparison-track">
+              <div className="comparison-fill comparison-fill-current" style={{ width: `${metric.lastPercent}%` }} />
+            </div>
+            <div className="comparison-meta">Atual: {metric.lastValue}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -2019,6 +2203,9 @@ export default function App() {
                   maxValue={10}
                 />
                 <SleepBarChart points={checkpointChartData} />
+                <WellnessScoreChart points={checkpointChartData} />
+                <SessionTypeDistributionChart points={checkpointChartData} />
+                <InitialVsCurrentChart points={checkpointChartData} />
               </div>
 
               <ul className="list">

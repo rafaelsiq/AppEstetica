@@ -555,12 +555,20 @@ h5 {
   stroke: #cc6e22;
 }
 
+.chart-line-tertiary {
+  stroke: #3a5ac7;
+}
+
 .chart-point-primary {
   fill: #24695c;
 }
 
 .chart-point-secondary {
   fill: #cc6e22;
+}
+
+.chart-point-tertiary {
+  fill: #3a5ac7;
 }
 
 .chart-legend {
@@ -590,6 +598,107 @@ h5 {
   fill: #4a85c7;
 }
 
+.chart-footnote {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.distribution-chart {
+  display: grid;
+  gap: 8px;
+}
+
+.distribution-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 2fr 40px;
+  gap: 8px;
+  align-items: center;
+}
+
+.distribution-label {
+  font-size: 13px;
+  color: #2f4957;
+}
+
+.distribution-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #e6edf2;
+  overflow: hidden;
+}
+
+.distribution-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #24695c, #3a5ac7);
+}
+
+.distribution-count {
+  text-align: right;
+  font-weight: 600;
+  color: #2f4957;
+  font-size: 13px;
+}
+
+.comparison-chart {
+  display: grid;
+  gap: 10px;
+}
+
+.comparison-row {
+  border: 1px solid #d7dde3;
+  border-radius: 10px;
+  padding: 8px;
+  background: #ffffff;
+}
+
+.comparison-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.delta-good {
+  color: #1f692b;
+  font-weight: 700;
+}
+
+.delta-alert {
+  color: #b64a1d;
+  font-weight: 700;
+}
+
+.comparison-track {
+  width: 100%;
+  height: 9px;
+  border-radius: 999px;
+  background: #e6edf2;
+  overflow: hidden;
+}
+
+.comparison-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.comparison-fill-initial {
+  background: #9cb5c0;
+}
+
+.comparison-fill-current {
+  background: #24695c;
+}
+
+.comparison-meta {
+  margin-top: 3px;
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: #54656f;
+}
+
 @media (max-width: 640px) {
   .grid-form {
     grid-template-columns: 1fr;
@@ -611,6 +720,15 @@ h5 {
 
   .charts-grid {
     grid-template-columns: 1fr;
+  }
+
+  .distribution-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .distribution-count {
+    text-align: left;
   }
 
   .pain-map-grid {

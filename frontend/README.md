@@ -22,6 +22,9 @@ Aplicação web em React + Vite com autenticação Firebase e persistência no F
 - Gráficos de evolução por cliente:
   - Dor x estresse
   - Sono por sessão
+  - Índice de bem-estar por sessão
+  - Distribuição por tipo de atendimento
+  - Comparativo inicial x atual
 - PWA habilitada (instalável no navegador)
 
 ## Como rodar
