@@ -614,6 +614,13 @@ function getAppointmentDateTimeMillis(appointment) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function normalizeClientNameKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEditable }) {
   const [pendingSelection, setPendingSelection] = useState(null);
 
@@ -1518,24 +1525,33 @@ export default function App() {
     [clients, selectedClientId]
   );
 
-  const visibleClients = useMemo(() => {
-    const normalizedSearch = clientSearchTerm.trim().toLowerCase();
-    const lastAppointmentByClientName = new Map();
+  const lastAppointmentByClientName = useMemo(() => {
+    const summaryMap = new Map();
 
     appointments.forEach((appointment) => {
-      const clientName = String(appointment.client || "").trim();
-      if (!clientName) {
+      const nameKey = normalizeClientNameKey(appointment.client);
+      if (!nameKey) {
         return;
       }
       const timestamp = getAppointmentDateTimeMillis(appointment);
       if (timestamp <= 0) {
         return;
       }
-      const previous = lastAppointmentByClientName.get(clientName) || 0;
-      if (timestamp > previous) {
-        lastAppointmentByClientName.set(clientName, timestamp);
+      const previous = summaryMap.get(nameKey);
+      if (!previous || timestamp > previous.timestamp) {
+        summaryMap.set(nameKey, {
+          timestamp,
+          date: appointment.date || "",
+          time: appointment.time || ""
+        });
       }
     });
+
+    return summaryMap;
+  }, [appointments]);
+
+  const visibleClients = useMemo(() => {
+    const normalizedSearch = clientSearchTerm.trim().toLowerCase();
 
     const filtered = clients.filter((client) => {
       if (clientSexFilter !== "all" && (client.sex || "") !== clientSexFilter) {
@@ -1556,8 +1572,10 @@ export default function App() {
     return [...filtered].sort((first, second) => {
       const firstName = String(first.name || "");
       const secondName = String(second.name || "");
-      const firstLastAppointment = lastAppointmentByClientName.get(firstName.trim()) || 0;
-      const secondLastAppointment = lastAppointmentByClientName.get(secondName.trim()) || 0;
+      const firstLastAppointment =
+        lastAppointmentByClientName.get(normalizeClientNameKey(firstName))?.timestamp || 0;
+      const secondLastAppointment =
+        lastAppointmentByClientName.get(normalizeClientNameKey(secondName))?.timestamp || 0;
       const firstHasAppointment = firstLastAppointment > 0;
       const secondHasAppointment = secondLastAppointment > 0;
 
@@ -1591,7 +1609,7 @@ export default function App() {
 
       return firstName.localeCompare(secondName, "pt-BR", { sensitivity: "base" });
     });
-  }, [clients, clientSearchTerm, clientSexFilter, clientSortMode, appointments]);
+  }, [clients, clientSearchTerm, clientSexFilter, clientSortMode, lastAppointmentByClientName]);
 
   useEffect(() => {
     if (!user || !selectedClient) {
@@ -2657,77 +2675,72 @@ export default function App() {
             ) : visibleClients.length === 0 ? (
               <li className="empty">Nenhuma cliente encontrada com os filtros atuais.</li>
             ) : (
-              visibleClients.map((client) => (
-                <li key={client.id} className="client-card">
-                  <button
-                    type="button"
-                    className="client-menu-trigger"
-                    aria-label={`Abrir opções de ${client.name}`}
-                    onClick={() => handleToggleClientMenu(client.id)}
-                  >
-                    ☰
-                  </button>
-                  {openClientMenuId === client.id ? (
-                    <div className="client-menu-dropdown">
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={() => handleEditClient(client)}
-                      >
-                        Editar cadastro
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-btn"
-                        onClick={() => {
-                          setOpenClientMenuId("");
-                          handleDeleteByCollection("clients", client.id);
-                        }}
-                      >
-                        Excluir cliente
-                      </button>
-                    </div>
-                  ) : null}
+              visibleClients.map((client) => {
+                const lastAppointmentInfo = lastAppointmentByClientName.get(
+                  normalizeClientNameKey(client.name)
+                );
+                const lastAppointmentDate = lastAppointmentInfo?.date || "";
 
-                  <button
-                    type="button"
-                    className="client-card-open"
-                    onClick={() => handleOpenClientModal(client.id)}
-                    disabled={isClientFormOpen}
-                  >
-                    <div className="client-card-main">
-                      <div className="client-card-title-row">
-                        <strong>{client.name}</strong>
-                        <span className="client-open-hint">Clique para abrir o prontuário</span>
+                return (
+                  <li key={client.id} className="client-card">
+                    <button
+                      type="button"
+                      className="client-menu-trigger"
+                      aria-label={`Abrir opções de ${client.name}`}
+                      onClick={() => handleToggleClientMenu(client.id)}
+                    >
+                      ☰
+                    </button>
+                    {openClientMenuId === client.id ? (
+                      <div className="client-menu-dropdown">
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          onClick={() => handleEditClient(client)}
+                        >
+                          Editar cadastro
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-btn"
+                          onClick={() => {
+                            setOpenClientMenuId("");
+                            handleDeleteByCollection("clients", client.id);
+                          }}
+                        >
+                          Excluir cliente
+                        </button>
                       </div>
+                    ) : null}
 
-                      <div className="client-contact-row">
-                        <span className="client-pill">
-                          Telefone: {client.phone || "Não informado"}
-                        </span>
-                        <span className="client-pill">
-                          E-mail: {client.email || "Não informado"}
-                        </span>
-                      </div>
+                    <button
+                      type="button"
+                      className="client-card-open"
+                      onClick={() => handleOpenClientModal(client.id)}
+                      disabled={isClientFormOpen}
+                    >
+                      <div className="client-card-main">
+                        <div className="client-card-title-row">
+                          <strong>{client.name}</strong>
+                          <span className="client-open-hint">Clique para abrir o prontuário</span>
+                        </div>
 
-                      <div className="client-info-grid">
-                        <div className="client-info-item">
-                          <span>Nascimento</span>
-                          <strong>{client.birthDate ? formatDatePt(client.birthDate) : "Não informado"}</strong>
-                        </div>
-                        <div className="client-info-item">
-                          <span>Sexo</span>
-                          <strong>{client.sex ? formatSexLabel(client.sex) : "Não informado"}</strong>
-                        </div>
-                        <div className="client-info-item client-info-item-wide">
-                          <span>Endereço</span>
-                          <strong>{client.address || "Não informado"}</strong>
+                        <div className="client-contact-row">
+                          <span className="client-pill">
+                            Telefone: {client.phone || "Não informado"}
+                          </span>
+                          <span className="client-pill">
+                            Último atendimento:{" "}
+                            {lastAppointmentDate
+                              ? formatDatePt(lastAppointmentDate)
+                              : "Sem atendimento"}
+                          </span>
                         </div>
                       </div>
-                    </div>
-                  </button>
-                </li>
-              ))
+                    </button>
+                  </li>
+                );
+              })
             )}
           </ul>
 
