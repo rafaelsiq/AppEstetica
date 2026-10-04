@@ -421,6 +421,29 @@ function formatDatePt(dateValue) {
   return parsed.toLocaleDateString("pt-BR");
 }
 
+function formatDateTimePt(dateValue) {
+  if (!dateValue) {
+    return "--";
+  }
+
+  const parsed =
+    typeof dateValue?.toDate === "function"
+      ? dateValue.toDate()
+      : new Date(dateValue);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "--";
+  }
+
+  return parsed.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion }) {
   const [pendingSelection, setPendingSelection] = useState(null);
 
@@ -963,6 +986,10 @@ export default function App() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [anamneseForm, setAnamneseForm] = useState(buildEmptyAnamnese());
   const [lastAnamneseTemplate, setLastAnamneseTemplate] = useState(null);
+  const [anamneseVersions, setAnamneseVersions] = useState([]);
+  const [selectedAnamneseVersionId, setSelectedAnamneseVersionId] = useState("");
+  const [legacyAnamneseData, setLegacyAnamneseData] = useState(null);
+  const [isDraftingNewAnamnese, setIsDraftingNewAnamnese] = useState(false);
   const [clientHasAnamnese, setClientHasAnamnese] = useState(false);
   const [checkpoints, setCheckpoints] = useState([]);
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
@@ -998,6 +1025,10 @@ export default function App() {
       setSelectedClientId("");
       setAnamneseForm(buildEmptyAnamnese());
       setLastAnamneseTemplate(null);
+      setAnamneseVersions([]);
+      setSelectedAnamneseVersionId("");
+      setLegacyAnamneseData(null);
+      setIsDraftingNewAnamnese(false);
       setClientHasAnamnese(false);
       setCheckpoints([]);
       return undefined;
@@ -1060,6 +1091,10 @@ export default function App() {
     if (!clients.some((client) => client.id === selectedClientId)) {
       setSelectedClientId("");
       setAnamneseForm(buildEmptyAnamnese());
+      setAnamneseVersions([]);
+      setSelectedAnamneseVersionId("");
+      setLegacyAnamneseData(null);
+      setIsDraftingNewAnamnese(false);
       setCheckpoints([]);
     }
   }, [clients, selectedClientId]);
@@ -1081,23 +1116,37 @@ export default function App() {
   useEffect(() => {
     if (!user || !selectedClient) {
       setAnamneseForm(buildEmptyAnamnese(selectedClient));
+      setAnamneseVersions([]);
+      setSelectedAnamneseVersionId("");
+      setLegacyAnamneseData(null);
+      setIsDraftingNewAnamnese(false);
       setClientHasAnamnese(false);
       setCheckpoints([]);
       return undefined;
     }
 
+    setAnamneseVersions([]);
+    setSelectedAnamneseVersionId("");
+    setLegacyAnamneseData(null);
+    setIsDraftingNewAnamnese(false);
+
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
+    const versionsRef = query(
+      collection(db, "users", user.uid, "anamneses", selectedClient.id, "versions"),
+      orderBy("updatedAt", "desc")
+    );
     const checkpointsRef = collection(db, "users", user.uid, "anamneses", selectedClient.id, "checkpoints");
 
     const unsubscribeAnamnese = onSnapshot(anamneseRef, (snapshot) => {
-      if (!snapshot.exists()) {
-        setAnamneseForm(buildEmptyAnamnese(selectedClient));
-        setClientHasAnamnese(false);
-        return;
-      }
+      setLegacyAnamneseData(snapshot.exists() ? snapshot.data() : null);
+    });
 
-      setAnamneseForm(normalizeAnamneseRecord(snapshot.data(), selectedClient));
-      setClientHasAnamnese(true);
+    const unsubscribeVersions = onSnapshot(versionsRef, (snapshot) => {
+      const loadedVersions = snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data()
+      }));
+      setAnamneseVersions(loadedVersions);
     });
 
     const unsubscribeCheckpoints = onSnapshot(checkpointsRef, (snapshot) => {
@@ -1107,9 +1156,54 @@ export default function App() {
 
     return () => {
       unsubscribeAnamnese();
+      unsubscribeVersions();
       unsubscribeCheckpoints();
     };
   }, [user, selectedClient]);
+
+  useEffect(() => {
+    if (!selectedClient) {
+      return;
+    }
+
+    const hasAnyStoredAnamnese = anamneseVersions.length > 0 || Boolean(legacyAnamneseData);
+    setClientHasAnamnese(hasAnyStoredAnamnese);
+
+    if (isDraftingNewAnamnese) {
+      return;
+    }
+
+    if (selectedAnamneseVersionId) {
+      const selectedVersion = anamneseVersions.find(
+        (item) => item.id === selectedAnamneseVersionId
+      );
+      if (selectedVersion) {
+        setAnamneseForm(normalizeAnamneseRecord(selectedVersion, selectedClient));
+        return;
+      }
+      setSelectedAnamneseVersionId("");
+    }
+
+    if (anamneseVersions.length > 0) {
+      const latestVersion = anamneseVersions[0];
+      setSelectedAnamneseVersionId(latestVersion.id);
+      setAnamneseForm(normalizeAnamneseRecord(latestVersion, selectedClient));
+      return;
+    }
+
+    if (legacyAnamneseData) {
+      setAnamneseForm(normalizeAnamneseRecord(legacyAnamneseData, selectedClient));
+      return;
+    }
+
+    setAnamneseForm(buildEmptyAnamnese(selectedClient));
+  }, [
+    selectedClient,
+    anamneseVersions,
+    selectedAnamneseVersionId,
+    legacyAnamneseData,
+    isDraftingNewAnamnese
+  ]);
 
   const formattedUserName = useMemo(() => {
     if (!user?.email) {
@@ -1288,7 +1382,32 @@ export default function App() {
       return;
     }
     setAnamneseForm(normalizeAnamneseRecord(lastAnamneseTemplate, selectedClient));
+    setSelectedAnamneseVersionId("");
+    setIsDraftingNewAnamnese(true);
     setAnamneseMessage("Campos preenchidos com base na última anamnese salva.");
+    setTimeout(() => setAnamneseMessage(""), 2500);
+  };
+
+  const handleStartNewAnamnese = () => {
+    if (!selectedClient) {
+      return;
+    }
+    setAnamneseForm(buildEmptyAnamnese(selectedClient));
+    setSelectedAnamneseVersionId("");
+    setIsDraftingNewAnamnese(true);
+    setAnamneseMessage("Nova ficha iniciada. Você pode preencher do zero ou usar a última.");
+    setTimeout(() => setAnamneseMessage(""), 2500);
+  };
+
+  const handleLoadAnamneseVersion = (versionId) => {
+    const target = anamneseVersions.find((item) => item.id === versionId);
+    if (!target || !selectedClient) {
+      return;
+    }
+    setAnamneseForm(normalizeAnamneseRecord(target, selectedClient));
+    setSelectedAnamneseVersionId(versionId);
+    setIsDraftingNewAnamnese(false);
+    setAnamneseMessage("Ficha anterior carregada para edição.");
     setTimeout(() => setAnamneseMessage(""), 2500);
   };
 
@@ -1299,6 +1418,14 @@ export default function App() {
     }
 
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
+    const anamneseVersionsRef = collection(
+      db,
+      "users",
+      user.uid,
+      "anamneses",
+      selectedClient.id,
+      "versions"
+    );
     const normalizedPainSelections = normalizePainSelections(anamneseForm.painSelections);
     const normalizedPainTypeOptions = normalizeStringArray(
       anamneseForm.painTypeOptions,
@@ -1382,8 +1509,44 @@ export default function App() {
       updatedAt: serverTimestamp()
     };
 
+    let activeVersionId = selectedAnamneseVersionId;
+    if (selectedAnamneseVersionId) {
+      await updateDoc(
+        doc(
+          db,
+          "users",
+          user.uid,
+          "anamneses",
+          selectedClient.id,
+          "versions",
+          selectedAnamneseVersionId
+        ),
+        payload
+      );
+    } else {
+      const created = await addDoc(anamneseVersionsRef, {
+        ...payload,
+        createdAt: serverTimestamp()
+      });
+      activeVersionId = created.id;
+      setSelectedAnamneseVersionId(created.id);
+    }
+
     await setDoc(anamneseRef, payload, { merge: true });
-    setAnamneseMessage("Ficha salva com sucesso.");
+    await setDoc(
+      anamneseRef,
+      {
+        currentVersionId: activeVersionId
+      },
+      { merge: true }
+    );
+
+    setIsDraftingNewAnamnese(false);
+    setAnamneseMessage(
+      selectedAnamneseVersionId
+        ? "Ficha atualizada com sucesso."
+        : "Nova ficha salva com sucesso."
+    );
     setTimeout(() => setAnamneseMessage(""), 2500);
   };
 
@@ -1766,11 +1929,51 @@ export default function App() {
                   </p>
                 </div>
 
-                {!clientHasAnamnese ? (
+                <div className="anamnese-history-box">
+                  <div className="section-header">
+                    <h5>Histórico de fichas</h5>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={handleStartNewAnamnese}
+                    >
+                      Nova ficha
+                    </button>
+                  </div>
+                  {anamneseVersions.length > 0 ? (
+                    <ul className="history-list">
+                      {anamneseVersions.map((version) => (
+                        <li key={version.id}>
+                          <div>
+                            <strong>
+                              Ficha {version.id === selectedAnamneseVersionId ? "(em edição)" : ""}
+                            </strong>
+                            <p>
+                              Atualizada em: {formatDateTimePt(version.updatedAt || version.createdAt)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => handleLoadAnamneseVersion(version.id)}
+                          >
+                            Editar ficha
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted-text">
+                      Nenhuma ficha salva para essa cliente ainda.
+                    </p>
+                  )}
+                </div>
+
+                {isDraftingNewAnamnese ? (
                   <div className="anamnese-prefill-box">
                     <p className="muted-text">
-                      Essa cliente ainda não tem anamnese salva. Você pode começar em branco ou
-                      usar os dados da última anamnese registrada para agilizar o preenchimento.
+                      Você está criando uma nova ficha. Se quiser agilizar, preencha com dados da
+                      última anamnese salva.
                     </p>
                     <button
                       type="button"
@@ -2178,7 +2381,9 @@ export default function App() {
 
                 {anamneseMessage ? <p className="success-text">{anamneseMessage}</p> : null}
                 <button className="primary-btn" type="submit">
-                  Salvar ficha de anamnese
+                  {selectedAnamneseVersionId && !isDraftingNewAnamnese
+                    ? "Salvar edição da ficha"
+                    : "Salvar nova ficha de anamnese"}
                 </button>
               </form>
 
