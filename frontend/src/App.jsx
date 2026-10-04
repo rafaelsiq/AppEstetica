@@ -3314,7 +3314,11 @@ export default function App() {
                     </div>
                   </div>
 
-                  <form className="form grid-form" onSubmit={handleAddCheckpoint}>
+                  <form
+                    id="followup-checkpoint-form"
+                    className="form grid-form"
+                    onSubmit={handleAddCheckpoint}
+                  >
                     <label>
                       Data do atendimento
                       <input
@@ -3385,9 +3389,6 @@ export default function App() {
                         onChange={(event) => handleCheckpointFieldChange("observations", event.target.value)}
                       />
                     </label>
-                    <button className="primary-btn full-row" type="submit">
-                      Registrar evolução
-                    </button>
                   </form>
 
                   <section className="photo-analysis-section">
@@ -3508,6 +3509,14 @@ export default function App() {
                       )}
                     </ul>
                   </section>
+
+                  <button
+                    className="primary-btn followup-submit-btn"
+                    type="submit"
+                    form="followup-checkpoint-form"
+                  >
+                    Registrar acompanhamento
+                  </button>
 
                   <ul className="list">
                     {checkpoints.length === 0 ? (
