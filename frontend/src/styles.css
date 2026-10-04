@@ -811,13 +811,61 @@ select:focus {
   padding: 16px;
 }
 
-.record-menu-backdrop {
-  z-index: 140;
+.client-modal-header-actions {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.record-menu-modal {
-  width: min(520px, 100%);
-  align-content: start;
+.record-menu-trigger {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #c6d0d7;
+  border-radius: 10px;
+  background: #f2f5f7;
+  color: #24343d;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.record-menu-trigger svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.record-menu-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+
+.record-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 5;
+  width: min(380px, calc(100vw - 48px));
+  max-height: min(68vh, 540px);
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d7dde3;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 16px 36px rgba(10, 29, 46, 0.22);
 }
 
 .record-menu-actions {
@@ -825,7 +873,12 @@ select:focus {
   gap: 8px;
 }
 
+.record-menu-dropdown .share-link-actions {
+  display: grid;
+}
+
 .client-modal {
+  position: relative;
   width: min(1080px, 100%);
   max-height: 94vh;
   background: #ffffff;
@@ -2036,6 +2089,15 @@ h5 {
   .client-modal-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .client-modal-header-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .record-menu-dropdown {
+    width: min(380px, 100%);
   }
 
   .profile-modal-header {

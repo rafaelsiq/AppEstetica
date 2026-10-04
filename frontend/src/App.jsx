@@ -4348,18 +4348,181 @@ export default function App() {
                 aria-label={`Prontuário de ${selectedClient.name}`}
                 onClick={(event) => event.stopPropagation()}
               >
+                {isRecordMenuOpen ? (
+                  <button
+                    type="button"
+                    className="record-menu-scrim"
+                    aria-label="Fechar menu"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIsRecordMenuOpen(false);
+                    }}
+                  />
+                ) : null}
                 <header className="client-modal-header">
                   <div>
                     <h4>{selectedClient.name}</h4>
                     <p>Prontuário da cliente</p>
                   </div>
-                  <div className="inline-actions">
-                    <button type="button" className="secondary-btn" onClick={() => setIsRecordMenuOpen(true)}>
-                      Menu
+                  <div className="client-modal-header-actions">
+                    <button
+                      type="button"
+                      className="record-menu-trigger"
+                      aria-label={isRecordMenuOpen ? "Fechar menu" : "Abrir menu"}
+                      aria-expanded={isRecordMenuOpen}
+                      onClick={() => setIsRecordMenuOpen((previous) => !previous)}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        {isRecordMenuOpen ? (
+                          <path d="M6 6l12 12M18 6L6 18" />
+                        ) : (
+                          <>
+                            <path d="M4 7h16" />
+                            <path d="M4 12h16" />
+                            <path d="M4 17h16" />
+                          </>
+                        )}
+                      </svg>
                     </button>
                     <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
                       Fechar
                     </button>
+                    {isRecordMenuOpen ? (
+                      <div className="record-menu-dropdown" role="dialog" aria-label="Menu da cliente">
+                        <div className="record-menu-actions">
+                          {clientHasAnamnese && !isEditingAnamnese ? (
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => {
+                                setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
+                                handleStartEditAnamnese();
+                                setIsRecordMenuOpen(false);
+                              }}
+                            >
+                              Editar ficha
+                            </button>
+                          ) : null}
+                          {clientHasAnamnese && isEditingAnamnese ? (
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => {
+                                handleCancelEditAnamnese();
+                                setIsRecordMenuOpen(false);
+                              }}
+                            >
+                              Cancelar edição
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => {
+                              handleExportAnamnesePdf();
+                              setIsRecordMenuOpen(false);
+                            }}
+                          >
+                            Exportar PDF
+                          </button>
+                        </div>
+                        <ShareLinkPanel
+                          title="Link para a cliente preencher"
+                          description="Quiz curto de múltipla escolha. Observações da clínica não entram nesse link."
+                          links={anamneseLinks}
+                          notice={shareNotice?.scope === "anamnese" ? shareNotice : null}
+                          actions={[
+                            {
+                              label: shareBusy === "anamnese" ? "Gerando..." : "Gerar link da anamnese",
+                              primary: true,
+                              disabled: Boolean(shareBusy),
+                              onClick: () => handleCreateClientLink("anamnese")
+                            },
+                            ...(anamneseLinks[0]
+                              ? [{
+                                label: "Copiar link",
+                                onClick: () => copyShareLink(anamneseLinks[0].id, "anamnese")
+                              }]
+                              : [])
+                          ]}
+                        />
+                        <ShareLinkPanel
+                          title="Quiz de acompanhamento"
+                          description="Envie antes ou depois do atendimento. As respostas entram nos gráficos."
+                          links={followupLinks}
+                          notice={shareNotice?.scope === "followup" ? shareNotice : null}
+                          actions={[
+                            {
+                              label: shareBusy === "followup-antes" ? "Gerando..." : "Antes do atendimento",
+                              primary: true,
+                              disabled: Boolean(shareBusy),
+                              onClick: () => handleCreateClientLink("acompanhamento", "antes")
+                            },
+                            {
+                              label: shareBusy === "followup-depois" ? "Gerando..." : "Depois do atendimento",
+                              disabled: Boolean(shareBusy),
+                              onClick: () => handleCreateClientLink("acompanhamento", "depois")
+                            },
+                            ...(followupLinks[0]
+                              ? [{
+                                label: "Copiar link",
+                                onClick: () => copyShareLink(followupLinks[0].id, "followup")
+                              }]
+                              : [])
+                          ]}
+                        />
+                        <section className="share-link-box">
+                          <h5>Link da evolução</h5>
+                          <p className="muted-text">
+                            A cliente confirma o telefone cadastrado para ver o recado e os gráficos.
+                          </p>
+                          <label>
+                            Recado para a cliente
+                            <textarea
+                              value={evolutionComment}
+                              onChange={(event) => setEvolutionComment(event.target.value)}
+                              placeholder="Comentário sobre a evolução"
+                            />
+                          </label>
+                          {!phoneKey(selectedClient.phone) ? (
+                            <p className="muted-text">Cadastre o telefone da cliente para liberar este link.</p>
+                          ) : null}
+                          <div className="share-link-actions">
+                            <button
+                              type="button"
+                              className="primary-btn"
+                              disabled={shareBusy === "charts"}
+                              onClick={handleUpdateEvolution}
+                            >
+                              {shareBusy === "charts"
+                                ? "Salvando..."
+                                : evolutionLink
+                                  ? "Atualizar link da evolução"
+                                  : "Gerar link da evolução"}
+                            </button>
+                            {evolutionLink ? (
+                              <button type="button" className="secondary-btn" onClick={() => copyShareLink(evolutionLink.id, "charts")}>
+                                Copiar link
+                              </button>
+                            ) : null}
+                          </div>
+                          {evolutionLink ? (
+                            <>
+                              <p className="share-link-status">Link ativo</p>
+                              <input
+                                readOnly
+                                value={shareUrl(evolutionLink.id)}
+                                onFocus={(event) => event.target.select()}
+                                aria-label="Link da evolução"
+                              />
+                            </>
+                          ) : null}
+                          {shareNotice?.scope === "charts" ? (
+                            <p className={shareNotice.tone === "error" ? "error-text" : "success-text"}>{shareNotice.text}</p>
+                          ) : null}
+                        </section>
+                      </div>
+                    ) : null}
                   </div>
                 </header>
                 <div className="client-modal-tabs" role="tablist" aria-label="Abas do prontuário">
@@ -5343,159 +5506,6 @@ export default function App() {
         </div>
       ) : null}
 
-      {selectedClient && isRecordMenuOpen ? (
-        <div className="client-modal-backdrop record-menu-backdrop" onClick={() => setIsRecordMenuOpen(false)}>
-          <section
-            className="profile-modal record-menu-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menu da cliente"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="profile-modal-header">
-              <div>
-                <h4>Menu</h4>
-                <p>{selectedClient.name}</p>
-              </div>
-              <button type="button" className="secondary-btn" onClick={() => setIsRecordMenuOpen(false)}>
-                Fechar
-              </button>
-            </header>
-            <div className="record-menu-actions">
-              {clientHasAnamnese && !isEditingAnamnese ? (
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => {
-                    setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
-                    handleStartEditAnamnese();
-                    setIsRecordMenuOpen(false);
-                  }}
-                >
-                  Editar ficha
-                </button>
-              ) : null}
-              {clientHasAnamnese && isEditingAnamnese ? (
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => {
-                    handleCancelEditAnamnese();
-                    setIsRecordMenuOpen(false);
-                  }}
-                >
-                  Cancelar edição
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={() => {
-                  handleExportAnamnesePdf();
-                  setIsRecordMenuOpen(false);
-                }}
-              >
-                Exportar PDF
-              </button>
-            </div>
-            <ShareLinkPanel
-              title="Link para a cliente preencher"
-              description="Quiz curto de múltipla escolha. Observações da clínica não entram nesse link."
-              links={anamneseLinks}
-              notice={shareNotice?.scope === "anamnese" ? shareNotice : null}
-              actions={[
-                {
-                  label: shareBusy === "anamnese" ? "Gerando..." : "Gerar link da anamnese",
-                  primary: true,
-                  disabled: Boolean(shareBusy),
-                  onClick: () => handleCreateClientLink("anamnese")
-                },
-                ...(anamneseLinks[0]
-                  ? [{
-                    label: "Copiar link",
-                    onClick: () => copyShareLink(anamneseLinks[0].id, "anamnese")
-                  }]
-                  : [])
-              ]}
-            />
-            <ShareLinkPanel
-              title="Quiz de acompanhamento"
-              description="Envie antes ou depois do atendimento. As respostas entram nos gráficos."
-              links={followupLinks}
-              notice={shareNotice?.scope === "followup" ? shareNotice : null}
-              actions={[
-                {
-                  label: shareBusy === "followup-antes" ? "Gerando..." : "Antes do atendimento",
-                  primary: true,
-                  disabled: Boolean(shareBusy),
-                  onClick: () => handleCreateClientLink("acompanhamento", "antes")
-                },
-                {
-                  label: shareBusy === "followup-depois" ? "Gerando..." : "Depois do atendimento",
-                  disabled: Boolean(shareBusy),
-                  onClick: () => handleCreateClientLink("acompanhamento", "depois")
-                },
-                ...(followupLinks[0]
-                  ? [{
-                    label: "Copiar link",
-                    onClick: () => copyShareLink(followupLinks[0].id, "followup")
-                  }]
-                  : [])
-              ]}
-            />
-            <section className="share-link-box">
-              <h5>Link da evolução</h5>
-              <p className="muted-text">
-                A cliente confirma o telefone cadastrado para ver o recado e os gráficos.
-              </p>
-              <label>
-                Recado para a cliente
-                <textarea
-                  value={evolutionComment}
-                  onChange={(event) => setEvolutionComment(event.target.value)}
-                  placeholder="Comentário sobre a evolução"
-                />
-              </label>
-              {!phoneKey(selectedClient.phone) ? (
-                <p className="muted-text">Cadastre o telefone da cliente para liberar este link.</p>
-              ) : null}
-              <div className="share-link-actions">
-                <button
-                  type="button"
-                  className="primary-btn"
-                  disabled={shareBusy === "charts"}
-                  onClick={handleUpdateEvolution}
-                >
-                  {shareBusy === "charts"
-                    ? "Salvando..."
-                    : evolutionLink
-                      ? "Atualizar link da evolução"
-                      : "Gerar link da evolução"}
-                </button>
-                {evolutionLink ? (
-                  <button type="button" className="secondary-btn" onClick={() => copyShareLink(evolutionLink.id, "charts")}>
-                    Copiar link
-                  </button>
-                ) : null}
-              </div>
-              {evolutionLink ? (
-                <>
-                  <p className="share-link-status">Link ativo</p>
-                  <input
-                    readOnly
-                    value={shareUrl(evolutionLink.id)}
-                    onFocus={(event) => event.target.select()}
-                    aria-label="Link da evolução"
-                  />
-                </>
-              ) : null}
-              {shareNotice?.scope === "charts" ? (
-                <p className={shareNotice.tone === "error" ? "error-text" : "success-text"}>{shareNotice.text}</p>
-              ) : null}
-            </section>
-          </section>
-        </div>
-      ) : null}
 
       {isClientFormOpen ? (
         <div className="client-modal-backdrop" onClick={resetClientForm}>
