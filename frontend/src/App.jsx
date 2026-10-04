@@ -1497,9 +1497,9 @@ export default function App() {
     setOpenClientMenuId("");
   };
 
-  const handleOpenClientView = (clientId, view) => {
+  const handleOpenClientModal = (clientId) => {
     setSelectedClientId(clientId);
-    setSelectedClientView(view);
+    setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
     setOpenClientMenuId("");
     setAnamneseMessage("");
   };
@@ -2016,7 +2016,11 @@ export default function App() {
                     </div>
                   ) : null}
 
-                  <div className="client-card-content">
+                  <button
+                    type="button"
+                    className="client-card-open"
+                    onClick={() => handleOpenClientModal(client.id)}
+                  >
                     <div>
                       <strong>{client.name}</strong>
                       <p>{client.phone || "Sem telefone"}</p>
@@ -2024,42 +2028,7 @@ export default function App() {
                       {client.birthDate ? <p>Nascimento: {formatDatePt(client.birthDate)}</p> : null}
                       {client.sex ? <p>Sexo: {formatSexLabel(client.sex)}</p> : null}
                     </div>
-                    <div className="client-tab-actions" role="tablist" aria-label={`Abrir prontuário de ${client.name}`}>
-                      <button
-                        type="button"
-                        className={
-                          selectedClientId === client.id && isAnamneseViewOpen
-                            ? "client-tab-btn active"
-                            : "client-tab-btn"
-                        }
-                        onClick={() => handleOpenClientView(client.id, CLIENT_VIEWS.ANAMNESE)}
-                      >
-                        Anamnese
-                      </button>
-                      <button
-                        type="button"
-                        className={
-                          selectedClientId === client.id && isFollowupViewOpen
-                            ? "client-tab-btn active"
-                            : "client-tab-btn"
-                        }
-                        onClick={() => handleOpenClientView(client.id, CLIENT_VIEWS.FOLLOWUP)}
-                      >
-                        Acompanhamentos
-                      </button>
-                      <button
-                        type="button"
-                        className={
-                          selectedClientId === client.id && isChartsViewOpen
-                            ? "client-tab-btn active"
-                            : "client-tab-btn"
-                        }
-                        onClick={() => handleOpenClientView(client.id, CLIENT_VIEWS.CHARTS)}
-                      >
-                        Gráficos
-                      </button>
-                    </div>
-                  </div>
+                  </button>
                 </li>
               ))
             )}

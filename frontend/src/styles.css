@@ -245,35 +245,26 @@ select:focus {
   align-items: flex-start !important;
 }
 
-.client-card-content {
+.client-card-open {
   width: 100%;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.client-tab-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-  padding-right: 46px;
-}
-
-.client-tab-btn {
-  border: 1px solid #c6d0d7;
-  background: #e6edf1;
-  color: #24343d;
-  border-radius: 16px;
-  padding: 10px 14px;
-  font-weight: 700;
+  border: none;
+  padding: 0;
+  padding-right: 52px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
   cursor: pointer;
 }
 
-.client-tab-btn.active {
-  border-color: #0f65d0;
-  box-shadow: 0 0 0 2px rgba(15, 101, 208, 0.22);
+.client-card-open:hover strong {
+  color: #24695c;
+}
+
+.client-card-open:focus-visible {
+  outline: 2px solid rgba(36, 105, 92, 0.35);
+  outline-offset: 8px;
+  border-radius: 10px;
 }
 
 .client-menu-trigger {
@@ -906,15 +897,8 @@ h5 {
     align-items: stretch;
   }
 
-  .client-card-content {
-    flex-direction: column;
-    align-items: flex-start;
+  .client-card-open {
     padding-top: 30px;
-  }
-
-  .client-tab-actions {
-    width: 100%;
-    justify-content: flex-start;
     padding-right: 0;
   }
 
