@@ -1435,7 +1435,8 @@ h5 {
 
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
     position: fixed;
     left: 12px;
     right: 12px;
@@ -1446,6 +1447,20 @@ h5 {
     border-radius: 24px;
     box-shadow: 0 10px 28px rgba(16, 29, 44, 0.12);
     padding: 8px 6px;
+  }
+
+  .bottom-nav-group {
+    display: flex;
+    justify-content: space-evenly;
+    min-width: 0;
+  }
+
+  .bottom-nav-group button {
+    flex: 1;
+  }
+
+  .bottom-nav-home {
+    width: 76px;
   }
 
   .bottom-nav button {
