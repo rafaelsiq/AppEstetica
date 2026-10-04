@@ -2948,6 +2948,22 @@ export default function App() {
   const isAnamneseViewOpen = selectedClientView === CLIENT_VIEWS.ANAMNESE;
   const isFollowupViewOpen = selectedClientView === CLIENT_VIEWS.FOLLOWUP;
   const isChartsViewOpen = selectedClientView === CLIENT_VIEWS.CHARTS;
+  const followupChartCards = [
+    <AngleProgressChart key="angle" series={angleChartSeries} />,
+    <ProgressLineChart
+      key="pain-stress"
+      title="Evolução da dor x estresse"
+      points={checkpointChartData}
+      firstMetric={{ field: "painLevel", label: "Dor" }}
+      secondMetric={{ field: "stressLevel", label: "Estresse" }}
+      maxValue={10}
+    />,
+    <SleepBarChart key="sleep" points={checkpointChartData} />,
+    <SessionTypeDistributionChart key="session-type" points={checkpointChartData} />,
+    <InitialVsCurrentChart key="initial-current" points={checkpointChartData} />
+  ];
+  const wellnessChartCount = followupChartCards.length + 1;
+  const wellnessSpansTwo = wellnessChartCount % 2 === 1;
 
   const currentPhotoDraft = photoDraftHasProgress(photoForm) ? buildPhotoDraft(photoForm) : null;
   const pendingPhotoCount = draftPhotos.length + (currentPhotoDraft && !currentPhotoDraft.error ? 1 : 0);
@@ -4151,19 +4167,9 @@ export default function App() {
                   <div className="charts-grid">
                     <WellnessScoreChart
                       points={checkpointChartData}
-                      className="chart-card-span-2"
+                      className={wellnessSpansTwo ? "chart-card-span-2" : ""}
                     />
-                    <AngleProgressChart series={angleChartSeries} />
-                    <ProgressLineChart
-                      title="Evolução da dor x estresse"
-                      points={checkpointChartData}
-                      firstMetric={{ field: "painLevel", label: "Dor" }}
-                      secondMetric={{ field: "stressLevel", label: "Estresse" }}
-                      maxValue={10}
-                    />
-                    <SleepBarChart points={checkpointChartData} />
-                    <SessionTypeDistributionChart points={checkpointChartData} />
-                    <InitialVsCurrentChart points={checkpointChartData} />
+                    {followupChartCards}
                   </div>
                 </section>
               ) : null}
