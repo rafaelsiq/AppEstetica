@@ -413,6 +413,73 @@ select:focus {
   align-items: center;
 }
 
+.client-picker {
+  position: relative;
+}
+
+.client-picker-field {
+  position: relative;
+}
+
+.client-picker input {
+  padding-right: 48px;
+}
+
+.client-picker-add {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 10px;
+  background: #24695c;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.client-picker-add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.client-picker-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 6;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #ffffff;
+  border: 1px solid #e6eef1;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(16, 29, 44, 0.12);
+  display: grid;
+  gap: 4px;
+}
+
+.client-picker-suggestions button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: #24343d;
+  cursor: pointer;
+}
+
+.client-picker-suggestions button:hover {
+  background: #f4f7f8;
+}
+
 .clients-toolbar {
   margin-top: 14px;
   display: grid;
