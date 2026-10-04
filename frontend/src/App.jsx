@@ -781,6 +781,54 @@ function formatDatePt(dateValue) {
   return parsed.toLocaleDateString("pt-BR");
 }
 
+const MONTH_LABELS = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro"
+];
+const WEEKDAY_LABELS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const WEEKDAY_SHORT_LABELS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+function parseIsoDate(isoDate) {
+  const [year, month, day] = String(isoDate || "").split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
+function toIsoDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatAgendaDayLabel(isoDate) {
+  const date = parseIsoDate(isoDate);
+  const weekday = WEEKDAY_LABELS[date.getDay()];
+  const label = `${weekday}, ${date.getDate()} de ${MONTH_LABELS[date.getMonth()]}`;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function buildMonthDays(visibleMonthDate) {
+  const year = visibleMonthDate.getFullYear();
+  const month = visibleMonthDate.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days = Array.from({ length: firstWeekday }, () => null);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    days.push(toIsoDate(new Date(year, month, day)));
+  }
+  return days;
+}
+
 function getTimestampMillis(value) {
   if (!value) {
     return 0;
@@ -1777,6 +1825,13 @@ export default function App() {
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [appointmentNotes, setAppointmentNotes] = useState("");
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+  const [agendaMode, setAgendaMode] = useState("month");
+  const [agendaSelectedDate, setAgendaSelectedDate] = useState("");
+  const [agendaVisibleMonth, setAgendaVisibleMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedClientView, setSelectedClientView] = useState(null);
   const [openClientMenuId, setOpenClientMenuId] = useState("");
@@ -2490,6 +2545,11 @@ export default function App() {
     setAppointmentServiceNotice("");
     setIsAppointmentClientListOpen(false);
     setIsAppointmentServiceListOpen(false);
+    setAgendaSelectedDate(appointmentDate);
+    setAgendaVisibleMonth(
+      new Date(parseIsoDate(appointmentDate).getFullYear(), parseIsoDate(appointmentDate).getMonth(), 1)
+    );
+    setIsAppointmentModalOpen(false);
   };
 
   const normalizedAppointmentService = appointmentService.trim().toLowerCase();
@@ -3168,6 +3228,56 @@ export default function App() {
     .toISOString()
     .slice(0, 10);
   const todayAppointments = appointments.filter((appointment) => appointment.date === todayIsoDate);
+  const selectedAgendaDate = agendaSelectedDate || todayIsoDate;
+  const selectedDayAppointments = appointments.filter((appointment) => appointment.date === selectedAgendaDate);
+  const appointmentCountByDate = new Map();
+  appointments.forEach((appointment) => {
+    if (!appointment.date) {
+      return;
+    }
+    appointmentCountByDate.set(appointment.date, (appointmentCountByDate.get(appointment.date) || 0) + 1);
+  });
+  const monthDays = buildMonthDays(agendaVisibleMonth);
+  const visibleMonthLabel = MONTH_LABELS[agendaVisibleMonth.getMonth()];
+  const monthTitle = `${visibleMonthLabel.charAt(0).toUpperCase()}${visibleMonthLabel.slice(1)} ${agendaVisibleMonth.getFullYear()}`;
+  const selectedDayLabel = formatAgendaDayLabel(selectedAgendaDate);
+  const agendaNavTitle = agendaMode === "month" ? monthTitle : selectedDayLabel;
+
+  const openAppointmentModal = () => {
+    setAppointmentDate(selectedAgendaDate);
+    setAppointmentClientNotice("");
+    setAppointmentServiceNotice("");
+    setIsAppointmentClientListOpen(false);
+    setIsAppointmentServiceListOpen(false);
+    setIsAppointmentModalOpen(true);
+  };
+
+  const closeAppointmentModal = () => {
+    setIsAppointmentModalOpen(false);
+    setIsAppointmentClientListOpen(false);
+    setIsAppointmentServiceListOpen(false);
+  };
+
+  const goToAgendaToday = () => {
+    const today = parseIsoDate(todayIsoDate);
+    setAgendaSelectedDate(todayIsoDate);
+    setAgendaVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+  };
+
+  const shiftAgenda = (delta) => {
+    if (agendaMode === "month") {
+      setAgendaVisibleMonth(
+        (current) => new Date(current.getFullYear(), current.getMonth() + delta, 1)
+      );
+      return;
+    }
+
+    const nextDate = parseIsoDate(selectedAgendaDate);
+    nextDate.setDate(nextDate.getDate() + delta);
+    const nextIsoDate = toIsoDate(nextDate);
+    setAgendaSelectedDate(nextIsoDate);
+    setAgendaVisibleMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+  };
   const greetingName = currentUserDisplayName.split(" ")[0] || currentUserDisplayName;
   const dayPeriod = new Date().getHours();
   const greetingLabel = dayPeriod < 12 ? "Bom dia" : dayPeriod < 18 ? "Boa tarde" : "Boa noite";
@@ -3493,9 +3603,140 @@ export default function App() {
       ) : null}
 
       {activeTab === TABS.AGENDA ? (
-        <section className="card">
-          <h3>Agenda</h3>
-          <form className="form grid-form" onSubmit={handleAddAppointment}>
+        <section className="agenda-page">
+          <div className="agenda-toolbar">
+            <div className="agenda-switch" role="tablist" aria-label="Visualização da agenda">
+              <button
+                type="button"
+                className={agendaMode === "month" ? "active" : ""}
+                onClick={() => setAgendaMode("month")}
+              >
+                Mês
+              </button>
+              <button
+                type="button"
+                className={agendaMode === "day" ? "active" : ""}
+                onClick={() => setAgendaMode("day")}
+              >
+                Dia
+              </button>
+            </div>
+            <button className="primary-btn" type="button" onClick={openAppointmentModal}>
+              Inserir atendimento
+            </button>
+          </div>
+
+          <div className={agendaMode === "month" ? "agenda-layout" : "agenda-layout agenda-layout-day"}>
+            <article className="card agenda-card">
+              <div className="agenda-nav">
+                <button
+                  type="button"
+                  aria-label={agendaMode === "month" ? "Mês anterior" : "Dia anterior"}
+                  onClick={() => shiftAgenda(-1)}
+                >
+                  ‹
+                </button>
+                <div className="agenda-nav-title">
+                  <h3>{agendaNavTitle}</h3>
+                  <button type="button" className="agenda-today" onClick={goToAgendaToday}>
+                    Hoje
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  aria-label={agendaMode === "month" ? "Próximo mês" : "Próximo dia"}
+                  onClick={() => shiftAgenda(1)}
+                >
+                  ›
+                </button>
+              </div>
+
+              {agendaMode === "month" ? (
+                <div className="month-grid">
+                  {WEEKDAY_SHORT_LABELS.map((weekday) => (
+                    <span key={weekday} className="month-weekday">
+                      {weekday}
+                    </span>
+                  ))}
+                  {monthDays.map((isoDate, index) =>
+                    isoDate ? (
+                      <button
+                        key={isoDate}
+                        type="button"
+                        className={`month-day ${isoDate === selectedAgendaDate ? "is-selected" : ""} ${
+                          isoDate === todayIsoDate ? "is-today" : ""
+                        } ${appointmentCountByDate.get(isoDate) ? "has-appointments" : ""}`}
+                        aria-pressed={isoDate === selectedAgendaDate}
+                        aria-label={`${formatAgendaDayLabel(isoDate)}${
+                          appointmentCountByDate.get(isoDate)
+                            ? `, ${appointmentCountByDate.get(isoDate)} atendimento${
+                                appointmentCountByDate.get(isoDate) > 1 ? "s" : ""
+                              }`
+                            : ""
+                        }`}
+                        onClick={() => setAgendaSelectedDate(isoDate)}
+                      >
+                        <span>{parseIsoDate(isoDate).getDate()}</span>
+                        <span className="month-day-dot" />
+                      </button>
+                    ) : (
+                      <span key={`empty-day-${index}`} className="month-day is-empty" />
+                    )
+                  )}
+                </div>
+              ) : null}
+            </article>
+
+            <article className="card">
+              {agendaMode === "month" ? <h3 className="day-heading">{selectedDayLabel}</h3> : null}
+              <ul className="list">
+                {selectedDayAppointments.length === 0 ? (
+                  <li className="empty">Nenhum atendimento neste dia.</li>
+                ) : (
+                  selectedDayAppointments.map((appointment) => (
+                    <li key={appointment.id}>
+                      <div>
+                        <strong>
+                          {appointment.time || "Sem horário"} · {appointment.client}
+                        </strong>
+                        <p>{appointment.service}</p>
+                        {appointment.notes ? <p>{appointment.notes}</p> : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        onClick={() => handleDeleteByCollection("appointments", appointment.id)}
+                      >
+                        Excluir
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </article>
+          </div>
+        </section>
+      ) : null}
+
+      {isAppointmentModalOpen ? (
+        <div className="client-modal-backdrop" onClick={closeAppointmentModal}>
+          <section
+            className="appointment-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Inserir atendimento"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>Inserir atendimento</h4>
+                <p>{formatAgendaDayLabel(appointmentDate || selectedAgendaDate)}</p>
+              </div>
+              <button type="button" className="secondary-btn" onClick={closeAppointmentModal}>
+                Fechar
+              </button>
+            </header>
+            <form className="form grid-form" onSubmit={handleAddAppointment}>
             <label>
               Cliente
               <div className={`client-picker ${isAppointmentClientListOpen ? "is-open" : ""}`}>
@@ -3635,35 +3876,11 @@ export default function App() {
               />
             </label>
             <button className="primary-btn full-row" type="submit">
-              Adicionar horário
+              Salvar atendimento
             </button>
           </form>
-
-          <ul className="list">
-            {appointments.length === 0 ? (
-              <li className="empty">Nenhum horário cadastrado.</li>
-            ) : (
-              appointments.map((appointment) => (
-                <li key={appointment.id}>
-                  <div>
-                    <strong>{appointment.client}</strong> - {appointment.service}
-                    <p>
-                      {appointment.date} {appointment.time ? `às ${appointment.time}` : ""}
-                    </p>
-                    {appointment.notes ? <p>{appointment.notes}</p> : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="danger-btn"
-                    onClick={() => handleDeleteByCollection("appointments", appointment.id)}
-                  >
-                    Excluir
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </section>
+          </section>
+        </div>
       ) : null}
 
       {activeTab === TABS.CLIENTES ? (

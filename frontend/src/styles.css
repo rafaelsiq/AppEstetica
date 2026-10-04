@@ -501,6 +501,174 @@ select:focus {
   margin-top: 8px;
 }
 
+.agenda-page {
+  display: grid;
+  gap: 14px;
+}
+
+.agenda-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.agenda-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 180px;
+  gap: 8px;
+}
+
+.agenda-switch button {
+  border: 1px solid #c6d0d7;
+  background: #f2f5f7;
+  color: #2f4957;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.agenda-switch button.active {
+  border-color: #24695c;
+  background: #24695c;
+  color: #ffffff;
+}
+
+.agenda-layout {
+  display: grid;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (min-width: 800px) {
+  .agenda-layout:not(.agenda-layout-day) {
+    grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  }
+}
+
+.agenda-nav {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agenda-nav > button {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: #f4f7f8;
+  color: #24343d;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agenda-nav-title {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.agenda-nav-title h3 {
+  margin: 0;
+  font-size: 18px;
+  text-align: center;
+}
+
+.agenda-today {
+  border: none;
+  background: transparent;
+  color: #24695c;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.month-weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b98a5;
+  padding-bottom: 4px;
+}
+
+.month-day {
+  min-height: 44px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #1d2b33;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 3px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.month-day.is-empty {
+  cursor: default;
+}
+
+.month-day.is-today {
+  box-shadow: inset 0 0 0 1.5px #24695c;
+}
+
+.month-day.is-selected {
+  background: #24695c;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.month-day-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.month-day.has-appointments .month-day-dot {
+  background: #24695c;
+}
+
+.month-day.is-selected.has-appointments .month-day-dot {
+  background: #ffffff;
+}
+
+.day-heading {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.appointment-modal {
+  width: min(560px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid #d7dde3;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(10, 29, 46, 0.28);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.appointment-modal .grid-form {
+  grid-template-columns: 1fr;
+}
+
 .client-card {
   position: relative;
   align-items: flex-start !important;
@@ -1452,6 +1620,15 @@ h5 {
 
   .tabs {
     display: none;
+  }
+
+  .agenda-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .agenda-switch {
+    width: 100%;
   }
 
   .bottom-nav {
