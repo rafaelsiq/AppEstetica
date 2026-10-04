@@ -4307,93 +4307,6 @@ export default function App() {
             )}
           </ul>
 
-          {isClientFormOpen ? (
-            <div className="client-modal-backdrop" onClick={resetClientForm}>
-            <section
-              className="profile-modal"
-              role="dialog"
-              aria-modal="true"
-              aria-label={editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <header className="profile-modal-header">
-                <div>
-                  <h4>{editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}</h4>
-                  <p>Os dados ficam no cadastro da cliente.</p>
-                </div>
-                <button type="button" className="secondary-btn" onClick={resetClientForm}>
-                  Fechar
-                </button>
-              </header>
-              <form className="form grid-form" onSubmit={handleSaveClient}>
-                <label>
-                  Nome
-                  <input
-                    value={clientName}
-                    onChange={(event) => setClientName(event.target.value)}
-                    placeholder="Nome completo"
-                    required
-                  />
-                </label>
-                <label>
-                  Telefone
-                  <input
-                    value={clientPhone}
-                    onChange={(event) => setClientPhone(event.target.value)}
-                    placeholder="(00) 00000-0000"
-                  />
-                </label>
-                <label>
-                  E-mail
-                  <input
-                    type="email"
-                    value={clientEmail}
-                    onChange={(event) => setClientEmail(event.target.value)}
-                    placeholder="cliente@email.com"
-                  />
-                </label>
-                <label>
-                  Data de nascimento
-                  <input
-                    type="date"
-                    value={clientBirthDate}
-                    onChange={(event) => setClientBirthDate(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Sexo
-                  <select value={clientSex} onChange={(event) => setClientSex(event.target.value)}>
-                    {SEX_OPTIONS.map((option) => (
-                      <option key={option.value || "empty"} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="full-row">
-                  Endereço
-                  <input
-                    value={clientAddress}
-                    onChange={(event) => setClientAddress(event.target.value)}
-                    placeholder="Rua, número, bairro e cidade"
-                  />
-                </label>
-
-                <button className="primary-btn full-row" type="submit">
-                  {editingClientId ? "Salvar alterações da cliente" : "Adicionar cliente"}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-btn full-row"
-                  onClick={resetClientForm}
-                >
-                  Cancelar
-                </button>
-              </form>
-            </section>
-            </div>
-          ) : null}
-
           {selectedClient && selectedClientView ? (
             <div className="client-modal-backdrop" onClick={handleCloseClientView}>
               <section
@@ -5500,6 +5413,88 @@ export default function App() {
                   Excluir meu cadastro
                 </button>
               ) : null}
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {isClientFormOpen ? (
+        <div className="client-modal-backdrop" onClick={resetClientForm}>
+          <section
+            className="profile-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>{editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}</h4>
+                <p>Os dados ficam no cadastro da cliente.</p>
+              </div>
+              <button type="button" className="secondary-btn" onClick={resetClientForm}>
+                Fechar
+              </button>
+            </header>
+            <form className="form grid-form" onSubmit={handleSaveClient}>
+              <label>
+                Nome
+                <input
+                  value={clientName}
+                  onChange={(event) => setClientName(event.target.value)}
+                  placeholder="Nome completo"
+                  required
+                />
+              </label>
+              <label>
+                Telefone
+                <input
+                  value={clientPhone}
+                  onChange={(event) => setClientPhone(event.target.value)}
+                  placeholder="(00) 00000-0000"
+                />
+              </label>
+              <label>
+                E-mail
+                <input
+                  type="email"
+                  value={clientEmail}
+                  onChange={(event) => setClientEmail(event.target.value)}
+                  placeholder="cliente@email.com"
+                />
+              </label>
+              <label>
+                Data de nascimento
+                <input
+                  type="date"
+                  value={clientBirthDate}
+                  onChange={(event) => setClientBirthDate(event.target.value)}
+                />
+              </label>
+              <label>
+                Sexo
+                <select value={clientSex} onChange={(event) => setClientSex(event.target.value)}>
+                  {SEX_OPTIONS.map((option) => (
+                    <option key={option.value || "empty"} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="full-row">
+                Endereço
+                <input
+                  value={clientAddress}
+                  onChange={(event) => setClientAddress(event.target.value)}
+                  placeholder="Rua, número, bairro e cidade"
+                />
+              </label>
+              <button className="primary-btn full-row" type="submit">
+                {editingClientId ? "Salvar alterações da cliente" : "Adicionar cliente"}
+              </button>
+              <button type="button" className="secondary-btn full-row" onClick={resetClientForm}>
+                Cancelar
+              </button>
             </form>
           </section>
         </div>
