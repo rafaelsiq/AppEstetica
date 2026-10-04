@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
+      injectRegister: false,
+      selfDestroying: true,
       includeAssets: ["icon.svg"],
       manifest: {
         name: "Gestão Clínica de Estética",
