@@ -10,10 +10,7 @@ import {
   collection,
   deleteDoc,
   doc,
-  limit,
   onSnapshot,
-  orderBy,
-  query,
   serverTimestamp,
   setDoc,
   updateDoc
@@ -24,6 +21,11 @@ const TABS = {
   AGENDA: "agenda",
   CLIENTES: "clientes",
   SERVICOS: "servicos"
+};
+
+const CLIENT_VIEWS = {
+  ANAMNESE: "anamnese",
+  FOLLOWUP: "followup"
 };
 
 const PAIN_AREAS = [
@@ -419,29 +421,6 @@ function formatDatePt(dateValue) {
     return dateValue;
   }
   return parsed.toLocaleDateString("pt-BR");
-}
-
-function formatDateTimePt(dateValue) {
-  if (!dateValue) {
-    return "--";
-  }
-
-  const parsed =
-    typeof dateValue?.toDate === "function"
-      ? dateValue.toDate()
-      : new Date(dateValue);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "--";
-  }
-
-  return parsed.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
 }
 
 function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEditable }) {
@@ -1022,12 +1001,9 @@ export default function App() {
   const [appointmentTime, setAppointmentTime] = useState("");
   const [appointmentNotes, setAppointmentNotes] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedClientView, setSelectedClientView] = useState(null);
   const [anamneseForm, setAnamneseForm] = useState(buildEmptyAnamnese());
-  const [lastAnamneseTemplate, setLastAnamneseTemplate] = useState(null);
-  const [anamneseVersions, setAnamneseVersions] = useState([]);
-  const [selectedAnamneseVersionId, setSelectedAnamneseVersionId] = useState("");
-  const [legacyAnamneseData, setLegacyAnamneseData] = useState(null);
-  const [isDraftingNewAnamnese, setIsDraftingNewAnamnese] = useState(false);
+  const [anamneseSnapshot, setAnamneseSnapshot] = useState(buildEmptyAnamnese());
   const [isEditingAnamnese, setIsEditingAnamnese] = useState(false);
   const [clientHasAnamnese, setClientHasAnamnese] = useState(false);
   const [checkpoints, setCheckpoints] = useState([]);
@@ -1062,12 +1038,9 @@ export default function App() {
       resetClientForm();
       setClientFormMessage("");
       setSelectedClientId("");
+      setSelectedClientView(null);
       setAnamneseForm(buildEmptyAnamnese());
-      setLastAnamneseTemplate(null);
-      setAnamneseVersions([]);
-      setSelectedAnamneseVersionId("");
-      setLegacyAnamneseData(null);
-      setIsDraftingNewAnamnese(false);
+      setAnamneseSnapshot(buildEmptyAnamnese());
       setIsEditingAnamnese(false);
       setClientHasAnamnese(false);
       setCheckpoints([]);
@@ -1117,28 +1090,6 @@ export default function App() {
     }));
   }, [checkpoints, selectedClientId]);
 
-  useEffect(() => {
-    if (!user) {
-      return undefined;
-    }
-
-    const latestAnamneseQuery = query(
-      collection(db, "users", user.uid, "anamneses"),
-      orderBy("updatedAt", "desc"),
-      limit(1)
-    );
-
-    const unsubscribe = onSnapshot(latestAnamneseQuery, (snapshot) => {
-      if (snapshot.empty) {
-        setLastAnamneseTemplate(null);
-        return;
-      }
-      const latestData = snapshot.docs[0].data();
-      setLastAnamneseTemplate(normalizeAnamneseRecord(latestData));
-    });
-
-    return unsubscribe;
-  }, [user]);
 
   useEffect(() => {
     if (!selectedClientId) {
@@ -1146,12 +1097,11 @@ export default function App() {
     }
     if (!clients.some((client) => client.id === selectedClientId)) {
       setSelectedClientId("");
+      setSelectedClientView(null);
       setAnamneseForm(buildEmptyAnamnese());
-      setAnamneseVersions([]);
-      setSelectedAnamneseVersionId("");
-      setLegacyAnamneseData(null);
-      setIsDraftingNewAnamnese(false);
+      setAnamneseSnapshot(buildEmptyAnamnese());
       setIsEditingAnamnese(false);
+      setClientHasAnamnese(false);
       setCheckpoints([]);
     }
   }, [clients, selectedClientId]);
@@ -1173,38 +1123,33 @@ export default function App() {
   useEffect(() => {
     if (!user || !selectedClient) {
       setAnamneseForm(buildEmptyAnamnese(selectedClient));
-      setAnamneseVersions([]);
-      setSelectedAnamneseVersionId("");
-      setLegacyAnamneseData(null);
-      setIsDraftingNewAnamnese(false);
+      setAnamneseSnapshot(buildEmptyAnamnese(selectedClient));
+      setIsEditingAnamnese(false);
       setClientHasAnamnese(false);
       setCheckpoints([]);
       return undefined;
     }
 
-    setAnamneseVersions([]);
-    setSelectedAnamneseVersionId("");
-    setLegacyAnamneseData(null);
-    setIsDraftingNewAnamnese(false);
     setIsEditingAnamnese(false);
 
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
-    const versionsRef = query(
-      collection(db, "users", user.uid, "anamneses", selectedClient.id, "versions"),
-      orderBy("updatedAt", "desc")
-    );
     const checkpointsRef = collection(db, "users", user.uid, "anamneses", selectedClient.id, "checkpoints");
 
     const unsubscribeAnamnese = onSnapshot(anamneseRef, (snapshot) => {
-      setLegacyAnamneseData(snapshot.exists() ? snapshot.data() : null);
-    });
+      if (!snapshot.exists()) {
+        const emptyRecord = buildEmptyAnamnese(selectedClient);
+        setClientHasAnamnese(false);
+        setAnamneseForm(emptyRecord);
+        setAnamneseSnapshot(emptyRecord);
+        setIsEditingAnamnese(true);
+        return;
+      }
 
-    const unsubscribeVersions = onSnapshot(versionsRef, (snapshot) => {
-      const loadedVersions = snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data()
-      }));
-      setAnamneseVersions(loadedVersions);
+      const normalizedRecord = normalizeAnamneseRecord(snapshot.data(), selectedClient);
+      setClientHasAnamnese(true);
+      setAnamneseForm(normalizedRecord);
+      setAnamneseSnapshot(normalizedRecord);
+      setIsEditingAnamnese(false);
     });
 
     const unsubscribeCheckpoints = onSnapshot(checkpointsRef, (snapshot) => {
@@ -1214,57 +1159,9 @@ export default function App() {
 
     return () => {
       unsubscribeAnamnese();
-      unsubscribeVersions();
       unsubscribeCheckpoints();
     };
   }, [user, selectedClient]);
-
-  useEffect(() => {
-    if (!selectedClient) {
-      return;
-    }
-
-    const hasAnyStoredAnamnese = anamneseVersions.length > 0 || Boolean(legacyAnamneseData);
-    setClientHasAnamnese(hasAnyStoredAnamnese);
-
-    if (isDraftingNewAnamnese) {
-      return;
-    }
-
-    if (selectedAnamneseVersionId) {
-      const selectedVersion = anamneseVersions.find(
-        (item) => item.id === selectedAnamneseVersionId
-      );
-      if (selectedVersion) {
-        setAnamneseForm(normalizeAnamneseRecord(selectedVersion, selectedClient));
-        return;
-      }
-      setSelectedAnamneseVersionId("");
-    }
-
-    if (anamneseVersions.length > 0) {
-      const latestVersion = anamneseVersions[0];
-      setSelectedAnamneseVersionId(latestVersion.id);
-      setAnamneseForm(normalizeAnamneseRecord(latestVersion, selectedClient));
-      setIsEditingAnamnese(false);
-      return;
-    }
-
-    if (legacyAnamneseData) {
-      setAnamneseForm(normalizeAnamneseRecord(legacyAnamneseData, selectedClient));
-      setIsEditingAnamnese(false);
-      return;
-    }
-
-    setAnamneseForm(buildEmptyAnamnese(selectedClient));
-    setIsEditingAnamnese(false);
-  }, [
-    selectedClient,
-    anamneseVersions,
-    selectedAnamneseVersionId,
-    legacyAnamneseData,
-    isDraftingNewAnamnese
-  ]);
 
   const formattedUserName = useMemo(() => {
     if (!user?.email) {
@@ -1348,12 +1245,32 @@ export default function App() {
 
   const handleOpenClientAnamnese = (clientId) => {
     setSelectedClientId(clientId);
-    setSelectedAnamneseVersionId("");
-    setLegacyAnamneseData(null);
-    setIsDraftingNewAnamnese(false);
-    setIsEditingAnamnese(false);
+    setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
     setAnamneseMessage("");
-    setCheckpoints([]);
+  };
+
+  const handleOpenClientFollowup = (clientId) => {
+    setSelectedClientId(clientId);
+    setSelectedClientView(CLIENT_VIEWS.FOLLOWUP);
+    setAnamneseMessage("");
+  };
+
+  const handleCloseClientView = () => {
+    setSelectedClientId("");
+    setSelectedClientView(null);
+    setAnamneseMessage("");
+  };
+
+  const handleStartEditAnamnese = () => {
+    setIsEditingAnamnese(true);
+    setAnamneseMessage("");
+  };
+
+  const handleCancelEditAnamnese = () => {
+    if (clientHasAnamnese) {
+      setAnamneseForm(anamneseSnapshot);
+      setIsEditingAnamnese(false);
+    }
   };
 
   const handleAddService = async (event) => {
@@ -1448,43 +1365,6 @@ export default function App() {
     });
   };
 
-  const handleFillWithLastAnamnese = () => {
-    if (!lastAnamneseTemplate || !selectedClient) {
-      return;
-    }
-    setAnamneseForm(normalizeAnamneseRecord(lastAnamneseTemplate, selectedClient));
-    setSelectedAnamneseVersionId("");
-    setIsDraftingNewAnamnese(true);
-    setIsEditingAnamnese(true);
-    setAnamneseMessage("Campos preenchidos com base na última anamnese salva.");
-    setTimeout(() => setAnamneseMessage(""), 2500);
-  };
-
-  const handleStartNewAnamnese = () => {
-    if (!selectedClient) {
-      return;
-    }
-    setAnamneseForm(buildEmptyAnamnese(selectedClient));
-    setSelectedAnamneseVersionId("");
-    setIsDraftingNewAnamnese(true);
-    setIsEditingAnamnese(true);
-    setAnamneseMessage("Nova ficha iniciada. Você pode preencher do zero ou usar a última.");
-    setTimeout(() => setAnamneseMessage(""), 2500);
-  };
-
-  const handleLoadAnamneseVersion = (versionId) => {
-    const target = anamneseVersions.find((item) => item.id === versionId);
-    if (!target || !selectedClient) {
-      return;
-    }
-    setAnamneseForm(normalizeAnamneseRecord(target, selectedClient));
-    setSelectedAnamneseVersionId(versionId);
-    setIsDraftingNewAnamnese(false);
-    setIsEditingAnamnese(true);
-    setAnamneseMessage("Ficha anterior carregada para edição.");
-    setTimeout(() => setAnamneseMessage(""), 2500);
-  };
-
   const handleSaveAnamnese = async (event) => {
     event.preventDefault();
     if (!user || !selectedClient) {
@@ -1492,14 +1372,6 @@ export default function App() {
     }
 
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
-    const anamneseVersionsRef = collection(
-      db,
-      "users",
-      user.uid,
-      "anamneses",
-      selectedClient.id,
-      "versions"
-    );
     const normalizedPainSelections = normalizePainSelections(anamneseForm.painSelections);
     const normalizedPainTypeOptions = normalizeStringArray(
       anamneseForm.painTypeOptions,
@@ -1583,44 +1455,18 @@ export default function App() {
       updatedAt: serverTimestamp()
     };
 
-    let activeVersionId = selectedAnamneseVersionId;
-    if (selectedAnamneseVersionId) {
-      await updateDoc(
-        doc(
-          db,
-          "users",
-          user.uid,
-          "anamneses",
-          selectedClient.id,
-          "versions",
-          selectedAnamneseVersionId
-        ),
-        payload
-      );
-    } else {
-      const created = await addDoc(anamneseVersionsRef, {
-        ...payload,
-        createdAt: serverTimestamp()
-      });
-      activeVersionId = created.id;
-      setSelectedAnamneseVersionId(created.id);
-    }
-
-    await setDoc(anamneseRef, payload, { merge: true });
     await setDoc(
       anamneseRef,
       {
-        currentVersionId: activeVersionId
+        ...payload,
+        ...(clientHasAnamnese ? {} : { createdAt: serverTimestamp() })
       },
       { merge: true }
     );
 
-    setIsDraftingNewAnamnese(false);
     setIsEditingAnamnese(false);
     setAnamneseMessage(
-      selectedAnamneseVersionId
-        ? "Ficha atualizada com sucesso."
-        : "Nova ficha salva com sucesso."
+      clientHasAnamnese ? "Ficha atualizada com sucesso." : "Ficha salva com sucesso."
     );
     setTimeout(() => setAnamneseMessage(""), 2500);
   };
@@ -1664,6 +1510,9 @@ export default function App() {
   const checkpointChartData = useMemo(() => {
     return sortByDate(checkpoints).filter((item) => item.date);
   }, [checkpoints]);
+
+  const isAnamneseViewOpen = selectedClientView === CLIENT_VIEWS.ANAMNESE;
+  const isFollowupViewOpen = selectedClientView === CLIENT_VIEWS.FOLLOWUP;
 
   if (isLoadingAuth) {
     return <main className="page loading">Carregando...</main>;
@@ -1877,6 +1726,13 @@ export default function App() {
                     <button
                       type="button"
                       className="secondary-btn"
+                      onClick={() => handleOpenClientFollowup(client.id)}
+                    >
+                      Acompanhamento
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn"
                       onClick={() => handleEditClient(client)}
                     >
                       Editar
@@ -1965,93 +1821,64 @@ export default function App() {
             </section>
           ) : null}
 
-          {selectedClient ? (
-            <>
-            <section className="anamnese-panel">
-              <div className="panel-header">
+          {selectedClient && selectedClientView ? (
+            <section className="client-detail-panel">
+              <div className="panel-header client-detail-header">
                 <div>
-                  <h4>Ficha de Anamnese - {selectedClient.name}</h4>
-                  <p>Registre as informações clínicas da ficha base da cliente.</p>
-                  <p className="muted-text">
-                    Dados pessoais ficam no cadastro da cliente e são fixos.
+                  <h4>{selectedClient.name}</h4>
+                  <p>
+                    {isAnamneseViewOpen
+                      ? "Ficha de anamnese única da cliente."
+                      : "Histórico de atendimentos da cliente."}
                   </p>
-                    {!isEditingAnamnese ? (
-                      <p className="muted-text">Modo visualização ativado (somente leitura).</p>
-                    ) : null}
                 </div>
-                <button type="button" className="secondary-btn" onClick={() => setSelectedClientId("")}>
-                  Fechar
-                </button>
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    className={isAnamneseViewOpen ? "primary-btn" : "secondary-btn"}
+                    onClick={() => setSelectedClientView(CLIENT_VIEWS.ANAMNESE)}
+                  >
+                    Anamnese
+                  </button>
+                  <button
+                    type="button"
+                    className={isFollowupViewOpen ? "primary-btn" : "secondary-btn"}
+                    onClick={() => setSelectedClientView(CLIENT_VIEWS.FOLLOWUP)}
+                  >
+                    Acompanhamento
+                  </button>
+                  <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
+                    Fechar
+                  </button>
+                </div>
               </div>
 
-              <form className="form" onSubmit={handleSaveAnamnese}>
-                <div className="anamnese-history-box">
-                  <div className="section-header">
-                    <h5>Histórico de fichas</h5>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={handleStartNewAnamnese}
-                    >
-                      Nova ficha
-                    </button>
+              {isAnamneseViewOpen ? (
+                <section className="anamnese-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h4>Ficha de Anamnese</h4>
+                      <p>Dados pessoais ficam no cadastro da cliente e são fixos.</p>
+                      {!isEditingAnamnese ? (
+                        <p className="muted-text">Modo visualização ativado (somente leitura).</p>
+                      ) : null}
+                    </div>
+                    <div className="inline-actions">
+                      {clientHasAnamnese && !isEditingAnamnese ? (
+                        <button type="button" className="secondary-btn" onClick={handleStartEditAnamnese}>
+                          Editar ficha
+                        </button>
+                      ) : null}
+                      {clientHasAnamnese && isEditingAnamnese ? (
+                        <button type="button" className="secondary-btn" onClick={handleCancelEditAnamnese}>
+                          Cancelar edição
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                  {anamneseVersions.length > 0 ? (
-                    <ul className="history-list">
-                      {anamneseVersions.map((version) => (
-                        <li key={version.id}>
-                          <div>
-                            <strong>
-                              Ficha {version.id === selectedAnamneseVersionId ? "(em edição)" : ""}
-                            </strong>
-                            <p>
-                              Atualizada em: {formatDateTimePt(version.updatedAt || version.createdAt)}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            className="secondary-btn"
-                            onClick={() => handleLoadAnamneseVersion(version.id)}
-                          >
-                            Editar ficha
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="muted-text">
-                      Nenhuma ficha salva para essa cliente ainda.
-                    </p>
-                  )}
-                </div>
 
-                {isDraftingNewAnamnese ? (
-                  <div className="anamnese-prefill-box">
-                    <p className="muted-text">
-                      Você está criando uma nova ficha. Se quiser agilizar, preencha com dados da
-                      última anamnese salva.
-                    </p>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={handleFillWithLastAnamnese}
-                      disabled={!lastAnamneseTemplate}
-                    >
-                      Preencher com dados da última anamnese
-                    </button>
-                  </div>
-                ) : null}
-
-                {!isEditingAnamnese ? (
-                  <div className="anamnese-prefill-box">
-                    <p className="muted-text">
-                      Para editar valores, clique em <strong>Editar ficha</strong> no histórico ou
-                      inicie uma <strong>Nova ficha</strong>.
-                    </p>
-                  </div>
-                ) : null}
-
-                <fieldset className="anamnese-fieldset" disabled={!isEditingAnamnese}>
+                  <form className="form" onSubmit={handleSaveAnamnese}>
+                    <fieldset className="anamnese-fieldset" disabled={!isEditingAnamnese}>
                 <h5>Círculo das dores principais</h5>
                 <PainMapSelector
                   painSelections={anamneseForm.painSelections}
@@ -2445,149 +2272,151 @@ export default function App() {
                     placeholder="Nome completo da cliente"
                   />
                 </label>
-                </fieldset>
 
-                {anamneseMessage ? <p className="success-text">{anamneseMessage}</p> : null}
-                {isEditingAnamnese ? (
-                  <button className="primary-btn" type="submit">
-                    {selectedAnamneseVersionId && !isDraftingNewAnamnese
-                      ? "Salvar edição da ficha"
-                      : "Salvar nova ficha de anamnese"}
-                  </button>
-                ) : null}
-              </form>
-            </section>
+                    </fieldset>
 
-            <section className="followup-panel">
-              <div className="panel-header">
-                <div>
-                  <h4>Acompanhamento - {selectedClient.name}</h4>
-                  <p>
-                    Registro de evolução independente da criação de nova ficha de anamnese.
-                  </p>
-                </div>
-              </div>
-
-              <form className="form grid-form" onSubmit={handleAddCheckpoint}>
-                <label>
-                  Data do atendimento
-                  <input
-                    type="date"
-                    value={checkpointForm.date}
-                    onChange={(event) => handleCheckpointFieldChange("date", event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  Sessão nº
-                  <input
-                    value={checkpointForm.sessionNumber}
-                    readOnly
-                    placeholder="Auto"
-                  />
-                </label>
-                <label>
-                  Tipo de atendimento
-                  <select
-                    value={checkpointForm.sessionType}
-                    onChange={(event) => handleCheckpointFieldChange("sessionType", event.target.value)}
-                  >
-                    <option value="">Selecionar</option>
-                    {SESSION_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Dor (0-10)
-                  <input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={checkpointForm.painLevel}
-                    onChange={(event) => handleCheckpointFieldChange("painLevel", event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  Estresse/Tensão (0-10)
-                  <input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={checkpointForm.stressLevel}
-                    onChange={(event) => handleCheckpointFieldChange("stressLevel", event.target.value)}
-                  />
-                </label>
-                <label>
-                  Sono (horas)
-                  <input
-                    type="number"
-                    min="0"
-                    max="12"
-                    step="0.5"
-                    value={checkpointForm.sleepHours}
-                    onChange={(event) => handleCheckpointFieldChange("sleepHours", event.target.value)}
-                  />
-                </label>
-                <label className="full-row">
-                  Observações da sessão
-                  <textarea
-                    value={checkpointForm.observations}
-                    onChange={(event) => handleCheckpointFieldChange("observations", event.target.value)}
-                  />
-                </label>
-                <button className="primary-btn full-row" type="submit">
-                  Registrar evolução
-                </button>
-              </form>
-
-              <div className="charts-grid">
-                <ProgressLineChart
-                  title="Evolução da dor x estresse"
-                  points={checkpointChartData}
-                  firstMetric={{ field: "painLevel", label: "Dor" }}
-                  secondMetric={{ field: "stressLevel", label: "Estresse" }}
-                  maxValue={10}
-                />
-                <SleepBarChart points={checkpointChartData} />
-                <WellnessScoreChart points={checkpointChartData} />
-                <SessionTypeDistributionChart points={checkpointChartData} />
-                <InitialVsCurrentChart points={checkpointChartData} />
-              </div>
-
-              <ul className="list">
-                {checkpoints.length === 0 ? (
-                  <li className="empty">Sem sessões registradas para acompanhamento.</li>
-                ) : (
-                  checkpoints.map((checkpoint) => (
-                    <li key={checkpoint.id}>
-                      <div>
-                        <strong>
-                          {formatDatePt(checkpoint.date)}
-                          {checkpoint.sessionNumber ? ` - Sessão ${checkpoint.sessionNumber}` : ""}
-                        </strong>
-                        <p>
-                          Tipo: {checkpoint.sessionType || "Não informado"} | Dor: {checkpoint.painLevel ?? 0} |
-                          Estresse: {checkpoint.stressLevel ?? 0} | Sono: {checkpoint.sleepHours ?? 0}h
-                        </p>
-                        {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
-                      </div>
-                      <button
-                        type="button"
-                        className="danger-btn"
-                        onClick={() => handleDeleteCheckpoint(checkpoint.id)}
-                      >
-                        Excluir
+                    {anamneseMessage ? <p className="success-text">{anamneseMessage}</p> : null}
+                    {isEditingAnamnese ? (
+                      <button className="primary-btn" type="submit">
+                        {clientHasAnamnese ? "Salvar edição da ficha" : "Salvar ficha de anamnese"}
                       </button>
-                    </li>
-                  ))
-                )}
-              </ul>
+                    ) : null}
+                  </form>
+                </section>
+              ) : null}
+
+              {isFollowupViewOpen ? (
+                <section className="followup-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h4>Acompanhamento</h4>
+                      <p>
+                        Histórico de atendimentos independente da anamnese.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form className="form grid-form" onSubmit={handleAddCheckpoint}>
+                    <label>
+                      Data do atendimento
+                      <input
+                        type="date"
+                        value={checkpointForm.date}
+                        onChange={(event) => handleCheckpointFieldChange("date", event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Sessão nº
+                      <input
+                        value={checkpointForm.sessionNumber}
+                        readOnly
+                        placeholder="Auto"
+                      />
+                    </label>
+                    <label>
+                      Tipo de atendimento
+                      <select
+                        value={checkpointForm.sessionType}
+                        onChange={(event) => handleCheckpointFieldChange("sessionType", event.target.value)}
+                      >
+                        <option value="">Selecionar</option>
+                        {SESSION_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Dor (0-10)
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={checkpointForm.painLevel}
+                        onChange={(event) => handleCheckpointFieldChange("painLevel", event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Estresse/Tensão (0-10)
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={checkpointForm.stressLevel}
+                        onChange={(event) => handleCheckpointFieldChange("stressLevel", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Sono (horas)
+                      <input
+                        type="number"
+                        min="0"
+                        max="12"
+                        step="0.5"
+                        value={checkpointForm.sleepHours}
+                        onChange={(event) => handleCheckpointFieldChange("sleepHours", event.target.value)}
+                      />
+                    </label>
+                    <label className="full-row">
+                      Observações da sessão
+                      <textarea
+                        value={checkpointForm.observations}
+                        onChange={(event) => handleCheckpointFieldChange("observations", event.target.value)}
+                      />
+                    </label>
+                    <button className="primary-btn full-row" type="submit">
+                      Registrar evolução
+                    </button>
+                  </form>
+
+                  <div className="charts-grid">
+                    <ProgressLineChart
+                      title="Evolução da dor x estresse"
+                      points={checkpointChartData}
+                      firstMetric={{ field: "painLevel", label: "Dor" }}
+                      secondMetric={{ field: "stressLevel", label: "Estresse" }}
+                      maxValue={10}
+                    />
+                    <SleepBarChart points={checkpointChartData} />
+                    <WellnessScoreChart points={checkpointChartData} />
+                    <SessionTypeDistributionChart points={checkpointChartData} />
+                    <InitialVsCurrentChart points={checkpointChartData} />
+                  </div>
+
+                  <ul className="list">
+                    {checkpoints.length === 0 ? (
+                      <li className="empty">Sem sessões registradas para acompanhamento.</li>
+                    ) : (
+                      checkpoints.map((checkpoint) => (
+                        <li key={checkpoint.id}>
+                          <div>
+                            <strong>
+                              {formatDatePt(checkpoint.date)}
+                              {checkpoint.sessionNumber ? ` - Sessão ${checkpoint.sessionNumber}` : ""}
+                            </strong>
+                            <p>
+                              Tipo: {checkpoint.sessionType || "Não informado"} | Dor: {checkpoint.painLevel ?? 0} |
+                              Estresse: {checkpoint.stressLevel ?? 0} | Sono: {checkpoint.sleepHours ?? 0}h
+                            </p>
+                            {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
+                          </div>
+                          <button
+                            type="button"
+                            className="danger-btn"
+                            onClick={() => handleDeleteCheckpoint(checkpoint.id)}
+                          >
+                            Excluir
+                          </button>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </section>
+              ) : null}
             </section>
-            </>
           ) : null}
         </section>
       ) : null}

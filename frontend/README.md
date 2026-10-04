@@ -11,14 +11,15 @@ Aplicação web em React + Vite com autenticação Firebase e persistência no F
   - Serviços
 - Ficha de anamnese por cliente com:
   - Dados pessoais fixos no cadastro da cliente
-  - Opção de preencher nova anamnese com base na última anamnese salva
-  - Histórico de fichas por cliente com edição de ficha anterior
-  - Abertura da anamnese mostrando a última ficha registrada (modo somente leitura por padrão)
+  - Ficha única por cliente (sem histórico/versionamento de anamnese)
+  - Visualização por padrão em modo somente leitura com botão para editar quando necessário
   - Mapa de dores interativo (frente e costas com seleção por imagem e lateralidade: esquerdo/direito/ambos)
   - Perguntas-chave com opções de múltipla escolha (quando aplicável) + campo complementar
   - Condições de saúde
   - Bloco "Para mulheres" exibido de forma condicional conforme sexo da cliente
-  - Sessões de acompanhamento
+- Tela separada por cliente para:
+  - Anamnese
+  - Acompanhamento
 - Cadastro de cliente com edição (atualização de dados sem recriar registro)
   - Lista de clientes exibida antes do formulário
   - Formulário exibido somente em ações de "Nova cliente" ou "Editar"
@@ -28,7 +29,7 @@ Aplicação web em React + Vite com autenticação Firebase e persistência no F
   - Índice de bem-estar por sessão
   - Distribuição por tipo de atendimento
   - Comparativo inicial x atual
-- Acompanhamento separado da ficha de anamnese (registro independente por sessão)
+- Histórico mantido somente para acompanhamento/atendimentos (registro independente por sessão)
   - Número de sessão preenchido automaticamente no formulário de acompanhamento
 - PWA habilitada (instalável no navegador)
 

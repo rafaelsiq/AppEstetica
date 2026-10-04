@@ -240,7 +240,7 @@ select:focus {
   align-items: center;
 }
 
-.anamnese-panel {
+.client-detail-panel {
   margin-top: 18px;
   border-top: 1px solid #d7dde3;
   padding-top: 18px;
@@ -248,10 +248,19 @@ select:focus {
   gap: 12px;
 }
 
+.client-detail-header {
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+  background: #fbfcfd;
+  padding: 12px;
+}
+
+.anamnese-panel {
+  display: grid;
+  gap: 12px;
+}
+
 .followup-panel {
-  margin-top: 18px;
-  border-top: 1px solid #d7dde3;
-  padding-top: 18px;
   display: grid;
   gap: 12px;
 }
@@ -280,44 +289,6 @@ select:focus {
 
 .anamnese-fieldset:disabled {
   opacity: 0.78;
-}
-
-.anamnese-history-box {
-  border: 1px solid #d7dde3;
-  border-radius: 12px;
-  background: #ffffff;
-  padding: 10px 12px;
-  display: grid;
-  gap: 8px;
-}
-
-.anamnese-history-box .section-header h5 {
-  margin: 0;
-}
-
-.history-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.history-list li {
-  border: 1px solid #d7dde3;
-  border-radius: 10px;
-  padding: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  background: #fbfcfd;
-}
-
-.history-list p {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #54656f;
 }
 
 .client-form-panel {
@@ -772,11 +743,6 @@ h5 {
   .section-header {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .history-list li {
-    flex-direction: column;
-    align-items: flex-start;
   }
 
   .checkbox-grid {
