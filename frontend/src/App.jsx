@@ -239,8 +239,11 @@ function formatLateralityShort(laterality) {
   return option ? option.short : "A";
 }
 
-function formatPainSelectionLocation(selection) {
+function formatPainSelectionLocation(selection, showCoordinates = false) {
   const sideLabel = selection.side === "front" ? "Frente" : "Costas";
+  if (!showCoordinates) {
+    return sideLabel;
+  }
   const x = Number(selection.x);
   const y = Number(selection.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
@@ -329,7 +332,7 @@ function buildPdfSection(title, rows) {
 function buildAnamnesePdfHtml(client, anamnese) {
   const painSelectionsDescription = normalizePainSelections(anamnese.painSelections).map(
     (selection) =>
-      `${selection.label} (${formatPainSelectionLocation(selection)} - ${formatLateralityLabel(
+      `${selection.label} (${formatPainSelectionLocation(selection, true)} - ${formatLateralityLabel(
         selection.laterality
       )})`
   );
