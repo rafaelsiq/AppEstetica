@@ -17,6 +17,8 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { phoneKey } from "./clientQuiz";
+import { createShareLink, importSubmittedLink, shareUrl, updateEvolutionLink } from "./shareLinks";
 
 const TABS = {
   INICIO: "inicio",
@@ -1885,6 +1887,65 @@ function InitialVsCurrentChart({ points }) {
   );
 }
 
+function linkSortTime(link) {
+  const created = link?.createdAt;
+  if (!created) {
+    return Date.now();
+  }
+  if (typeof created.toMillis === "function") {
+    return created.toMillis();
+  }
+  if (typeof created.seconds === "number") {
+    return created.seconds * 1000;
+  }
+  return 0;
+}
+
+function describeShareLink(link) {
+  const momentLabel = link.moment === "antes"
+    ? "antes do atendimento"
+    : link.moment === "depois"
+      ? "depois do atendimento"
+      : "";
+  if (link.type === "evolucao") {
+    return "Link ativo";
+  }
+  if (link.status === "respondido" || link.status === "importado") {
+    return momentLabel ? `Respondido · ${momentLabel}` : "Respondido";
+  }
+  return momentLabel ? `Aguardando resposta · ${momentLabel}` : "Aguardando resposta";
+}
+
+function ShareLinkPanel({ title, description, links, actions, notice }) {
+  const latest = [...links].sort((first, second) => linkSortTime(second) - linkSortTime(first))[0];
+  return (
+    <section className="share-link-box">
+      <h5>{title}</h5>
+      <p className="muted-text">{description}</p>
+      <div className="share-link-actions">
+        {actions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            className={action.primary ? "primary-btn" : "secondary-btn"}
+            onClick={action.onClick}
+            disabled={action.disabled}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+      {latest ? (
+        <>
+          <p className="share-link-status">{describeShareLink(latest)}</p>
+          <input readOnly value={shareUrl(latest.id)} onFocus={(event) => event.target.select()} aria-label="Link da cliente" />
+        </>
+      ) : null}
+      {notice ? <p className={notice.tone === "error" ? "error-text" : "success-text"}>{notice.text}</p> : null}
+    </section>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -1960,6 +2021,12 @@ export default function App() {
   const [photoMessage, setPhotoMessage] = useState("");
   const [photoMessageTone, setPhotoMessageTone] = useState("success");
   const [anamneseMessage, setAnamneseMessage] = useState("");
+  const [shareLinks, setShareLinks] = useState([]);
+  const [shareNotice, setShareNotice] = useState(null);
+  const [shareBusy, setShareBusy] = useState("");
+  const [evolutionComment, setEvolutionComment] = useState("");
+  const importingLinksRef = useRef(new Set());
+  const shareBusyRef = useRef(false);
 
   const resetClientForm = () => {
     setClientName("");
@@ -2008,6 +2075,11 @@ export default function App() {
       setPhotoForm(buildEmptyPhotoAnalysis());
       setDraftPhotos([]);
       setPhotoMessage("");
+      setShareLinks([]);
+      setShareNotice(null);
+      setShareBusy("");
+      setEvolutionComment("");
+      importingLinksRef.current.clear();
       return undefined;
     }
 
@@ -2031,10 +2103,29 @@ export default function App() {
       setAppointments(sortAppointments(loadedAppointments));
     });
 
+    const shareLinksRef = collection(db, "users", user.uid, "shareLinks");
+    const unsubscribeShareLinks = onSnapshot(shareLinksRef, (snapshot) => {
+      const links = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      setShareLinks(links);
+      links.forEach((link) => {
+        if (link.status !== "respondido" || link.imported || importingLinksRef.current.has(link.id)) {
+          return;
+        }
+        importingLinksRef.current.add(link.id);
+        importSubmittedLink(user.uid, link, {
+          defaultPain: getDefaultPainSelection,
+          nextSession: getNextSessionNumber
+        }).catch(() => {
+          importingLinksRef.current.delete(link.id);
+        });
+      });
+    });
+
     return () => {
       unsubscribeClients();
       unsubscribeServices();
       unsubscribeAppointments();
+      unsubscribeShareLinks();
     };
   }, [user]);
 
@@ -2105,6 +2196,29 @@ export default function App() {
     () => clients.find((client) => client.id === selectedClientId) || null,
     [clients, selectedClientId]
   );
+
+  const selectedClientLinks = useMemo(
+    () => shareLinks
+      .filter((link) => link.clientId === selectedClientId)
+      .sort((first, second) => linkSortTime(second) - linkSortTime(first)),
+    [shareLinks, selectedClientId]
+  );
+  const anamneseLinks = useMemo(
+    () => selectedClientLinks.filter((link) => link.type === "anamnese"),
+    [selectedClientLinks]
+  );
+  const followupLinks = useMemo(
+    () => selectedClientLinks.filter((link) => link.type === "acompanhamento"),
+    [selectedClientLinks]
+  );
+  const evolutionLink = useMemo(
+    () => selectedClientLinks.find((link) => link.type === "evolucao") || null,
+    [selectedClientLinks]
+  );
+
+  useEffect(() => {
+    setEvolutionComment(evolutionLink?.comments || "");
+  }, [selectedClientId, evolutionLink?.id]);
 
   const lastAppointmentByClientName = useMemo(() => {
     const summaryMap = new Map();
@@ -2314,6 +2428,81 @@ export default function App() {
     }
     return "Clínica Estética";
   }, [userProfile]);
+
+  const publishShareNotice = (scope, text, tone = "success") => {
+    setShareNotice({ scope, text, tone });
+  };
+
+  const copyShareLink = async (token, scope) => {
+    const url = shareUrl(token);
+    try {
+      await navigator.clipboard.writeText(url);
+      publishShareNotice(scope, "Link copiado.");
+    } catch (copyError) {
+      publishShareNotice(scope, url);
+    }
+  };
+
+  const handleCreateClientLink = async (type, moment = "") => {
+    if (!user || !selectedClient || shareBusyRef.current) {
+      return;
+    }
+    const scope = type === "anamnese" ? "anamnese" : type === "evolucao" ? "charts" : "followup";
+    const busyKey = type === "acompanhamento" ? `followup-${moment}` : scope;
+    shareBusyRef.current = true;
+    setShareBusy(busyKey);
+    try {
+      const token = await createShareLink({
+        uid: user.uid,
+        client: selectedClient,
+        clinicName: currentClinicName,
+        type,
+        moment,
+        comments: type === "evolucao" ? evolutionComment : "",
+        checkpoints: type === "evolucao" ? checkpoints : []
+      });
+      try {
+        await navigator.clipboard.writeText(shareUrl(token));
+        publishShareNotice(scope, "Link gerado e copiado.");
+      } catch (copyError) {
+        publishShareNotice(scope, `Link gerado: ${shareUrl(token)}`);
+      }
+    } catch (createError) {
+      publishShareNotice(scope, createError.message || "Não foi possível gerar o link.", "error");
+    } finally {
+      shareBusyRef.current = false;
+      setShareBusy("");
+    }
+  };
+
+  const handleUpdateEvolution = async () => {
+    if (!user || !selectedClient || shareBusyRef.current) {
+      return;
+    }
+    if (!evolutionLink) {
+      await handleCreateClientLink("evolucao");
+      return;
+    }
+    shareBusyRef.current = true;
+    setShareBusy("charts");
+    try {
+      await updateEvolutionLink({
+        uid: user.uid,
+        token: evolutionLink.id,
+        phone: selectedClient.phone,
+        comments: evolutionComment,
+        checkpoints,
+        clinicName: currentClinicName,
+        clientName: selectedClient.name
+      });
+      publishShareNotice("charts", "Link da evolução atualizado com os gráficos e o recado.");
+    } catch (updateError) {
+      publishShareNotice("charts", updateError.message || "Não foi possível atualizar o link.", "error");
+    } finally {
+      shareBusyRef.current = false;
+      setShareBusy("");
+    }
+  };
 
   const handleAuthSubmit = async (event) => {
     event.preventDefault();
@@ -4264,6 +4453,27 @@ export default function App() {
                     </div>
                   </div>
 
+                  <ShareLinkPanel
+                    title="Link para a cliente preencher"
+                    description="Quiz curto de múltipla escolha para ela responder em casa. Observações e anotações da clínica não entram nesse link."
+                    links={anamneseLinks}
+                    notice={shareNotice?.scope === "anamnese" ? shareNotice : null}
+                    actions={[
+                      {
+                        label: shareBusy === "anamnese" ? "Gerando..." : "Gerar link",
+                        primary: true,
+                        disabled: Boolean(shareBusy),
+                        onClick: () => handleCreateClientLink("anamnese")
+                      },
+                      ...(anamneseLinks[0]
+                        ? [{
+                          label: "Copiar link",
+                          onClick: () => copyShareLink(anamneseLinks[0].id, "anamnese")
+                        }]
+                        : [])
+                    ]}
+                  />
+
                   <form className="form" onSubmit={handleSaveAnamnese}>
                     <fieldset className="anamnese-fieldset" disabled={!isEditingAnamnese}>
                 <h5>Círculo das dores principais</h5>
@@ -4646,6 +4856,7 @@ export default function App() {
                 </label>
                 <label>
                   Observações gerais
+                  <span className="muted-text">Visível só para a clínica. A cliente não preenche e não vê este campo.</span>
                   <textarea
                     value={anamneseForm.observations}
                     onChange={(event) => handleAnamneseFieldChange("observations", event.target.value)}
@@ -4699,6 +4910,31 @@ export default function App() {
                           Nova sessão
                         </button>
                       </div>
+                      <ShareLinkPanel
+                        title="Quiz de acompanhamento"
+                        description="Envie antes ou depois do atendimento. As respostas entram nos gráficos. As observações da sessão continuam só na clínica."
+                        links={followupLinks}
+                        notice={shareNotice?.scope === "followup" ? shareNotice : null}
+                        actions={[
+                          {
+                            label: shareBusy === "followup-antes" ? "Gerando..." : "Antes do atendimento",
+                            primary: true,
+                            disabled: Boolean(shareBusy),
+                            onClick: () => handleCreateClientLink("acompanhamento", "antes")
+                          },
+                          {
+                            label: shareBusy === "followup-depois" ? "Gerando..." : "Depois do atendimento",
+                            disabled: Boolean(shareBusy),
+                            onClick: () => handleCreateClientLink("acompanhamento", "depois")
+                          },
+                          ...(followupLinks[0]
+                            ? [{
+                              label: "Copiar link",
+                              onClick: () => copyShareLink(followupLinks[0].id, "followup")
+                            }]
+                            : [])
+                        ]}
+                      />
                       <ul className="list">
                         {checkpoints.length === 0 ? (
                           <li className="empty">Nenhuma sessão registrada.</li>
@@ -4729,6 +4965,13 @@ export default function App() {
                                     {checkpoint.sessionType || "Tipo não informado"} · Dor {checkpoint.painLevel ?? 0} ·
                                     Estresse {checkpoint.stressLevel ?? 0} · Sono {checkpoint.sleepHours ?? 0}h
                                   </p>
+                                  {checkpoint.source === "cliente" ? (
+                                    <p>
+                                      {checkpoint.moment === "depois"
+                                        ? "Resposta da cliente depois do atendimento"
+                                        : "Resposta da cliente antes do atendimento"}
+                                    </p>
+                                  ) : null}
                                 </button>
                               </li>
                             ))
@@ -5046,6 +5289,57 @@ export default function App() {
                       <p>Visualização da evolução com base no histórico dos atendimentos.</p>
                     </div>
                   </div>
+                  <section className="share-link-box">
+                    <h5>Link da evolução para a cliente</h5>
+                    <p className="muted-text">
+                      Ela abre o link e confirma o telefone cadastrado. O recado e os gráficos aparecem. Observações da ficha e das sessões ficam só com você.
+                    </p>
+                    <label>
+                      Recado para a cliente
+                      <textarea
+                        value={evolutionComment}
+                        onChange={(event) => setEvolutionComment(event.target.value)}
+                        placeholder="Comentário sobre a evolução"
+                      />
+                    </label>
+                    {!phoneKey(selectedClient.phone) ? (
+                      <p className="muted-text">Cadastre o telefone da cliente para liberar este link.</p>
+                    ) : null}
+                    <div className="share-link-actions">
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        disabled={shareBusy === "charts"}
+                        onClick={handleUpdateEvolution}
+                      >
+                        {shareBusy === "charts"
+                          ? "Salvando..."
+                          : evolutionLink
+                            ? "Atualizar link da evolução"
+                            : "Gerar link da evolução"}
+                      </button>
+                      {evolutionLink ? (
+                        <button type="button" className="secondary-btn" onClick={() => copyShareLink(evolutionLink.id, "charts")}>
+                          Copiar link
+                        </button>
+                      ) : null}
+                    </div>
+                    {evolutionLink ? (
+                      <>
+                        <p className="share-link-status">Link ativo</p>
+                        <input
+                          readOnly
+                          value={shareUrl(evolutionLink.id)}
+                          onFocus={(event) => event.target.select()}
+                          aria-label="Link da evolução"
+                        />
+                        <p className="muted-text">Atualize o link depois de novas sessões para a cliente ver os dados mais recentes.</p>
+                      </>
+                    ) : null}
+                    {shareNotice?.scope === "charts" ? (
+                      <p className={shareNotice.tone === "error" ? "error-text" : "success-text"}>{shareNotice.text}</p>
+                    ) : null}
+                  </section>
                   <div className="charts-grid">
                     <WellnessScoreChart
                       points={checkpointChartData}

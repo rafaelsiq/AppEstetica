@@ -1329,6 +1329,145 @@ h5 {
   cursor: pointer;
 }
 
+.share-link-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e6eef1;
+  border-radius: 16px;
+  background: #f7fafc;
+}
+
+.share-link-box h5 {
+  margin: 0;
+}
+
+.share-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.share-link-status {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #24695c;
+}
+
+.quiz-page {
+  min-height: 100vh;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  padding: 24px 16px 40px;
+}
+
+.quiz-card {
+  width: min(560px, 100%);
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 12px 28px rgba(16, 29, 44, 0.06);
+}
+
+.quiz-card h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #1d3550;
+}
+
+.quiz-card h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.quiz-kicker {
+  margin: 0;
+  color: #24695c;
+  font-weight: 700;
+}
+
+.quiz-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: #e6eef1;
+  overflow: hidden;
+}
+
+.quiz-progress span {
+  display: block;
+  height: 100%;
+  background: #24695c;
+}
+
+.quiz-count {
+  margin: 0;
+  color: #8b98a5;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.quiz-step {
+  display: grid;
+  gap: 10px;
+}
+
+.quiz-step p {
+  margin: 0;
+  color: #54656f;
+}
+
+.quiz-options {
+  display: grid;
+  gap: 8px;
+}
+
+.quiz-option {
+  border: 1px solid #d7dde3;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 700;
+  color: #24343d;
+  cursor: pointer;
+}
+
+.quiz-option.active {
+  border-color: #24695c;
+  background: #e7f4ef;
+  color: #24695c;
+}
+
+.quiz-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quiz-note {
+  background: #f7fafc;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.quiz-note h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.quiz-note p {
+  margin: 0;
+}
+
+.quiz-charts {
+  display: grid;
+  gap: 12px;
+}
+
 .photo-measurement-editor {
   display: grid;
   gap: 8px;
