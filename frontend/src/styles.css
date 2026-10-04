@@ -136,6 +136,12 @@ select:focus {
   color: #ffffff;
 }
 
+.primary-btn:disabled,
+.secondary-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .secondary-btn {
   background: #e6edf1;
   color: #24343d;
@@ -822,14 +828,90 @@ h5 {
   gap: 8px;
 }
 
+.photo-measurement-editor.is-dragging .photo-measurement-canvas,
+.photo-dropzone.is-dragging {
+  border-color: #24695c;
+  background: #e7f4ef;
+}
+
+.photo-dropzone {
+  border: 1.5px dashed #9eb0ba;
+  border-radius: 12px;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 20px;
+  background: #f7fbfa;
+  cursor: pointer;
+  color: #3d515b;
+}
+
+.photo-dropzone input,
+.photo-replace-btn input {
+  display: none;
+}
+
+.photo-position-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.photo-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.photo-replace-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.measurement-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.measurement-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d7dde3;
+  border-radius: 999px;
+  padding: 6px 8px 6px 10px;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.measurement-chip button {
+  border: none;
+  background: transparent;
+  color: #9e2525;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.measurement-chip-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
 .photo-measurement-canvas {
   position: relative;
+  width: min(100%, 640px);
   border: 1px solid #d7dde3;
   border-radius: 12px;
   background: #ffffff;
-  min-height: 220px;
   overflow: hidden;
   cursor: crosshair;
+  line-height: 0;
 }
 
 .photo-measurement-canvas img {
@@ -855,10 +937,19 @@ h5 {
   stroke: #c06b19;
 }
 
+.measurement-line.draft {
+  stroke: #b42318;
+  stroke-dasharray: 2 1.2;
+}
+
 .measurement-point {
   fill: #24695c;
   stroke: #ffffff;
   stroke-width: 0.5;
+}
+
+.measurement-point.draft {
+  fill: #b42318;
 }
 
 .measurement-point-label {
@@ -883,14 +974,29 @@ h5 {
   gap: 4px;
 }
 
+.photo-analysis-preview {
+  width: min(100%, 320px);
+  min-height: 0;
+  cursor: default;
+}
+
+.photo-measurement-canvas.is-complete {
+  cursor: default;
+}
+
 .photo-analysis-list {
   margin-top: 0;
 }
 
-.photo-analysis-item {
-  display: flex;
-  gap: 10px;
+.photo-analysis-list > li {
   align-items: flex-start;
+}
+
+.photo-analysis-item {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
 }
 
 .photo-analysis-thumb-wrap {
@@ -990,6 +1096,7 @@ h5 {
 .chart-legend {
   margin-top: 8px;
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   font-size: 13px;
 }
@@ -1116,7 +1223,8 @@ h5 {
 }
 
 @media (max-width: 640px) {
-  .grid-form {
+  .grid-form,
+  .photo-position-fields {
     grid-template-columns: 1fr;
   }
 

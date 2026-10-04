@@ -204,6 +204,7 @@ const PHOTO_POSITION_OPTIONS = [
   "Perfil direito",
   "Outro"
 ];
+const MEASUREMENT_COLORS = ["#24695c", "#c06b19", "#3a5ac7", "#9b3d6b", "#1f7a8c", "#6b4c9a"];
 
 function sortAppointments(items) {
   return [...items].sort((a, b) => {
@@ -475,10 +476,12 @@ function buildEmptyPhotoAnalysis() {
   return {
     date: getTodayISODate(),
     positionLabel: "",
+    positionCustom: "",
     notes: "",
-    measurementType: "line",
     imageDataUrl: "",
-    points: []
+    measurements: [],
+    activeMeasurementType: "line",
+    activePoints: []
   };
 }
 
@@ -534,6 +537,95 @@ function getAngleDegrees(points) {
   }
   const cosTheta = Math.min(1, Math.max(-1, (baX * bcX + baY * bcY) / (baLength * bcLength)));
   return (Math.acos(cosTheta) * 180) / Math.PI;
+}
+
+function createMeasurementId() {
+  return `med-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getRequiredMeasurementPoints(measurementType) {
+  return measurementType === "angle" ? 3 : 2;
+}
+
+function buildMeasurement(measurementType, rawPoints) {
+  const type = measurementType === "angle" ? "angle" : "line";
+  const points = normalizeMeasurementPoints(rawPoints, type);
+  if (points.length < getRequiredMeasurementPoints(type)) {
+    return null;
+  }
+  const lineDistancePercent = type === "line" ? getLineDistancePercent(points) : null;
+  const angleDegrees = type === "angle" ? getAngleDegrees(points) : null;
+  return {
+    id: createMeasurementId(),
+    type,
+    points,
+    lineDistancePercent: lineDistancePercent === null ? null : Number(lineDistancePercent.toFixed(2)),
+    angleDegrees: angleDegrees === null ? null : Number(angleDegrees.toFixed(2))
+  };
+}
+
+function getStoredMeasurements(analysis) {
+  if (Array.isArray(analysis?.measurements) && analysis.measurements.length > 0) {
+    return analysis.measurements
+      .map((item) => {
+        const type = item?.type === "angle" || item?.measurementType === "angle" ? "angle" : "line";
+        const points = normalizeMeasurementPoints(item?.points, type);
+        if (points.length < getRequiredMeasurementPoints(type)) {
+          return null;
+        }
+        const fallbackLine = type === "line" ? getLineDistancePercent(points) : null;
+        const fallbackAngle = type === "angle" ? getAngleDegrees(points) : null;
+        const lineDistancePercent = Number.isFinite(Number(item?.lineDistancePercent))
+          ? Number(item.lineDistancePercent)
+          : fallbackLine;
+        const angleDegrees = Number.isFinite(Number(item?.angleDegrees))
+          ? Number(item.angleDegrees)
+          : fallbackAngle;
+        return {
+          id: item?.id || createMeasurementId(),
+          type,
+          points,
+          lineDistancePercent:
+            lineDistancePercent === null ? null : Number(Number(lineDistancePercent).toFixed(2)),
+          angleDegrees: angleDegrees === null ? null : Number(Number(angleDegrees).toFixed(2))
+        };
+      })
+      .filter(Boolean);
+  }
+
+  if (analysis?.measurementType && Array.isArray(analysis?.points)) {
+    const measurement = buildMeasurement(analysis.measurementType, analysis.points);
+    if (!measurement) {
+      return [];
+    }
+    return [
+      {
+        ...measurement,
+        lineDistancePercent: Number.isFinite(Number(analysis.lineDistancePercent))
+          ? Number(analysis.lineDistancePercent)
+          : measurement.lineDistancePercent,
+        angleDegrees: Number.isFinite(Number(analysis.angleDegrees))
+          ? Number(analysis.angleDegrees)
+          : measurement.angleDegrees
+      }
+    ];
+  }
+
+  return [];
+}
+
+function resolvePhotoPositionLabel(positionLabel, positionCustom) {
+  if (positionLabel === "Outro") {
+    return positionCustom.trim();
+  }
+  return positionLabel.trim();
+}
+
+function formatMeasurementValue(measurement) {
+  if (measurement.type === "angle") {
+    return `Ângulo ${measurement.angleDegrees ?? "--"}°`;
+  }
+  return `Linha ${measurement.lineDistancePercent ?? "--"}%`;
 }
 
 async function compressImageFile(file, maxDimension = 1280, quality = 0.82) {
@@ -854,102 +946,226 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
   );
 }
 
+function MeasurementMarks({ measurements = [], activePoints = [], activeType = "line" }) {
+  return (
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="photo-overlay-svg">
+      {measurements.map((measurement, index) => {
+        const color = MEASUREMENT_COLORS[index % MEASUREMENT_COLORS.length];
+        const points = measurement.points || [];
+        return (
+          <g key={measurement.id || `measurement-${index}`}>
+            {points.length >= 2 ? (
+              <line
+                x1={points[0].x}
+                y1={points[0].y}
+                x2={points[1].x}
+                y2={points[1].y}
+                className="measurement-line"
+                style={{ stroke: color }}
+              />
+            ) : null}
+            {measurement.type === "angle" && points.length >= 3 ? (
+              <line
+                x1={points[1].x}
+                y1={points[1].y}
+                x2={points[2].x}
+                y2={points[2].y}
+                className="measurement-line"
+                style={{ stroke: color }}
+              />
+            ) : null}
+            {points.map((point) => (
+              <g key={`${measurement.id || index}-${point.label}`}>
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r="2.3"
+                  className="measurement-point"
+                  style={{ fill: color }}
+                />
+                <text x={point.x} y={point.y - 3.4} className="measurement-point-label">
+                  {index + 1}
+                  {point.label}
+                </text>
+              </g>
+            ))}
+          </g>
+        );
+      })}
+      {activePoints.length >= 2 ? (
+        <line
+          x1={activePoints[0].x}
+          y1={activePoints[0].y}
+          x2={activePoints[1].x}
+          y2={activePoints[1].y}
+          className="measurement-line draft"
+        />
+      ) : null}
+      {activeType === "angle" && activePoints.length >= 3 ? (
+        <line
+          x1={activePoints[1].x}
+          y1={activePoints[1].y}
+          x2={activePoints[2].x}
+          y2={activePoints[2].y}
+          className="measurement-line draft"
+        />
+      ) : null}
+      {activePoints.map((point) => (
+        <g key={`active-${point.label}-${point.x}-${point.y}`}>
+          <circle cx={point.x} cy={point.y} r="2.5" className="measurement-point draft" />
+          <text x={point.x} y={point.y - 3.4} className="measurement-point-label">
+            {point.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function PhotoMeasurementEditor({
   imageDataUrl,
-  measurementType,
-  points,
-  onChangePoints
+  measurements,
+  activeMeasurementType,
+  activePoints,
+  onSelectFile,
+  onChangeActivePoints,
+  onCommitMeasurement,
+  onRemoveMeasurement,
+  onUndoActivePoint,
+  onClearActivePoints
 }) {
-  const maxPoints = measurementType === "angle" ? 3 : 2;
+  const [isDragging, setIsDragging] = useState(false);
+  const requiredPoints = getRequiredMeasurementPoints(activeMeasurementType);
+  const draftMeasurement = buildMeasurement(activeMeasurementType, activePoints);
+  const remainingPoints = Math.max(requiredPoints - activePoints.length, 0);
+
+  const handleIncomingFile = (fileList) => {
+    const file = fileList?.[0];
+    if (file) {
+      onSelectFile(file);
+    }
+  };
 
   const handleImageClick = (event) => {
-    if (!imageDataUrl) {
+    if (!imageDataUrl || activePoints.length >= requiredPoints) {
       return;
     }
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
-    const nextPoint = {
-      label: getMeasurementPointLabel(0),
-      x: Number(Math.min(100, Math.max(0, x)).toFixed(2)),
-      y: Number(Math.min(100, Math.max(0, y)).toFixed(2))
-    };
-
-    if (points.length >= maxPoints) {
-      onChangePoints([nextPoint]);
-      return;
-    }
-
-    onChangePoints([...points, { ...nextPoint, label: getMeasurementPointLabel(points.length) }]);
+    onChangeActivePoints([
+      ...activePoints,
+      {
+        label: getMeasurementPointLabel(activePoints.length),
+        x: Number(Math.min(100, Math.max(0, x)).toFixed(2)),
+        y: Number(Math.min(100, Math.max(0, y)).toFixed(2))
+      }
+    ]);
   };
 
-  const computedLineDistance = getLineDistancePercent(points);
-  const computedAngle = getAngleDegrees(points);
-
   return (
-    <div className="photo-measurement-editor">
-      <p className="muted-text">
-        {measurementType === "angle"
-          ? "Clique nos pontos A, B e C para traçar as linhas e calcular o ângulo."
-          : "Clique nos pontos A e B para traçar uma linha."}
-      </p>
-      <div className="photo-measurement-canvas" onClick={handleImageClick} role="button" tabIndex={0}>
-        {imageDataUrl ? (
-          <>
-            <img src={imageDataUrl} alt="Foto de acompanhamento para medição" />
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="photo-overlay-svg">
-              {points.length >= 2 ? (
-                <line
-                  x1={points[0].x}
-                  y1={points[0].y}
-                  x2={points[1].x}
-                  y2={points[1].y}
-                  className="measurement-line"
-                />
-              ) : null}
-              {measurementType === "angle" && points.length >= 3 ? (
-                <line
-                  x1={points[1].x}
-                  y1={points[1].y}
-                  x2={points[2].x}
-                  y2={points[2].y}
-                  className="measurement-line secondary"
-                />
-              ) : null}
-              {points.map((point) => (
-                <g key={`${point.label}-${point.x}-${point.y}`}>
-                  <circle cx={point.x} cy={point.y} r="2.7" className="measurement-point" />
-                  <text x={point.x} y={point.y - 3.5} className="measurement-point-label">
-                    {point.label}
-                  </text>
-                </g>
-              ))}
-            </svg>
-          </>
-        ) : (
-          <div className="photo-placeholder">
-            <p>Selecione uma foto para começar as marcações.</p>
+    <div
+      className={`photo-measurement-editor ${isDragging ? "is-dragging" : ""}`}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setIsDragging(false);
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDragging(false);
+        handleIncomingFile(event.dataTransfer.files);
+      }}
+    >
+      {!imageDataUrl ? (
+        <label className={`photo-dropzone ${isDragging ? "is-dragging" : ""}`}>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              handleIncomingFile(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <strong>Adicionar foto</strong>
+          <span>Arraste a imagem aqui ou clique para escolher do dispositivo.</span>
+        </label>
+      ) : (
+        <>
+          <div className="photo-editor-toolbar">
+            <label className="secondary-btn photo-replace-btn">
+              Trocar foto
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  handleIncomingFile(event.target.files);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            <button type="button" className="secondary-btn" onClick={onUndoActivePoint} disabled={!activePoints.length}>
+              Desfazer ponto
+            </button>
+            <button type="button" className="secondary-btn" onClick={onClearActivePoints} disabled={!activePoints.length}>
+              Limpar marcação atual
+            </button>
+            <button type="button" className="primary-btn" onClick={onCommitMeasurement} disabled={!draftMeasurement}>
+              Adicionar medição
+            </button>
           </div>
-        )}
-      </div>
+          <p className="muted-text">
+            {remainingPoints > 0
+              ? `Clique na foto para marcar ${remainingPoints === 1 ? "o próximo ponto" : `mais ${remainingPoints} pontos`} desta ${
+                  activeMeasurementType === "angle" ? "medição de ângulo" : "linha"
+                }.`
+              : "Medição pronta. Adicione-a à foto e continue com outra linha ou outro ângulo."}
+          </p>
+          <div
+            className={`photo-measurement-canvas ${activePoints.length >= requiredPoints ? "is-complete" : ""}`}
+            onClick={handleImageClick}
+          >
+            <img src={imageDataUrl} alt="Foto de acompanhamento para medição" />
+            <MeasurementMarks
+              measurements={measurements}
+              activePoints={activePoints}
+              activeType={activeMeasurementType}
+            />
+          </div>
+        </>
+      )}
+
       <div className="photo-measurement-meta">
         <p className="muted-text">
-          Pontos marcados:{" "}
-          {points.length > 0
-            ? points.map((point) => `${point.label}(${point.x.toFixed(1)}%, ${point.y.toFixed(1)}%)`).join(" • ")
-            : "Nenhum"}
+          Medições nesta foto: {measurements.length === 0 ? "nenhuma ainda" : measurements.length}
         </p>
-        {measurementType === "line" ? (
-          <p className="muted-text">
-            Distância da linha (referência em % da imagem):{" "}
-            {computedLineDistance !== null ? computedLineDistance.toFixed(2) : "--"}
-          </p>
-        ) : (
-          <p className="muted-text">
-            Ângulo calculado (°): {computedAngle !== null ? computedAngle.toFixed(1) : "--"}
-          </p>
-        )}
+        {draftMeasurement ? (
+          <p className="muted-text">Medição atual: {formatMeasurementValue(draftMeasurement)}</p>
+        ) : null}
       </div>
+
+      {measurements.length > 0 ? (
+        <div className="measurement-chip-list">
+          {measurements.map((measurement, index) => (
+            <div key={measurement.id} className="measurement-chip">
+              <span
+                className="measurement-chip-swatch"
+                style={{ background: MEASUREMENT_COLORS[index % MEASUREMENT_COLORS.length] }}
+              />
+              <span>
+                {index + 1}. {formatMeasurementValue(measurement)}
+              </span>
+              <button type="button" onClick={() => onRemoveMeasurement(measurement.id)} aria-label={`Remover medição ${index + 1}`}>
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1167,12 +1383,23 @@ function WellnessScoreChart({ points, className = "" }) {
   );
 }
 
-function AngleProgressChart({ points }) {
-  if (points.length < 2) {
+function AngleProgressChart({ series }) {
+  const drawableSeries = (series || [])
+    .map((item, index) => ({
+      label: item.label,
+      color: item.color || MEASUREMENT_COLORS[index % MEASUREMENT_COLORS.length],
+      points: (item.points || []).filter(
+        (point) => point.date && Number.isFinite(Number(point.angleDegrees))
+      )
+    }))
+    .filter((item) => item.points.length > 0);
+  const dates = [...new Set(drawableSeries.flatMap((item) => item.points.map((point) => point.date)))];
+
+  if (dates.length < 2) {
     return (
       <div className="chart-card">
         <h5>Evolução de ângulo</h5>
-        <p className="muted-text">Cadastre pelo menos 2 fotos com ângulo para gerar o gráfico.</p>
+        <p className="muted-text">Cadastre ângulos em pelo menos 2 datas para gerar o gráfico.</p>
       </div>
     );
   }
@@ -1186,14 +1413,25 @@ function AngleProgressChart({ points }) {
   const yLabels = [0, 90, 180];
 
   const getX = (index) =>
-    points.length === 1 ? padding : padding + (index * plotWidth) / (points.length - 1);
+    dates.length === 1 ? padding : padding + (index * plotWidth) / (dates.length - 1);
 
   const getY = (value) =>
     padding + (1 - Math.min(Math.max(Number(value) || 0, 0), maxValue) / maxValue) * plotHeight;
 
-  const linePath = points
-    .map((item, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(item.angleDegrees)}`)
-    .join(" ");
+  const buildPath = (points) => {
+    let path = "";
+    let penDown = false;
+    dates.forEach((date, index) => {
+      const match = points.find((point) => point.date === date);
+      if (!match) {
+        penDown = false;
+        return;
+      }
+      path += `${penDown ? "L" : "M"} ${getX(index)} ${getY(match.angleDegrees)} `;
+      penDown = true;
+    });
+    return path.trim();
+  };
 
   return (
     <div className="chart-card">
@@ -1210,16 +1448,40 @@ function AngleProgressChart({ points }) {
             </g>
           );
         })}
-        <path d={linePath} className="chart-line chart-line-angle" />
-        {points.map((item, index) => (
-          <g key={`${item.date}-${index}`}>
-            <circle cx={getX(index)} cy={getY(item.angleDegrees)} r="3" className="chart-point-angle" />
-            <text x={getX(index)} y={height - 8} textAnchor="middle" className="chart-axis-x">
-              {formatDatePt(item.date)}
-            </text>
-          </g>
+        {drawableSeries.map((serie) => (
+          <path key={serie.label} d={buildPath(serie.points)} className="chart-line" style={{ stroke: serie.color }} />
+        ))}
+        {drawableSeries.map((serie) =>
+          serie.points.map((point) => {
+            const dateIndex = dates.indexOf(point.date);
+            return (
+              <circle
+                key={`${serie.label}-${point.date}`}
+                cx={getX(dateIndex)}
+                cy={getY(point.angleDegrees)}
+                r="3"
+                style={{ fill: serie.color }}
+              />
+            );
+          })
+        )}
+        {dates.map((date, index) => (
+          <text key={date} x={getX(index)} y={height - 8} textAnchor="middle" className="chart-axis-x">
+            {formatDatePt(date)}
+          </text>
         ))}
       </svg>
+      <div className="chart-legend">
+        {drawableSeries.map((serie) => (
+          <span key={serie.label}>
+            <i className="legend-dot" style={{ background: serie.color }} />
+            {serie.label}
+          </span>
+        ))}
+      </div>
+      <p className="muted-text chart-footnote">
+        Cada linha acompanha o ângulo pela ordem em que ele foi marcado na foto.
+      </p>
     </div>
   );
 }
@@ -1380,6 +1642,7 @@ export default function App() {
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
   const [photoForm, setPhotoForm] = useState(buildEmptyPhotoAnalysis());
   const [photoMessage, setPhotoMessage] = useState("");
+  const [photoMessageTone, setPhotoMessageTone] = useState("success");
   const [anamneseMessage, setAnamneseMessage] = useState("");
 
   const resetClientForm = () => {
@@ -2318,35 +2581,73 @@ export default function App() {
   const handlePhotoMeasurementTypeChange = (measurementType) => {
     setPhotoForm((previous) => ({
       ...previous,
-      measurementType,
-      points: []
+      activeMeasurementType: measurementType,
+      activePoints: []
     }));
   };
 
-  const handlePhotoPointsChange = (points) => {
-    setPhotoForm((previous) => ({ ...previous, points }));
+  const showPhotoFeedback = (message, tone = "success", duration = 3000) => {
+    setPhotoMessage(message);
+    setPhotoMessageTone(tone);
+    setTimeout(() => setPhotoMessage(""), duration);
   };
 
-  const handlePhotoFileChange = async (event) => {
-    const file = event.target.files?.[0];
+  const handlePhotoFileSelect = async (file) => {
     if (!file) {
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      showPhotoFeedback("Selecione um arquivo de imagem.", "error");
       return;
     }
 
     try {
       const compressedImage = await compressImageFile(file);
+      const replacedExisting = Boolean(photoForm.imageDataUrl);
       setPhotoForm((previous) => ({
         ...previous,
         imageDataUrl: compressedImage,
-        points: []
+        measurements: [],
+        activePoints: []
       }));
-      setPhotoMessage("");
+      showPhotoFeedback(
+        replacedExisting
+          ? "Foto substituída. As marcações desta edição foram reiniciadas."
+          : "Foto carregada. Clique na imagem para marcar os pontos."
+      );
     } catch (error) {
-      setPhotoMessage("Não foi possível carregar a foto. Tente outra imagem.");
-      setTimeout(() => setPhotoMessage(""), 3000);
-    } finally {
-      event.target.value = "";
+      showPhotoFeedback("Não foi possível carregar a foto. Tente outra imagem.", "error");
     }
+  };
+
+  const handleCommitMeasurement = () => {
+    if (!buildMeasurement(photoForm.activeMeasurementType, photoForm.activePoints)) {
+      showPhotoFeedback(
+        photoForm.activeMeasurementType === "angle"
+          ? "Marque os pontos A, B e C antes de adicionar o ângulo."
+          : "Marque os pontos A e B antes de adicionar a linha.",
+        "error"
+      );
+      return;
+    }
+    setPhotoForm((previous) => {
+      const measurement = buildMeasurement(previous.activeMeasurementType, previous.activePoints);
+      if (!measurement) {
+        return previous;
+      }
+      return {
+        ...previous,
+        measurements: [...previous.measurements, measurement],
+        activePoints: []
+      };
+    });
+  };
+
+  const handleRemoveMeasurement = (measurementId) => {
+    setPhotoForm((previous) => ({
+      ...previous,
+      measurements: previous.measurements.filter((item) => item.id !== measurementId)
+    }));
   };
 
   const handleAddPhotoAnalysis = async (event) => {
@@ -2355,39 +2656,57 @@ export default function App() {
       return;
     }
     if (!photoForm.imageDataUrl) {
-      setPhotoMessage("Adicione uma foto para salvar a análise.");
-      setTimeout(() => setPhotoMessage(""), 3000);
+      showPhotoFeedback("Adicione uma foto para salvar a análise.", "error");
       return;
     }
-    const maxPoints = photoForm.measurementType === "angle" ? 3 : 2;
-    const normalizedPoints = normalizeMeasurementPoints(photoForm.points, photoForm.measurementType);
-    const linkedDate = checkpointForm.date || photoForm.date || getTodayISODate();
-    if (normalizedPoints.length < maxPoints) {
-      setPhotoMessage(
-        photoForm.measurementType === "angle"
-          ? "Marque os pontos A, B e C para salvar o ângulo."
-          : "Marque os pontos A e B para salvar a linha."
+    const positionLabel = resolvePhotoPositionLabel(photoForm.positionLabel, photoForm.positionCustom);
+    if (!positionLabel) {
+      showPhotoFeedback(
+        photoForm.positionLabel === "Outro"
+          ? "Descreva qual é a posição da foto."
+          : "Selecione a posição da foto.",
+        "error"
       );
-      setTimeout(() => setPhotoMessage(""), 3000);
       return;
     }
 
-    const lineDistancePercent =
-      photoForm.measurementType === "line" ? getLineDistancePercent(normalizedPoints) : null;
-    const angleDegrees = photoForm.measurementType === "angle" ? getAngleDegrees(normalizedPoints) : null;
+    const requiredPoints = getRequiredMeasurementPoints(photoForm.activeMeasurementType);
+    if (photoForm.activePoints.length > 0 && photoForm.activePoints.length < requiredPoints) {
+      showPhotoFeedback("Termine a medição atual ou desfaça os pontos antes de salvar.", "error");
+      return;
+    }
+
+    const draftMeasurement = buildMeasurement(photoForm.activeMeasurementType, photoForm.activePoints);
+    const measurements = draftMeasurement
+      ? [...photoForm.measurements, draftMeasurement]
+      : photoForm.measurements;
+    if (measurements.length === 0) {
+      showPhotoFeedback("Inclua pelo menos uma medição na foto.", "error");
+      return;
+    }
+
+    const linkedDate = checkpointForm.date || photoForm.date || getTodayISODate();
+    const firstAngle = measurements.find((item) => item.type === "angle" && item.angleDegrees !== null);
 
     await addDoc(
       collection(db, "users", user.uid, "anamneses", selectedClient.id, "photoAnalyses"),
       {
         date: linkedDate,
-        positionLabel: photoForm.positionLabel.trim() || "Não informado",
+        positionLabel,
+        positionOption: photoForm.positionLabel,
         notes: photoForm.notes.trim(),
-        measurementType: photoForm.measurementType,
         imageDataUrl: photoForm.imageDataUrl,
-        points: normalizedPoints,
-        lineDistancePercent:
-          lineDistancePercent === null ? null : Number(lineDistancePercent.toFixed(2)),
-        angleDegrees: angleDegrees === null ? null : Number(angleDegrees.toFixed(2)),
+        measurements: measurements.map((item) => ({
+          id: item.id,
+          type: item.type,
+          points: item.points,
+          lineDistancePercent: item.lineDistancePercent,
+          angleDegrees: item.angleDegrees
+        })),
+        measurementType: measurements[0].type,
+        points: measurements[0].points,
+        lineDistancePercent: measurements[0].lineDistancePercent,
+        angleDegrees: firstAngle ? firstAngle.angleDegrees : null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       }
@@ -2397,8 +2716,7 @@ export default function App() {
       ...buildEmptyPhotoAnalysis(),
       date: checkpointForm.date || previous.date || getTodayISODate()
     }));
-    setPhotoMessage("Foto e análise salvas com sucesso.");
-    setTimeout(() => setPhotoMessage(""), 2500);
+    showPhotoFeedback("Foto e medições salvas com sucesso.", "success", 2500);
   };
 
   const handleDeletePhotoAnalysis = async (analysisId) => {
@@ -2414,13 +2732,26 @@ export default function App() {
     return sortByDate(checkpoints).filter((item) => item.date);
   }, [checkpoints]);
 
-  const angleChartData = useMemo(() => {
-    return sortByDate(photoAnalyses)
-      .filter((item) => item.date && Number.isFinite(Number(item.angleDegrees)))
+  const angleChartSeries = useMemo(() => {
+    const photos = sortByDate(photoAnalyses)
       .map((item) => ({
-        ...item,
-        angleDegrees: Number(item.angleDegrees)
-      }));
+        date: item.date,
+        angles: getStoredMeasurements(item).filter(
+          (measurement) => measurement.type === "angle" && Number.isFinite(Number(measurement.angleDegrees))
+        )
+      }))
+      .filter((item) => item.date && item.angles.length > 0);
+    const maxAngles = photos.reduce((max, item) => Math.max(max, item.angles.length), 0);
+    return Array.from({ length: maxAngles }, (_, index) => ({
+      label: maxAngles === 1 ? "Ângulo" : `Ângulo ${index + 1}`,
+      color: MEASUREMENT_COLORS[index % MEASUREMENT_COLORS.length],
+      points: photos
+        .filter((item) => item.angles[index])
+        .map((item) => ({
+          date: item.date,
+          angleDegrees: Number(item.angles[index].angleDegrees)
+        }))
+    }));
   }, [photoAnalyses]);
 
   const isAnamneseViewOpen = selectedClientView === CLIENT_VIEWS.ANAMNESE;
@@ -3394,7 +3725,7 @@ export default function App() {
                   <section className="photo-analysis-section">
                     <h5>Foto de acompanhamento</h5>
                     <form className="form" onSubmit={handleAddPhotoAnalysis}>
-                      <div className="grid-form">
+                      <div className="grid-form photo-position-fields">
                         <label>
                           Data vinculada ao acompanhamento
                           <input
@@ -3407,7 +3738,14 @@ export default function App() {
                           Posição da foto
                           <select
                             value={photoForm.positionLabel}
-                            onChange={(event) => handlePhotoFieldChange("positionLabel", event.target.value)}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setPhotoForm((previous) => ({
+                                ...previous,
+                                positionLabel: value,
+                                positionCustom: value === "Outro" ? previous.positionCustom : ""
+                              }));
+                            }}
                             required
                           >
                             <option value="">Selecionar</option>
@@ -3418,29 +3756,53 @@ export default function App() {
                             ))}
                           </select>
                         </label>
+                        {photoForm.positionLabel === "Outro" ? (
+                          <label className="full-row">
+                            Qual posição?
+                            <input
+                              value={photoForm.positionCustom}
+                              onChange={(event) => handlePhotoFieldChange("positionCustom", event.target.value)}
+                              placeholder="Descreva a posição da foto"
+                              required
+                            />
+                          </label>
+                        ) : null}
                       </div>
 
                       <label>
-                        Tipo de medição
+                        Tipo da próxima medição
                         <select
-                          value={photoForm.measurementType}
+                          value={photoForm.activeMeasurementType}
                           onChange={(event) => handlePhotoMeasurementTypeChange(event.target.value)}
                         >
                           <option value="line">Linha (pontos A e B)</option>
                           <option value="angle">Ângulo (pontos A, B e C)</option>
                         </select>
                       </label>
-
-                      <label>
-                        Foto
-                        <input type="file" accept="image/*" onChange={handlePhotoFileChange} />
-                      </label>
+                      <p className="muted-text">
+                        A mesma foto pode receber várias linhas, vários ângulos ou os dois juntos. Não há limite de medições.
+                      </p>
 
                       <PhotoMeasurementEditor
                         imageDataUrl={photoForm.imageDataUrl}
-                        measurementType={photoForm.measurementType}
-                        points={photoForm.points}
-                        onChangePoints={handlePhotoPointsChange}
+                        measurements={photoForm.measurements}
+                        activeMeasurementType={photoForm.activeMeasurementType}
+                        activePoints={photoForm.activePoints}
+                        onSelectFile={handlePhotoFileSelect}
+                        onChangeActivePoints={(points) =>
+                          setPhotoForm((previous) => ({ ...previous, activePoints: points }))
+                        }
+                        onCommitMeasurement={handleCommitMeasurement}
+                        onRemoveMeasurement={handleRemoveMeasurement}
+                        onUndoActivePoint={() =>
+                          setPhotoForm((previous) => ({
+                            ...previous,
+                            activePoints: previous.activePoints.slice(0, -1)
+                          }))
+                        }
+                        onClearActivePoints={() =>
+                          setPhotoForm((previous) => ({ ...previous, activePoints: [] }))
+                        }
                       />
 
                       <label>
@@ -3454,46 +3816,60 @@ export default function App() {
 
                       <div className="inline-actions">
                         <button className="primary-btn" type="submit">
-                          Salvar foto com medição
+                          Salvar foto e medições
                         </button>
                         <button
                           type="button"
                           className="secondary-btn"
-                          onClick={() => setPhotoForm(buildEmptyPhotoAnalysis())}
+                          onClick={() =>
+                            setPhotoForm((previous) => ({
+                              ...buildEmptyPhotoAnalysis(),
+                              date: checkpointForm.date || previous.date || getTodayISODate()
+                            }))
+                          }
                         >
                           Limpar foto
                         </button>
                       </div>
                     </form>
 
-                    {photoMessage ? <p className="success-text">{photoMessage}</p> : null}
+                    {photoMessage ? (
+                      <p className={photoMessageTone === "error" ? "error-text" : "success-text"}>{photoMessage}</p>
+                    ) : null}
 
                     <ul className="list photo-analysis-list">
                       {photoAnalyses.length === 0 ? (
                         <li className="empty">Nenhuma foto de acompanhamento registrada.</li>
                       ) : (
-                        photoAnalyses.map((analysis) => (
+                        photoAnalyses.map((analysis) => {
+                          const measurements = getStoredMeasurements(analysis);
+                          return (
                           <li key={analysis.id}>
                             <div className="photo-analysis-item">
-                              <div className="photo-analysis-thumb-wrap">
+                              <div className="photo-measurement-canvas photo-analysis-preview">
                                 {analysis.imageDataUrl ? (
-                                  <img
-                                    src={analysis.imageDataUrl}
-                                    alt={`Foto de acompanhamento em ${analysis.date || "--"}`}
-                                    className="photo-analysis-thumb"
-                                  />
+                                  <>
+                                    <img
+                                      src={analysis.imageDataUrl}
+                                      alt={`Foto de acompanhamento em ${analysis.date || "--"}`}
+                                    />
+                                    <MeasurementMarks measurements={measurements} />
+                                  </>
                                 ) : null}
                               </div>
                               <div>
                                 <strong>
                                   {formatDatePt(analysis.date)} • {analysis.positionLabel || "Posição não informada"}
                                 </strong>
-                                <p>
-                                  Tipo: {analysis.measurementType === "angle" ? "Ângulo" : "Linha"}{" "}
-                                  {analysis.measurementType === "angle"
-                                    ? `| Ângulo: ${analysis.angleDegrees ?? "--"}°`
-                                    : `| Distância: ${analysis.lineDistancePercent ?? "--"}%`}
-                                </p>
+                                {measurements.length === 0 ? (
+                                  <p>Sem medições registradas.</p>
+                                ) : (
+                                  measurements.map((measurement, index) => (
+                                    <p key={measurement.id}>
+                                      {index + 1}. {formatMeasurementValue(measurement)}
+                                    </p>
+                                  ))
+                                )}
                                 {analysis.notes ? <p>{analysis.notes}</p> : null}
                               </div>
                             </div>
@@ -3505,7 +3881,8 @@ export default function App() {
                               Excluir
                             </button>
                           </li>
-                        ))
+                          );
+                        })
                       )}
                     </ul>
                   </section>
@@ -3562,7 +3939,7 @@ export default function App() {
                       points={checkpointChartData}
                       className="chart-card-span-2"
                     />
-                    <AngleProgressChart points={angleChartData} />
+                    <AngleProgressChart series={angleChartSeries} />
                     <ProgressLineChart
                       title="Evolução da dor x estresse"
                       points={checkpointChartData}
