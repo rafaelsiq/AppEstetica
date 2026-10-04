@@ -1037,10 +1037,10 @@ function SleepBarChart({ points }) {
   );
 }
 
-function WellnessScoreChart({ points }) {
+function WellnessScoreChart({ points, className = "" }) {
   if (points.length < 2) {
     return (
-      <div className="chart-card">
+      <div className={`chart-card ${className}`.trim()}>
         <h5>Índice de bem-estar por sessão</h5>
         <p className="muted-text">Cadastre pelo menos 2 avaliações para gerar o gráfico.</p>
       </div>
@@ -1076,7 +1076,7 @@ function WellnessScoreChart({ points }) {
     .join(" ");
 
   return (
-    <div className="chart-card">
+    <div className={`chart-card ${className}`.trim()}>
       <h5>Índice de bem-estar por sessão</h5>
       <svg
         viewBox={`0 0 ${width} ${height}`}
@@ -2748,7 +2748,10 @@ export default function App() {
                       maxValue={10}
                     />
                     <SleepBarChart points={checkpointChartData} />
-                    <WellnessScoreChart points={checkpointChartData} />
+                    <WellnessScoreChart
+                      points={checkpointChartData}
+                      className="chart-card-span-2"
+                    />
                     <SessionTypeDistributionChart points={checkpointChartData} />
                     <InitialVsCurrentChart points={checkpointChartData} />
                   </div>

@@ -676,6 +676,10 @@ h5 {
   background: #fbfcfd;
 }
 
+.chart-card-span-2 {
+  grid-column: span 2;
+}
+
 .chart-card h5 {
   margin-top: 0;
 }
@@ -874,6 +878,10 @@ h5 {
 
   .charts-grid {
     grid-template-columns: 1fr;
+  }
+
+  .chart-card-span-2 {
+    grid-column: span 1;
   }
 
   .distribution-row {
