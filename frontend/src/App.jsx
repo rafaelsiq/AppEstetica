@@ -10,7 +10,10 @@ import {
   collection,
   deleteDoc,
   doc,
+  limit,
   onSnapshot,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc
@@ -166,6 +169,9 @@ const HABIT_OPTIONS = [
   "Uso excessivo de celular/computador"
 ];
 
+const PAIN_RADIATION_VALUES = PAIN_RADIATION_OPTIONS.map((option) => option.value);
+const GOAL_OPTION_VALUES = GOAL_OPTIONS.map((option) => option.value);
+
 const HEALTH_CONDITIONS = [
   "Tendinite",
   "Bursite",
@@ -255,6 +261,13 @@ function normalizeStringArray(rawValues, allowedValues) {
   );
 }
 
+function normalizeSingleChoice(rawValue, allowedValues) {
+  if (typeof rawValue !== "string") {
+    return "";
+  }
+  return allowedValues.includes(rawValue) ? rawValue : "";
+}
+
 function normalizePainSelections(rawSelections) {
   if (!Array.isArray(rawSelections)) {
     return [];
@@ -326,6 +339,62 @@ function buildEmptyAnamnese(client) {
     lactating: "",
     observations: "",
     signatureName: ""
+  };
+}
+
+function normalizeAnamneseRecord(rawData = {}, client = null) {
+  const data = rawData || {};
+  const normalizedPainSelections = normalizePainSelections(data.painSelections);
+  const fallbackSelectionsFromLegacyPainAreas = Array.isArray(data.painAreas)
+    ? data.painAreas
+        .filter((area) => PAIN_AREAS.includes(area))
+        .map((area) => getDefaultPainSelection(area))
+        .filter(Boolean)
+    : [];
+  const resolvedPainSelections =
+    normalizedPainSelections.length > 0
+      ? normalizedPainSelections
+      : fallbackSelectionsFromLegacyPainAreas;
+
+  return {
+    ...buildEmptyAnamnese(client),
+    painSelections: resolvedPainSelections,
+    painAreas: resolvedPainSelections.map((selection) => selection.label),
+    painRadiatesOption: normalizeSingleChoice(data.painRadiatesOption, PAIN_RADIATION_VALUES),
+    painRadiatesDetails: data.painRadiatesDetails || data.painRadiates || "",
+    firstPainEpisode: data.firstPainEpisode || "",
+    painTypeOptions: normalizeStringArray(data.painTypeOptions, PAIN_TYPE_OPTIONS),
+    painTypeOther: data.painTypeOther || data.painType || "",
+    painTriggerOptions: normalizeStringArray(data.painTriggerOptions, PAIN_TRIGGER_OPTIONS),
+    painTriggerOther: data.painTriggerOther || data.painTriggers || "",
+    painScale: data.painScale || "",
+    goalOption: normalizeSingleChoice(data.goalOption, GOAL_OPTION_VALUES),
+    goalDetails: data.goalDetails || data.goal || "",
+    playsSport: normalizeSingleChoice(data.playsSport, ["yes", "no"]),
+    sportOptions: normalizeStringArray(data.sportOptions, SPORT_OPTIONS),
+    sportOther: data.sportOther || data.practicesSport || "",
+    hadPreviousTreatment: normalizeSingleChoice(data.hadPreviousTreatment, ["yes", "no"]),
+    previousTreatmentTypes: normalizeStringArray(
+      data.previousTreatmentTypes,
+      PREVIOUS_TREATMENT_OPTIONS
+    ),
+    previousTreatmentExperience: data.previousTreatmentExperience || "",
+    aestheticGoalOptions: normalizeStringArray(
+      data.aestheticGoalOptions,
+      AESTHETIC_GOAL_OPTIONS
+    ),
+    aestheticGoalsOther: data.aestheticGoalsOther || data.aestheticGoals || "",
+    habitOptions: normalizeStringArray(data.habitOptions, HABIT_OPTIONS),
+    habitsContributingOther: data.habitsContributingOther || data.habitsContributing || "",
+    bodyFocus: data.bodyFocus || "",
+    healthConditions: normalizeStringArray(data.healthConditions, HEALTH_CONDITIONS),
+    healthOther: data.healthOther || "",
+    menstrualPeriod: data.menstrualPeriod || "",
+    pregnant: normalizeSingleChoice(data.pregnant, ["sim", "nao"]),
+    gestatingTime: data.gestatingTime || "",
+    lactating: normalizeSingleChoice(data.lactating, ["sim", "nao"]),
+    observations: data.observations || "",
+    signatureName: data.signatureName || ""
   };
 }
 
@@ -893,6 +962,8 @@ export default function App() {
   const [appointmentNotes, setAppointmentNotes] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [anamneseForm, setAnamneseForm] = useState(buildEmptyAnamnese());
+  const [lastAnamneseTemplate, setLastAnamneseTemplate] = useState(null);
+  const [clientHasAnamnese, setClientHasAnamnese] = useState(false);
   const [checkpoints, setCheckpoints] = useState([]);
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
   const [anamneseMessage, setAnamneseMessage] = useState("");
@@ -926,6 +997,8 @@ export default function App() {
       setClientFormMessage("");
       setSelectedClientId("");
       setAnamneseForm(buildEmptyAnamnese());
+      setLastAnamneseTemplate(null);
+      setClientHasAnamnese(false);
       setCheckpoints([]);
       return undefined;
     }
@@ -958,6 +1031,29 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      return undefined;
+    }
+
+    const latestAnamneseQuery = query(
+      collection(db, "users", user.uid, "anamneses"),
+      orderBy("updatedAt", "desc"),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(latestAnamneseQuery, (snapshot) => {
+      if (snapshot.empty) {
+        setLastAnamneseTemplate(null);
+        return;
+      }
+      const latestData = snapshot.docs[0].data();
+      setLastAnamneseTemplate(normalizeAnamneseRecord(latestData));
+    });
+
+    return unsubscribe;
+  }, [user]);
+
+  useEffect(() => {
     if (!selectedClientId) {
       return;
     }
@@ -985,6 +1081,7 @@ export default function App() {
   useEffect(() => {
     if (!user || !selectedClient) {
       setAnamneseForm(buildEmptyAnamnese(selectedClient));
+      setClientHasAnamnese(false);
       setCheckpoints([]);
       return undefined;
     }
@@ -995,66 +1092,12 @@ export default function App() {
     const unsubscribeAnamnese = onSnapshot(anamneseRef, (snapshot) => {
       if (!snapshot.exists()) {
         setAnamneseForm(buildEmptyAnamnese(selectedClient));
+        setClientHasAnamnese(false);
         return;
       }
 
-      const data = snapshot.data();
-      const normalizedPainSelections = normalizePainSelections(data.painSelections);
-      const fallbackSelectionsFromLegacyPainAreas = Array.isArray(data.painAreas)
-        ? data.painAreas
-            .filter((area) => PAIN_AREAS.includes(area))
-            .map((area) => getDefaultPainSelection(area))
-            .filter(Boolean)
-        : [];
-      const resolvedPainSelections =
-        normalizedPainSelections.length > 0
-          ? normalizedPainSelections
-          : fallbackSelectionsFromLegacyPainAreas;
-
-      const normalizedPainTypeOptions = normalizeStringArray(
-        data.painTypeOptions,
-        PAIN_TYPE_OPTIONS
-      );
-      const normalizedPainTriggerOptions = normalizeStringArray(
-        data.painTriggerOptions,
-        PAIN_TRIGGER_OPTIONS
-      );
-      const normalizedSportOptions = normalizeStringArray(data.sportOptions, SPORT_OPTIONS);
-      const normalizedTreatmentTypes = normalizeStringArray(
-        data.previousTreatmentTypes,
-        PREVIOUS_TREATMENT_OPTIONS
-      );
-      const normalizedAestheticGoalOptions = normalizeStringArray(
-        data.aestheticGoalOptions,
-        AESTHETIC_GOAL_OPTIONS
-      );
-      const normalizedHabitOptions = normalizeStringArray(data.habitOptions, HABIT_OPTIONS);
-
-      setAnamneseForm({
-        ...buildEmptyAnamnese(selectedClient),
-        ...data,
-        painSelections: resolvedPainSelections,
-        painAreas: resolvedPainSelections.map((selection) => selection.label),
-        painTypeOptions: normalizedPainTypeOptions,
-        painTypeOther: data.painTypeOther || data.painType || "",
-        painTriggerOptions: normalizedPainTriggerOptions,
-        painTriggerOther: data.painTriggerOther || data.painTriggers || "",
-        painRadiatesOption: data.painRadiatesOption || "",
-        painRadiatesDetails: data.painRadiatesDetails || data.painRadiates || "",
-        goalOption: data.goalOption || "",
-        goalDetails: data.goalDetails || data.goal || "",
-        playsSport: data.playsSport || "",
-        sportOptions: normalizedSportOptions,
-        sportOther: data.sportOther || data.practicesSport || "",
-        hadPreviousTreatment: data.hadPreviousTreatment || "",
-        previousTreatmentTypes: normalizedTreatmentTypes,
-        aestheticGoalOptions: normalizedAestheticGoalOptions,
-        aestheticGoalsOther: data.aestheticGoalsOther || data.aestheticGoals || "",
-        habitOptions: normalizedHabitOptions,
-        habitsContributingOther:
-          data.habitsContributingOther || data.habitsContributing || "",
-        healthConditions: Array.isArray(data.healthConditions) ? data.healthConditions : []
-      });
+      setAnamneseForm(normalizeAnamneseRecord(snapshot.data(), selectedClient));
+      setClientHasAnamnese(true);
     });
 
     const unsubscribeCheckpoints = onSnapshot(checkpointsRef, (snapshot) => {
@@ -1238,6 +1281,15 @@ export default function App() {
         painAreas: nextSelections.map((selection) => selection.label)
       };
     });
+  };
+
+  const handleFillWithLastAnamnese = () => {
+    if (!lastAnamneseTemplate || !selectedClient) {
+      return;
+    }
+    setAnamneseForm(normalizeAnamneseRecord(lastAnamneseTemplate, selectedClient));
+    setAnamneseMessage("Campos preenchidos com base na última anamnese salva.");
+    setTimeout(() => setAnamneseMessage(""), 2500);
   };
 
   const handleSaveAnamnese = async (event) => {
@@ -1713,6 +1765,23 @@ export default function App() {
                     <strong>Endereço:</strong> {selectedClient.address || "Não informado"}
                   </p>
                 </div>
+
+                {!clientHasAnamnese ? (
+                  <div className="anamnese-prefill-box">
+                    <p className="muted-text">
+                      Essa cliente ainda não tem anamnese salva. Você pode começar em branco ou
+                      usar os dados da última anamnese registrada para agilizar o preenchimento.
+                    </p>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={handleFillWithLastAnamnese}
+                      disabled={!lastAnamneseTemplate}
+                    >
+                      Preencher com dados da última anamnese
+                    </button>
+                  </div>
+                ) : null}
 
                 <h5>Círculo das dores principais</h5>
                 <PainMapSelector

@@ -248,6 +248,20 @@ select:focus {
   gap: 12px;
 }
 
+.anamnese-prefill-box {
+  border: 1px dashed #b8c5cf;
+  border-radius: 12px;
+  background: #f7fafc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.anamnese-prefill-box .secondary-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .client-form-panel {
   margin-top: 16px;
   border: 1px solid #d7dde3;
