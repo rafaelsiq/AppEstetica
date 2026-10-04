@@ -992,6 +992,21 @@ h5 {
   align-items: flex-start;
 }
 
+.checkpoint-entry {
+  align-items: flex-start;
+}
+
+.checkpoint-entry-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.checkpoint-photos .list {
+  margin-top: 0;
+}
+
 .photo-analysis-item {
   flex: 1;
   min-width: 0;

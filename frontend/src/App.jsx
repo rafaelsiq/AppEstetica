@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -13,7 +13,8 @@ import {
   onSnapshot,
   serverTimestamp,
   setDoc,
-  updateDoc
+  updateDoc,
+  writeBatch
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
@@ -627,6 +628,107 @@ function formatMeasurementValue(measurement) {
   return `Linha ${measurement.lineDistancePercent ?? "--"}%`;
 }
 
+function photoDraftHasProgress(form) {
+  return Boolean(
+    form?.imageDataUrl ||
+      form?.activePoints?.length ||
+      form?.measurements?.length ||
+      form?.positionLabel ||
+      form?.positionCustom ||
+      String(form?.notes || "").trim()
+  );
+}
+
+function buildPhotoDraft(photoForm) {
+  if (!photoForm.imageDataUrl) {
+    return { error: "Adicione uma foto para incluir neste acompanhamento." };
+  }
+  const positionLabel = resolvePhotoPositionLabel(photoForm.positionLabel, photoForm.positionCustom);
+  if (!positionLabel) {
+    return {
+      error: isCustomPhotoPosition(photoForm.positionLabel)
+        ? "Escreva qual foi a posição da foto."
+        : "Selecione a posição da foto."
+    };
+  }
+  const requiredPoints = getRequiredMeasurementPoints(photoForm.activeMeasurementType);
+  if (photoForm.activePoints.length > 0 && photoForm.activePoints.length < requiredPoints) {
+    return { error: "Termine a medição atual ou desfaça os pontos antes de continuar." };
+  }
+  const draftMeasurement = buildMeasurement(photoForm.activeMeasurementType, photoForm.activePoints);
+  const measurements = draftMeasurement
+    ? [...photoForm.measurements, draftMeasurement]
+    : photoForm.measurements;
+  if (measurements.length === 0) {
+    return { error: "Inclua pelo menos uma medição na foto." };
+  }
+  const firstAngle = measurements.find((item) => item.type === "angle" && item.angleDegrees !== null);
+  return {
+    photo: {
+      localId: createMeasurementId(),
+      positionLabel,
+      positionOption: photoForm.positionLabel,
+      notes: photoForm.notes.trim(),
+      imageDataUrl: photoForm.imageDataUrl,
+      measurements: measurements.map((item) => ({
+        id: item.id,
+        type: item.type,
+        points: item.points,
+        lineDistancePercent: item.lineDistancePercent,
+        angleDegrees: item.angleDegrees
+      })),
+      measurementType: measurements[0].type,
+      points: measurements[0].points,
+      lineDistancePercent: measurements[0].lineDistancePercent,
+      angleDegrees: firstAngle ? firstAngle.angleDegrees : null
+    }
+  };
+}
+
+function toFirestorePhoto(photo, checkpointId, date) {
+  return {
+    date,
+    checkpointId,
+    positionLabel: photo.positionLabel,
+    positionOption: photo.positionOption || "",
+    notes: photo.notes || "",
+    imageDataUrl: photo.imageDataUrl,
+    measurements: photo.measurements,
+    measurementType: photo.measurementType,
+    points: photo.points,
+    lineDistancePercent: photo.lineDistancePercent,
+    angleDegrees: photo.angleDegrees,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+}
+
+function groupPhotosByCheckpoint(checkpoints, photos) {
+  const grouped = new Map(checkpoints.map((checkpoint) => [checkpoint.id, []]));
+  const checkpointsByDate = new Map();
+  checkpoints.forEach((checkpoint) => {
+    const matches = checkpointsByDate.get(checkpoint.date) || [];
+    matches.push(checkpoint);
+    checkpointsByDate.set(checkpoint.date, matches);
+  });
+
+  const unlinked = [];
+  photos.forEach((photo) => {
+    if (photo.checkpointId && grouped.has(photo.checkpointId)) {
+      grouped.get(photo.checkpointId).push(photo);
+      return;
+    }
+    const matches = checkpointsByDate.get(photo.date) || [];
+    if (!photo.checkpointId && matches.length === 1) {
+      grouped.get(matches[0].id).push(photo);
+      return;
+    }
+    unlinked.push(photo);
+  });
+
+  return { grouped, unlinked };
+}
+
 async function compressImageFile(file, maxDimension = 1280, quality = 0.82) {
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1169,6 +1271,43 @@ function PhotoMeasurementEditor({
   );
 }
 
+function PhotoAnalysisSummary({ analysis, onRemove, removeLabel = "Excluir" }) {
+  const measurements = getStoredMeasurements(analysis);
+  return (
+    <li>
+      <div className="photo-analysis-item">
+        <div className="photo-measurement-canvas photo-analysis-preview">
+          {analysis.imageDataUrl ? (
+            <>
+              <img
+                src={analysis.imageDataUrl}
+                alt={`Foto de acompanhamento em ${analysis.date || analysis.positionLabel || "posição informada"}`}
+              />
+              <MeasurementMarks measurements={measurements} />
+            </>
+          ) : null}
+        </div>
+        <div>
+          <strong>{analysis.positionLabel || "Posição não informada"}</strong>
+          {measurements.length === 0 ? (
+            <p>Sem medições registradas.</p>
+          ) : (
+            measurements.map((measurement, index) => (
+              <p key={measurement.id}>
+                {index + 1}. {formatMeasurementValue(measurement)}
+              </p>
+            ))
+          )}
+          {analysis.notes ? <p>{analysis.notes}</p> : null}
+        </div>
+      </div>
+      <button type="button" className="danger-btn" onClick={onRemove}>
+        {removeLabel}
+      </button>
+    </li>
+  );
+}
+
 function ProgressLineChart({ title, points, firstMetric, secondMetric, maxValue }) {
   if (points.length < 2) {
     return (
@@ -1640,6 +1779,8 @@ export default function App() {
   const [photoAnalyses, setPhotoAnalyses] = useState([]);
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
   const [photoForm, setPhotoForm] = useState(buildEmptyPhotoAnalysis());
+  const [draftPhotos, setDraftPhotos] = useState([]);
+  const [isSavingCheckpoint, setIsSavingCheckpoint] = useState(false);
   const [photoMessage, setPhotoMessage] = useState("");
   const [photoMessageTone, setPhotoMessageTone] = useState("success");
   const [anamneseMessage, setAnamneseMessage] = useState("");
@@ -1689,6 +1830,7 @@ export default function App() {
       setCheckpoints([]);
       setPhotoAnalyses([]);
       setPhotoForm(buildEmptyPhotoAnalysis());
+      setDraftPhotos([]);
       setPhotoMessage("");
       return undefined;
     }
@@ -1752,6 +1894,7 @@ export default function App() {
       setCheckpoints([]);
       setPhotoAnalyses([]);
       setPhotoForm(buildEmptyPhotoAnalysis());
+      setDraftPhotos([]);
       setPhotoMessage("");
     }
   }, [clients, selectedClientId]);
@@ -1882,6 +2025,7 @@ export default function App() {
       setCheckpoints([]);
       setPhotoAnalyses([]);
       setPhotoForm(buildEmptyPhotoAnalysis());
+      setDraftPhotos([]);
       setPhotoMessage("");
       return undefined;
     }
@@ -1932,6 +2076,47 @@ export default function App() {
       unsubscribePhotoAnalyses();
     };
   }, [user, selectedClient]);
+
+  const linkingPhotoIdsRef = useRef(new Set());
+  const linkingClientIdRef = useRef("");
+
+  useEffect(() => {
+    const clientId = selectedClient?.id || "";
+    if (linkingClientIdRef.current !== clientId) {
+      linkingClientIdRef.current = clientId;
+      linkingPhotoIdsRef.current = new Set();
+    }
+    if (!user || !selectedClient || checkpoints.length === 0 || photoAnalyses.length === 0) {
+      return;
+    }
+
+    const checkpointsByDate = new Map();
+    checkpoints.forEach((checkpoint) => {
+      const matches = checkpointsByDate.get(checkpoint.date) || [];
+      matches.push(checkpoint);
+      checkpointsByDate.set(checkpoint.date, matches);
+    });
+
+    photoAnalyses.forEach((photo) => {
+      if (photo.checkpointId || linkingPhotoIdsRef.current.has(photo.id)) {
+        return;
+      }
+      const matches = checkpointsByDate.get(photo.date) || [];
+      if (matches.length !== 1) {
+        return;
+      }
+      linkingPhotoIdsRef.current.add(photo.id);
+      updateDoc(
+        doc(db, "users", user.uid, "anamneses", selectedClient.id, "photoAnalyses", photo.id),
+        {
+          checkpointId: matches[0].id,
+          updatedAt: serverTimestamp()
+        }
+      ).catch(() => {
+        linkingPhotoIdsRef.current.delete(photo.id);
+      });
+    });
+  }, [user, selectedClient, checkpoints, photoAnalyses]);
 
   const formattedUserName = useMemo(() => {
     if (!user?.email) {
@@ -2536,13 +2721,27 @@ export default function App() {
 
   const handleAddCheckpoint = async (event) => {
     event.preventDefault();
-    if (!user || !selectedClient || !checkpointForm.date || checkpointForm.painLevel === "") {
+    if (!user || !selectedClient || !checkpointForm.date || checkpointForm.painLevel === "" || isSavingCheckpoint) {
       return;
     }
 
-    await addDoc(
-      collection(db, "users", user.uid, "anamneses", selectedClient.id, "checkpoints"),
-      {
+    let photosToSave = [...draftPhotos];
+    if (photoDraftHasProgress(photoForm)) {
+      const draftResult = buildPhotoDraft(photoForm);
+      if (draftResult.error) {
+        showPhotoFeedback(draftResult.error, "error");
+        return;
+      }
+      photosToSave = [...photosToSave, draftResult.photo];
+    }
+
+    setIsSavingCheckpoint(true);
+    try {
+      const batch = writeBatch(db);
+      const checkpointRef = doc(
+        collection(db, "users", user.uid, "anamneses", selectedClient.id, "checkpoints")
+      );
+      batch.set(checkpointRef, {
         date: checkpointForm.date,
         sessionNumber: checkpointForm.sessionNumber.trim(),
         sessionType: checkpointForm.sessionType,
@@ -2551,19 +2750,57 @@ export default function App() {
         sleepHours: Number(checkpointForm.sleepHours || 0),
         observations: checkpointForm.observations.trim(),
         createdAt: serverTimestamp()
-      }
-    );
+      });
+      photosToSave.forEach((photo) => {
+        const photoRef = doc(
+          collection(db, "users", user.uid, "anamneses", selectedClient.id, "photoAnalyses")
+        );
+        batch.set(photoRef, toFirestorePhoto(photo, checkpointRef.id, checkpointForm.date));
+      });
+      await batch.commit();
 
-    setCheckpointForm(buildEmptyCheckpoint());
+      setCheckpointForm(buildEmptyCheckpoint());
+      setDraftPhotos([]);
+      setPhotoForm((previous) => ({
+        ...buildEmptyPhotoAnalysis(),
+        date: getTodayISODate()
+      }));
+      showPhotoFeedback(
+        photosToSave.length > 0
+          ? "Acompanhamento registrado com as fotos vinculadas."
+          : "Acompanhamento registrado.",
+        "success",
+        2500
+      );
+    } catch (error) {
+      showPhotoFeedback("Não foi possível salvar o acompanhamento com as fotos. Tente novamente.", "error");
+    } finally {
+      setIsSavingCheckpoint(false);
+    }
   };
 
   const handleDeleteCheckpoint = async (checkpointId) => {
     if (!user || !selectedClient) {
       return;
     }
-    await deleteDoc(
-      doc(db, "users", user.uid, "anamneses", selectedClient.id, "checkpoints", checkpointId)
-    );
+    const checkpoint = checkpoints.find((item) => item.id === checkpointId);
+    const sameDateCount = checkpoint
+      ? checkpoints.filter((item) => item.date === checkpoint.date).length
+      : 0;
+    const relatedPhotos = photoAnalyses.filter((photo) => {
+      if (photo.checkpointId === checkpointId) {
+        return true;
+      }
+      return Boolean(
+        checkpoint && !photo.checkpointId && sameDateCount === 1 && photo.date === checkpoint.date
+      );
+    });
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "users", user.uid, "anamneses", selectedClient.id, "checkpoints", checkpointId));
+    relatedPhotos.forEach((photo) => {
+      batch.delete(doc(db, "users", user.uid, "anamneses", selectedClient.id, "photoAnalyses", photo.id));
+    });
+    await batch.commit();
   };
 
   const handlePhotoFieldChange = (fieldName, value) => {
@@ -2649,73 +2886,23 @@ export default function App() {
     }));
   };
 
-  const handleAddPhotoAnalysis = async (event) => {
+  const handleAddPhotoAnalysis = (event) => {
     event.preventDefault();
     if (!user || !selectedClient) {
       return;
     }
-    if (!photoForm.imageDataUrl) {
-      showPhotoFeedback("Adicione uma foto para salvar a análise.", "error");
-      return;
-    }
-    const positionLabel = resolvePhotoPositionLabel(photoForm.positionLabel, photoForm.positionCustom);
-    if (!positionLabel) {
-      showPhotoFeedback(
-        isCustomPhotoPosition(photoForm.positionLabel)
-          ? "Escreva qual foi a posição da foto."
-          : "Selecione a posição da foto.",
-        "error"
-      );
+    const draftResult = buildPhotoDraft(photoForm);
+    if (draftResult.error) {
+      showPhotoFeedback(draftResult.error, "error");
       return;
     }
 
-    const requiredPoints = getRequiredMeasurementPoints(photoForm.activeMeasurementType);
-    if (photoForm.activePoints.length > 0 && photoForm.activePoints.length < requiredPoints) {
-      showPhotoFeedback("Termine a medição atual ou desfaça os pontos antes de salvar.", "error");
-      return;
-    }
-
-    const draftMeasurement = buildMeasurement(photoForm.activeMeasurementType, photoForm.activePoints);
-    const measurements = draftMeasurement
-      ? [...photoForm.measurements, draftMeasurement]
-      : photoForm.measurements;
-    if (measurements.length === 0) {
-      showPhotoFeedback("Inclua pelo menos uma medição na foto.", "error");
-      return;
-    }
-
-    const linkedDate = checkpointForm.date || photoForm.date || getTodayISODate();
-    const firstAngle = measurements.find((item) => item.type === "angle" && item.angleDegrees !== null);
-
-    await addDoc(
-      collection(db, "users", user.uid, "anamneses", selectedClient.id, "photoAnalyses"),
-      {
-        date: linkedDate,
-        positionLabel,
-        positionOption: photoForm.positionLabel,
-        notes: photoForm.notes.trim(),
-        imageDataUrl: photoForm.imageDataUrl,
-        measurements: measurements.map((item) => ({
-          id: item.id,
-          type: item.type,
-          points: item.points,
-          lineDistancePercent: item.lineDistancePercent,
-          angleDegrees: item.angleDegrees
-        })),
-        measurementType: measurements[0].type,
-        points: measurements[0].points,
-        lineDistancePercent: measurements[0].lineDistancePercent,
-        angleDegrees: firstAngle ? firstAngle.angleDegrees : null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      }
-    );
-
+    setDraftPhotos((previous) => [...previous, draftResult.photo]);
     setPhotoForm((previous) => ({
       ...buildEmptyPhotoAnalysis(),
       date: checkpointForm.date || previous.date || getTodayISODate()
     }));
-    showPhotoFeedback("Foto e medições salvas com sucesso.", "success", 2500);
+    showPhotoFeedback("Foto incluída neste acompanhamento. Ela será salva ao registrar.", "success", 2500);
   };
 
   const handleDeletePhotoAnalysis = async (analysisId) => {
@@ -2730,6 +2917,11 @@ export default function App() {
   const checkpointChartData = useMemo(() => {
     return sortByDate(checkpoints).filter((item) => item.date);
   }, [checkpoints]);
+
+  const photosByCheckpoint = useMemo(
+    () => groupPhotosByCheckpoint(checkpoints, photoAnalyses),
+    [checkpoints, photoAnalyses]
+  );
 
   const angleChartSeries = useMemo(() => {
     const photos = sortByDate(photoAnalyses)
@@ -2756,6 +2948,9 @@ export default function App() {
   const isAnamneseViewOpen = selectedClientView === CLIENT_VIEWS.ANAMNESE;
   const isFollowupViewOpen = selectedClientView === CLIENT_VIEWS.FOLLOWUP;
   const isChartsViewOpen = selectedClientView === CLIENT_VIEWS.CHARTS;
+
+  const currentPhotoDraft = photoDraftHasProgress(photoForm) ? buildPhotoDraft(photoForm) : null;
+  const pendingPhotoCount = draftPhotos.length + (currentPhotoDraft && !currentPhotoDraft.error ? 1 : 0);
 
   if (isLoadingAuth) {
     return <main className="page loading">Carregando...</main>;
@@ -3722,11 +3917,14 @@ export default function App() {
                   </form>
 
                   <section className="photo-analysis-section">
-                    <h5>Foto de acompanhamento</h5>
+                    <h5>Fotos deste acompanhamento</h5>
+                    <p className="muted-text">
+                      As fotos incluídas aqui ficam vinculadas a este atendimento e são salvas junto com ele.
+                    </p>
                     <form className="form" onSubmit={handleAddPhotoAnalysis}>
                       <div className="grid-form photo-position-fields">
                         <label>
-                          Data vinculada ao acompanhamento
+                          Data deste acompanhamento
                           <input
                             type="date"
                             value={photoForm.date}
@@ -3818,7 +4016,7 @@ export default function App() {
 
                       <div className="inline-actions">
                         <button className="primary-btn" type="submit">
-                          Salvar foto e medições
+                          Incluir foto neste acompanhamento
                         </button>
                         <button
                           type="button"
@@ -3839,80 +4037,76 @@ export default function App() {
                       <p className={photoMessageTone === "error" ? "error-text" : "success-text"}>{photoMessage}</p>
                     ) : null}
 
-                    <ul className="list photo-analysis-list">
-                      {photoAnalyses.length === 0 ? (
-                        <li className="empty">Nenhuma foto de acompanhamento registrada.</li>
-                      ) : (
-                        photoAnalyses.map((analysis) => {
-                          const measurements = getStoredMeasurements(analysis);
-                          return (
-                          <li key={analysis.id}>
-                            <div className="photo-analysis-item">
-                              <div className="photo-measurement-canvas photo-analysis-preview">
-                                {analysis.imageDataUrl ? (
-                                  <>
-                                    <img
-                                      src={analysis.imageDataUrl}
-                                      alt={`Foto de acompanhamento em ${analysis.date || "--"}`}
-                                    />
-                                    <MeasurementMarks measurements={measurements} />
-                                  </>
-                                ) : null}
-                              </div>
-                              <div>
-                                <strong>
-                                  {formatDatePt(analysis.date)} • {analysis.positionLabel || "Posição não informada"}
-                                </strong>
-                                {measurements.length === 0 ? (
-                                  <p>Sem medições registradas.</p>
-                                ) : (
-                                  measurements.map((measurement, index) => (
-                                    <p key={measurement.id}>
-                                      {index + 1}. {formatMeasurementValue(measurement)}
-                                    </p>
-                                  ))
-                                )}
-                                {analysis.notes ? <p>{analysis.notes}</p> : null}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="danger-btn"
-                              onClick={() => handleDeletePhotoAnalysis(analysis.id)}
-                            >
-                              Excluir
-                            </button>
-                          </li>
-                          );
-                        })
-                      )}
-                    </ul>
+                    {draftPhotos.length > 0 ? (
+                      <ul className="list photo-analysis-list">
+                        {draftPhotos.map((analysis) => (
+                          <PhotoAnalysisSummary
+                            key={analysis.localId}
+                            analysis={analysis}
+                            removeLabel="Remover"
+                            onRemove={() =>
+                              setDraftPhotos((previous) =>
+                                previous.filter((item) => item.localId !== analysis.localId)
+                              )
+                            }
+                          />
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="muted-text">Nenhuma foto incluída neste acompanhamento ainda.</p>
+                    )}
                   </section>
 
                   <button
                     className="primary-btn followup-submit-btn"
                     type="submit"
                     form="followup-checkpoint-form"
+                    disabled={isSavingCheckpoint}
                   >
-                    Registrar acompanhamento
+                    {isSavingCheckpoint
+                      ? "Salvando acompanhamento..."
+                      : pendingPhotoCount > 0
+                        ? `Registrar acompanhamento com ${pendingPhotoCount} foto${pendingPhotoCount > 1 ? "s" : ""}`
+                        : "Registrar acompanhamento"}
                   </button>
 
                   <ul className="list">
                     {checkpoints.length === 0 ? (
                       <li className="empty">Sem sessões registradas para acompanhamento.</li>
                     ) : (
-                      checkpoints.map((checkpoint) => (
-                        <li key={checkpoint.id}>
-                          <div>
-                            <strong>
-                              {formatDatePt(checkpoint.date)}
-                              {checkpoint.sessionNumber ? ` - Sessão ${checkpoint.sessionNumber}` : ""}
-                            </strong>
-                            <p>
-                              Tipo: {checkpoint.sessionType || "Não informado"} | Dor: {checkpoint.painLevel ?? 0} |
-                              Estresse: {checkpoint.stressLevel ?? 0} | Sono: {checkpoint.sleepHours ?? 0}h
-                            </p>
-                            {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
+                      checkpoints.map((checkpoint) => {
+                        const linkedPhotos = photosByCheckpoint.grouped.get(checkpoint.id) || [];
+                        return (
+                        <li key={checkpoint.id} className="checkpoint-entry">
+                          <div className="checkpoint-entry-body">
+                            <div>
+                              <strong>
+                                {formatDatePt(checkpoint.date)}
+                                {checkpoint.sessionNumber ? ` - Sessão ${checkpoint.sessionNumber}` : ""}
+                              </strong>
+                              <p>
+                                Tipo: {checkpoint.sessionType || "Não informado"} | Dor: {checkpoint.painLevel ?? 0} |
+                                Estresse: {checkpoint.stressLevel ?? 0} | Sono: {checkpoint.sleepHours ?? 0}h
+                              </p>
+                              {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
+                            </div>
+                            {linkedPhotos.length > 0 ? (
+                              <div className="checkpoint-photos">
+                                <p className="muted-text">
+                                  {linkedPhotos.length} foto{linkedPhotos.length > 1 ? "s" : ""} vinculada
+                                  {linkedPhotos.length > 1 ? "s" : ""} a este acompanhamento
+                                </p>
+                                <ul className="list photo-analysis-list">
+                                  {linkedPhotos.map((analysis) => (
+                                    <PhotoAnalysisSummary
+                                      key={analysis.id}
+                                      analysis={analysis}
+                                      onRemove={() => handleDeletePhotoAnalysis(analysis.id)}
+                                    />
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
                           </div>
                           <button
                             type="button"
@@ -3922,9 +4116,27 @@ export default function App() {
                             Excluir
                           </button>
                         </li>
-                      ))
+                        );
+                      })
                     )}
                   </ul>
+                  {photosByCheckpoint.unlinked.length > 0 ? (
+                    <section className="photo-analysis-section">
+                      <h5>Fotos sem acompanhamento vinculado</h5>
+                      <ul className="list photo-analysis-list">
+                        {photosByCheckpoint.unlinked.map((analysis) => (
+                          <PhotoAnalysisSummary
+                            key={analysis.id}
+                            analysis={{
+                              ...analysis,
+                              positionLabel: `${formatDatePt(analysis.date)} • ${analysis.positionLabel || "Posição não informada"}`
+                            }}
+                            onRemove={() => handleDeletePhotoAnalysis(analysis.id)}
+                          />
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
                 </section>
               ) : null}
 
