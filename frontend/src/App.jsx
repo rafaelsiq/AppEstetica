@@ -697,6 +697,15 @@ function getTimestampMillis(value) {
   return 0;
 }
 
+function getAppointmentDateTimeMillis(appointment) {
+  if (!appointment?.date) {
+    return 0;
+  }
+  const isoDateTime = `${appointment.date}T${appointment.time || "00:00"}`;
+  const parsed = Date.parse(isoDateTime);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEditable }) {
   const [pendingSelection, setPendingSelection] = useState(null);
 
@@ -1437,6 +1446,22 @@ export default function App() {
 
   const visibleClients = useMemo(() => {
     const normalizedSearch = clientSearchTerm.trim().toLowerCase();
+    const lastAppointmentByClientName = new Map();
+
+    appointments.forEach((appointment) => {
+      const clientName = String(appointment.client || "").trim();
+      if (!clientName) {
+        return;
+      }
+      const timestamp = getAppointmentDateTimeMillis(appointment);
+      if (timestamp <= 0) {
+        return;
+      }
+      const previous = lastAppointmentByClientName.get(clientName) || 0;
+      if (timestamp > previous) {
+        lastAppointmentByClientName.set(clientName, timestamp);
+      }
+    });
 
     const filtered = clients.filter((client) => {
       if (clientSexFilter !== "all" && (client.sex || "") !== clientSexFilter) {
@@ -1457,9 +1482,27 @@ export default function App() {
     return [...filtered].sort((first, second) => {
       const firstName = String(first.name || "");
       const secondName = String(second.name || "");
+      const firstLastAppointment = lastAppointmentByClientName.get(firstName.trim()) || 0;
+      const secondLastAppointment = lastAppointmentByClientName.get(secondName.trim()) || 0;
+      const firstHasAppointment = firstLastAppointment > 0;
+      const secondHasAppointment = secondLastAppointment > 0;
 
       if (clientSortMode === "name_desc") {
         return secondName.localeCompare(firstName, "pt-BR", { sensitivity: "base" });
+      }
+
+      if (
+        clientSortMode === "last_appointment_desc" ||
+        clientSortMode === "last_appointment_asc"
+      ) {
+        if (firstHasAppointment !== secondHasAppointment) {
+          return firstHasAppointment ? -1 : 1;
+        }
+        if (firstHasAppointment && secondHasAppointment && firstLastAppointment !== secondLastAppointment) {
+          return clientSortMode === "last_appointment_desc"
+            ? secondLastAppointment - firstLastAppointment
+            : firstLastAppointment - secondLastAppointment;
+        }
       }
 
       if (clientSortMode === "updated_desc" || clientSortMode === "updated_asc") {
@@ -1474,7 +1517,7 @@ export default function App() {
 
       return firstName.localeCompare(secondName, "pt-BR", { sensitivity: "base" });
     });
-  }, [clients, clientSearchTerm, clientSexFilter, clientSortMode]);
+  }, [clients, clientSearchTerm, clientSexFilter, clientSortMode, appointments]);
 
   useEffect(() => {
     if (!user || !selectedClient) {
@@ -2251,6 +2294,8 @@ export default function App() {
               >
                 <option value="name_asc">Nome (A-Z)</option>
                 <option value="name_desc">Nome (Z-A)</option>
+                <option value="last_appointment_desc">Último atendimento (mais recente)</option>
+                <option value="last_appointment_asc">Último atendimento (mais antigo)</option>
                 <option value="updated_desc">Atualização mais recente</option>
                 <option value="updated_asc">Atualização mais antiga</option>
               </select>
