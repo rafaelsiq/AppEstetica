@@ -842,28 +842,34 @@ select:focus {
 }
 
 .client-modal-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 0 8px;
   border-bottom: 1px solid #d7dde3;
-  background: #f7fafc;
+  background: #ffffff;
 }
 
 .client-modal-tab {
-  border: 1px solid #c6d0d7;
-  background: #ffffff;
-  color: #2f4957;
-  border-radius: 999px;
-  padding: 9px 14px;
+  min-width: 0;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #6a7a84;
+  padding: 12px 4px 10px;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .client-modal-tab.active {
   border-color: #24695c;
-  background: #24695c;
-  color: #ffffff;
+  background: transparent;
+  color: #24695c;
 }
 
 .client-modal-content {
@@ -1767,9 +1773,9 @@ h5 {
     align-items: stretch;
   }
 
-  .client-modal-tabs {
-    display: grid;
-    grid-template-columns: 1fr;
+  .client-modal-tab {
+    font-size: 12px;
+    padding: 12px 2px 10px;
   }
 
   .photo-analysis-item {
@@ -1781,5 +1787,13 @@ h5 {
     max-width: 180px;
     height: auto;
     aspect-ratio: 1 / 1;
+  }
+}
+
+@media (max-width: 360px) {
+  .client-modal-tab {
+    font-size: 10px;
+    padding: 12px 0 10px;
+    letter-spacing: -0.02em;
   }
 }
