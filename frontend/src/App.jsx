@@ -1301,9 +1301,11 @@ function PhotoAnalysisSummary({ analysis, onRemove, removeLabel = "Excluir" }) {
           {analysis.notes ? <p>{analysis.notes}</p> : null}
         </div>
       </div>
-      <button type="button" className="danger-btn" onClick={onRemove}>
-        {removeLabel}
-      </button>
+      {onRemove ? (
+        <button type="button" className="danger-btn" onClick={onRemove}>
+          {removeLabel}
+        </button>
+      ) : null}
     </li>
   );
 }
@@ -4114,11 +4116,7 @@ export default function App() {
                                 </p>
                                 <ul className="list photo-analysis-list">
                                   {linkedPhotos.map((analysis) => (
-                                    <PhotoAnalysisSummary
-                                      key={analysis.id}
-                                      analysis={analysis}
-                                      onRemove={() => handleDeletePhotoAnalysis(analysis.id)}
-                                    />
+                                    <PhotoAnalysisSummary key={analysis.id} analysis={analysis} />
                                   ))}
                                 </ul>
                               </div>
