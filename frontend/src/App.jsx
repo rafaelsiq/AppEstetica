@@ -1947,29 +1947,6 @@ export default function App() {
               </div>
 
               <form className="form" onSubmit={handleSaveAnamnese}>
-                <h5>Dados pessoais (cadastro)</h5>
-                <div className="static-client-grid">
-                  <p>
-                    <strong>Nome:</strong> {selectedClient.name}
-                  </p>
-                  <p>
-                    <strong>Telefone:</strong> {selectedClient.phone || "Não informado"}
-                  </p>
-                  <p>
-                    <strong>E-mail:</strong> {selectedClient.email || "Não informado"}
-                  </p>
-                  <p>
-                    <strong>Nascimento:</strong>{" "}
-                    {selectedClient.birthDate ? formatDatePt(selectedClient.birthDate) : "Não informado"}
-                  </p>
-                  <p>
-                    <strong>Sexo:</strong> {formatSexLabel(selectedClient.sex)}
-                  </p>
-                  <p className="full-row">
-                    <strong>Endereço:</strong> {selectedClient.address || "Não informado"}
-                  </p>
-                </div>
-
                 <div className="anamnese-history-box">
                   <div className="section-header">
                     <h5>Histórico de fichas</h5>
