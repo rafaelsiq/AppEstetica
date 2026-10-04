@@ -990,6 +990,7 @@ export default function App() {
   const [selectedAnamneseVersionId, setSelectedAnamneseVersionId] = useState("");
   const [legacyAnamneseData, setLegacyAnamneseData] = useState(null);
   const [isDraftingNewAnamnese, setIsDraftingNewAnamnese] = useState(false);
+  const [isEditingAnamnese, setIsEditingAnamnese] = useState(false);
   const [clientHasAnamnese, setClientHasAnamnese] = useState(false);
   const [checkpoints, setCheckpoints] = useState([]);
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
@@ -1029,6 +1030,7 @@ export default function App() {
       setSelectedAnamneseVersionId("");
       setLegacyAnamneseData(null);
       setIsDraftingNewAnamnese(false);
+      setIsEditingAnamnese(false);
       setClientHasAnamnese(false);
       setCheckpoints([]);
       return undefined;
@@ -1060,6 +1062,22 @@ export default function App() {
       unsubscribeAppointments();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!selectedClientId) {
+      return;
+    }
+    const numericSessionNumbers = checkpoints
+      .map((item) => Number(item.sessionNumber))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const nextSessionNumber = numericSessionNumbers.length > 0
+      ? Math.max(...numericSessionNumbers) + 1
+      : checkpoints.length + 1;
+    setCheckpointForm((previous) => ({
+      ...previous,
+      sessionNumber: String(nextSessionNumber)
+    }));
+  }, [checkpoints, selectedClientId]);
 
   useEffect(() => {
     if (!user) {
@@ -1095,6 +1113,7 @@ export default function App() {
       setSelectedAnamneseVersionId("");
       setLegacyAnamneseData(null);
       setIsDraftingNewAnamnese(false);
+      setIsEditingAnamnese(false);
       setCheckpoints([]);
     }
   }, [clients, selectedClientId]);
@@ -1129,6 +1148,7 @@ export default function App() {
     setSelectedAnamneseVersionId("");
     setLegacyAnamneseData(null);
     setIsDraftingNewAnamnese(false);
+    setIsEditingAnamnese(false);
 
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
     const versionsRef = query(
@@ -1188,15 +1208,18 @@ export default function App() {
       const latestVersion = anamneseVersions[0];
       setSelectedAnamneseVersionId(latestVersion.id);
       setAnamneseForm(normalizeAnamneseRecord(latestVersion, selectedClient));
+      setIsEditingAnamnese(false);
       return;
     }
 
     if (legacyAnamneseData) {
       setAnamneseForm(normalizeAnamneseRecord(legacyAnamneseData, selectedClient));
+      setIsEditingAnamnese(false);
       return;
     }
 
     setAnamneseForm(buildEmptyAnamnese(selectedClient));
+    setIsEditingAnamnese(false);
   }, [
     selectedClient,
     anamneseVersions,
@@ -1283,6 +1306,16 @@ export default function App() {
     setEditingClientId(client.id);
     setIsClientFormOpen(true);
     setClientFormMessage("");
+  };
+
+  const handleOpenClientAnamnese = (clientId) => {
+    setSelectedClientId(clientId);
+    setSelectedAnamneseVersionId("");
+    setLegacyAnamneseData(null);
+    setIsDraftingNewAnamnese(false);
+    setIsEditingAnamnese(false);
+    setAnamneseMessage("");
+    setCheckpoints([]);
   };
 
   const handleAddService = async (event) => {
@@ -1384,6 +1417,7 @@ export default function App() {
     setAnamneseForm(normalizeAnamneseRecord(lastAnamneseTemplate, selectedClient));
     setSelectedAnamneseVersionId("");
     setIsDraftingNewAnamnese(true);
+    setIsEditingAnamnese(true);
     setAnamneseMessage("Campos preenchidos com base na última anamnese salva.");
     setTimeout(() => setAnamneseMessage(""), 2500);
   };
@@ -1395,6 +1429,7 @@ export default function App() {
     setAnamneseForm(buildEmptyAnamnese(selectedClient));
     setSelectedAnamneseVersionId("");
     setIsDraftingNewAnamnese(true);
+    setIsEditingAnamnese(true);
     setAnamneseMessage("Nova ficha iniciada. Você pode preencher do zero ou usar a última.");
     setTimeout(() => setAnamneseMessage(""), 2500);
   };
@@ -1407,6 +1442,7 @@ export default function App() {
     setAnamneseForm(normalizeAnamneseRecord(target, selectedClient));
     setSelectedAnamneseVersionId(versionId);
     setIsDraftingNewAnamnese(false);
+    setIsEditingAnamnese(true);
     setAnamneseMessage("Ficha anterior carregada para edição.");
     setTimeout(() => setAnamneseMessage(""), 2500);
   };
@@ -1542,6 +1578,7 @@ export default function App() {
     );
 
     setIsDraftingNewAnamnese(false);
+    setIsEditingAnamnese(false);
     setAnamneseMessage(
       selectedAnamneseVersionId
         ? "Ficha atualizada com sucesso."
@@ -1795,7 +1832,7 @@ export default function App() {
                     <button
                       type="button"
                       className="secondary-btn"
-                      onClick={() => setSelectedClientId(client.id)}
+                      onClick={() => handleOpenClientAnamnese(client.id)}
                     >
                       Anamnese
                     </button>
@@ -1900,6 +1937,9 @@ export default function App() {
                   <p className="muted-text">
                     Dados pessoais ficam no cadastro da cliente e são fixos.
                   </p>
+                    {!isEditingAnamnese ? (
+                      <p className="muted-text">Modo visualização ativado (somente leitura).</p>
+                    ) : null}
                 </div>
                 <button type="button" className="secondary-btn" onClick={() => setSelectedClientId("")}>
                   Fechar
@@ -1987,6 +2027,16 @@ export default function App() {
                   </div>
                 ) : null}
 
+                {!isEditingAnamnese ? (
+                  <div className="anamnese-prefill-box">
+                    <p className="muted-text">
+                      Para editar valores, clique em <strong>Editar ficha</strong> no histórico ou
+                      inicie uma <strong>Nova ficha</strong>.
+                    </p>
+                  </div>
+                ) : null}
+
+                <fieldset className="anamnese-fieldset" disabled={!isEditingAnamnese}>
                 <h5>Círculo das dores principais</h5>
                 <PainMapSelector
                   painSelections={anamneseForm.painSelections}
@@ -2379,13 +2429,16 @@ export default function App() {
                     placeholder="Nome completo da cliente"
                   />
                 </label>
+                </fieldset>
 
                 {anamneseMessage ? <p className="success-text">{anamneseMessage}</p> : null}
-                <button className="primary-btn" type="submit">
-                  {selectedAnamneseVersionId && !isDraftingNewAnamnese
-                    ? "Salvar edição da ficha"
-                    : "Salvar nova ficha de anamnese"}
-                </button>
+                {isEditingAnamnese ? (
+                  <button className="primary-btn" type="submit">
+                    {selectedAnamneseVersionId && !isDraftingNewAnamnese
+                      ? "Salvar edição da ficha"
+                      : "Salvar nova ficha de anamnese"}
+                  </button>
+                ) : null}
               </form>
             </section>
 
@@ -2413,10 +2466,8 @@ export default function App() {
                   Sessão nº
                   <input
                     value={checkpointForm.sessionNumber}
-                    onChange={(event) =>
-                      handleCheckpointFieldChange("sessionNumber", event.target.value)
-                    }
-                    placeholder="Ex: 1"
+                    readOnly
+                    placeholder="Auto"
                   />
                 </label>
                 <label>
