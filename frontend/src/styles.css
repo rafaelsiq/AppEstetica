@@ -267,6 +267,71 @@ select:focus {
   border-radius: 10px;
 }
 
+.client-card-main {
+  display: grid;
+  gap: 10px;
+}
+
+.client-card-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.client-card-title-row strong {
+  font-size: 30px;
+}
+
+.client-open-hint {
+  font-size: 13px;
+  color: #6a7a84;
+}
+
+.client-contact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.client-pill {
+  display: inline-flex;
+  border: 1px solid #d7dde3;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #30424d;
+  background: #f7fafc;
+}
+
+.client-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.client-info-item {
+  border: 1px solid #e2e8ee;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 8px 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.client-info-item span {
+  font-size: 12px;
+  color: #6a7a84;
+}
+
+.client-info-item strong {
+  font-size: 15px;
+  color: #24343d;
+}
+
+.client-info-item-wide {
+  grid-column: 1 / -1;
+}
+
 .client-menu-trigger {
   position: absolute;
   top: 10px;
@@ -900,6 +965,14 @@ h5 {
   .client-card-open {
     padding-top: 30px;
     padding-right: 0;
+  }
+
+  .client-card-title-row strong {
+    font-size: 24px;
+  }
+
+  .client-info-grid {
+    grid-template-columns: 1fr;
   }
 
   .client-modal {

@@ -2021,12 +2021,35 @@ export default function App() {
                     className="client-card-open"
                     onClick={() => handleOpenClientModal(client.id)}
                   >
-                    <div>
-                      <strong>{client.name}</strong>
-                      <p>{client.phone || "Sem telefone"}</p>
-                      {client.email ? <p>{client.email}</p> : null}
-                      {client.birthDate ? <p>Nascimento: {formatDatePt(client.birthDate)}</p> : null}
-                      {client.sex ? <p>Sexo: {formatSexLabel(client.sex)}</p> : null}
+                    <div className="client-card-main">
+                      <div className="client-card-title-row">
+                        <strong>{client.name}</strong>
+                        <span className="client-open-hint">Clique para abrir o prontuário</span>
+                      </div>
+
+                      <div className="client-contact-row">
+                        <span className="client-pill">
+                          Telefone: {client.phone || "Não informado"}
+                        </span>
+                        <span className="client-pill">
+                          E-mail: {client.email || "Não informado"}
+                        </span>
+                      </div>
+
+                      <div className="client-info-grid">
+                        <div className="client-info-item">
+                          <span>Nascimento</span>
+                          <strong>{client.birthDate ? formatDatePt(client.birthDate) : "Não informado"}</strong>
+                        </div>
+                        <div className="client-info-item">
+                          <span>Sexo</span>
+                          <strong>{client.sex ? formatSexLabel(client.sex) : "Não informado"}</strong>
+                        </div>
+                        <div className="client-info-item client-info-item-wide">
+                          <span>Endereço</span>
+                          <strong>{client.address || "Não informado"}</strong>
+                        </div>
+                      </div>
                     </div>
                   </button>
                 </li>
