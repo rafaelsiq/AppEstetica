@@ -5026,7 +5026,10 @@ export default function App() {
                     role="tab"
                     aria-selected={isAnamneseViewOpen}
                     className={isAnamneseViewOpen ? "client-modal-tab active" : "client-modal-tab"}
-                    onClick={() => setSelectedClientView(CLIENT_VIEWS.ANAMNESE)}
+                    onClick={(event) => {
+                      setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
+                      event.currentTarget.scrollIntoView({ inline: "nearest", block: "nearest" });
+                    }}
                   >
                     Anamnese
                   </button>
@@ -5035,7 +5038,10 @@ export default function App() {
                     role="tab"
                     aria-selected={isFollowupViewOpen}
                     className={isFollowupViewOpen ? "client-modal-tab active" : "client-modal-tab"}
-                    onClick={() => setSelectedClientView(CLIENT_VIEWS.FOLLOWUP)}
+                    onClick={(event) => {
+                      setSelectedClientView(CLIENT_VIEWS.FOLLOWUP);
+                      event.currentTarget.scrollIntoView({ inline: "nearest", block: "nearest" });
+                    }}
                   >
                     Acompanhamentos
                   </button>
@@ -5044,7 +5050,10 @@ export default function App() {
                     role="tab"
                     aria-selected={isChartsViewOpen}
                     className={isChartsViewOpen ? "client-modal-tab active" : "client-modal-tab"}
-                    onClick={() => setSelectedClientView(CLIENT_VIEWS.CHARTS)}
+                    onClick={(event) => {
+                      setSelectedClientView(CLIENT_VIEWS.CHARTS);
+                      event.currentTarget.scrollIntoView({ inline: "nearest", block: "nearest" });
+                    }}
                   >
                     Gráficos
                   </button>
@@ -5053,7 +5062,10 @@ export default function App() {
                     role="tab"
                     aria-selected={isTermsViewOpen}
                     className={isTermsViewOpen ? "client-modal-tab active" : "client-modal-tab"}
-                    onClick={() => setSelectedClientView(CLIENT_VIEWS.TERMS)}
+                    onClick={(event) => {
+                      setSelectedClientView(CLIENT_VIEWS.TERMS);
+                      event.currentTarget.scrollIntoView({ inline: "nearest", block: "nearest" });
+                    }}
                   >
                     Termos e Consentimentos
                   </button>
