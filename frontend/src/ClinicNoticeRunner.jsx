@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import { useDeliverNotices } from "./noticeDelivery";
+import { ensurePushSubscription } from "./pushSubscribe";
 import ModalClose from "./ModalClose";
 
-export default function ClinicNoticeRunner({ uid }) {
+export default function ClinicNoticeRunner({ uid, tokens = [] }) {
   const [lists, setLists] = useState([]);
   const [ask, setAsk] = useState(false);
 
@@ -20,6 +21,15 @@ export default function ClinicNoticeRunner({ uid }) {
   }, [uid]);
 
   useDeliverNotices(Boolean(uid), lists);
+
+  const tokenKey = tokens.join(",");
+  useEffect(() => {
+    if (!tokenKey || !("Notification" in window) || Notification.permission !== "granted") {
+      return undefined;
+    }
+    ensurePushSubscription(tokenKey.split(",")).catch(() => {});
+    return undefined;
+  }, [tokenKey]);
 
   useEffect(() => {
     const onNeed = () => {
@@ -40,6 +50,7 @@ export default function ClinicNoticeRunner({ uid }) {
       const result = await Notification.requestPermission();
       if (result === "granted") {
         window.dispatchEvent(new Event("clinica-notifications-granted"));
+        await ensurePushSubscription(tokens).catch(() => {});
       }
     } catch {
       // O navegador não abriu o pedido.

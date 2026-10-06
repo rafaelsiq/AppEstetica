@@ -4568,7 +4568,12 @@ export default function App() {
 
   return (
     <main className="page app-page">
-      <ClinicNoticeRunner uid={user.uid} />
+      <ClinicNoticeRunner
+        uid={user.uid}
+        tokens={shareLinks
+          .filter((link) => ["anamnese", "acompanhamento", "evolucao", "consentimento"].includes(link.type))
+          .map((link) => link.token || link.id)}
+      />
       {(isHeaderMenuOpen || isHeaderAlertsOpen) ? (
         <button
           type="button"

@@ -222,7 +222,7 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
         <div>
           <h3>Listas de notificação</h3>
           <p className="muted-text">
-            Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso chega na área de notificações do celular que estiver com o aplicativo aberto. Permita as notificações neste aparelho ao salvar.
+            Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso chega na área de notificações do celular, mesmo com o aplicativo fechado. A cliente precisa abrir o link uma vez e permitir as notificações. Pode levar alguns minutos depois do horário.
           </p>
         </div>
         <button type="button" className="primary-btn" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>

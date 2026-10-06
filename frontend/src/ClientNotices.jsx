@@ -3,6 +3,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import { noticeHistory } from "./notificationSchedule";
 import { useDeliverNotices } from "./noticeDelivery";
+import { ensurePushSubscription } from "./pushSubscribe";
 
 function BellIcon() {
   return (
@@ -28,6 +29,18 @@ export default function ClientNotices({ token, active, history = false }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const menuRef = useRef(null);
   useDeliverNotices(active, stored);
+
+  useEffect(() => {
+    if (!active || !token) {
+      return undefined;
+    }
+    ensurePushSubscription(token).catch(() => {});
+    const onGrant = () => {
+      ensurePushSubscription(token).catch(() => {});
+    };
+    window.addEventListener("clinica-notifications-granted", onGrant);
+    return () => window.removeEventListener("clinica-notifications-granted", onGrant);
+  }, [active, token]);
 
   useEffect(() => {
     if (!active || !token) {
