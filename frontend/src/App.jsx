@@ -2048,6 +2048,8 @@ export default function App() {
   const [appointmentNotes, setAppointmentNotes] = useState("");
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   const [agendaNotice, setAgendaNotice] = useState("");
+  const [feedbackCopyId, setFeedbackCopyId] = useState("");
+  const feedbackCopyRef = useRef(false);
   const [firstContactBusy, setFirstContactBusy] = useState(false);
   const [bookingReview, setBookingReview] = useState(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -2155,6 +2157,8 @@ export default function App() {
       setEvolutionDraft({ highlight: "", comments: "", homeCare: "" });
       setIsEvolutionComposerOpen(false);
       setAgendaNotice("");
+      setFeedbackCopyId("");
+      feedbackCopyRef.current = false;
       setFirstContactBusy(false);
       setBookingReview(null);
       setBookingNotice("");
@@ -3891,6 +3895,46 @@ export default function App() {
     }
   };
 
+  const handleCopyAppointmentFeedback = async (appointment) => {
+    if (!user || feedbackCopyRef.current) {
+      return;
+    }
+    const client = clients.find(
+      (item) => normalizeClientNameKey(item.name) === normalizeClientNameKey(appointment.client)
+    );
+    if (!client) {
+      setAgendaNotice("Cadastre a cliente para copiar o link de feedback.");
+      return;
+    }
+    feedbackCopyRef.current = true;
+    setFeedbackCopyId(appointment.id);
+    setAgendaNotice("");
+    try {
+      const existing = shareLinks
+        .filter((link) => link.clientId === client.id && link.type === "acompanhamento" && link.moment === "feedback")
+        .sort((first, second) => linkSortTime(second) - linkSortTime(first))[0];
+      const token = existing?.id || await createShareLink({
+        uid: user.uid,
+        client,
+        clinicName: currentClinicName,
+        type: "acompanhamento",
+        moment: "feedback",
+        logoDataUrl: userProfile?.logoDataUrl || ""
+      });
+      try {
+        await navigator.clipboard.writeText(shareUrl(token));
+        setAgendaNotice("Link de feedback copiado.");
+      } catch (copyError) {
+        setAgendaNotice(shareUrl(token));
+      }
+    } catch (error) {
+      setAgendaNotice(error.message || "Não foi possível copiar o link de feedback.");
+    } finally {
+      feedbackCopyRef.current = false;
+      setFeedbackCopyId("");
+    }
+  };
+
   const ensureBookingClient = async (name, phone) => {
     const trimmed = String(name || "").trim();
     const normalized = trimmed.toLowerCase();
@@ -4497,12 +4541,20 @@ export default function App() {
                         ) : null}
                         {appointment.notes ? <p>{appointment.notes}</p> : null}
                       </div>
-                      <div className="inline-actions">
+                      <div className="inline-actions appointment-actions">
                         {appointment.requestId ? (
                           <button type="button" className="secondary-btn" onClick={() => openBookingReview(appointment)}>
                             Ver pedido
                           </button>
                         ) : null}
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          disabled={feedbackCopyId === appointment.id}
+                          onClick={() => handleCopyAppointmentFeedback(appointment)}
+                        >
+                          {feedbackCopyId === appointment.id ? "Copiando..." : "Copiar feedback"}
+                        </button>
                         <button
                           type="button"
                           className="danger-btn"

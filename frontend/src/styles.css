@@ -2700,6 +2700,13 @@ h5 {
     align-items: stretch;
   }
 
+  .inline-actions.appointment-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
   .client-card-open {
     padding-top: 30px;
     padding-right: 0;
