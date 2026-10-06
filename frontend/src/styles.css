@@ -812,8 +812,6 @@ select:focus {
 }
 
 .client-modal-header-actions {
-  position: relative;
-  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -853,10 +851,11 @@ select:focus {
 
 .record-menu-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 5;
-  width: min(320px, calc(100vw - 48px));
+  top: calc(100% + 4px);
+  right: 12px;
+  left: auto;
+  z-index: 6;
+  width: min(300px, calc(100% - 24px));
   max-height: min(68vh, 540px);
   overflow-x: hidden;
   overflow-y: auto;
@@ -1003,6 +1002,8 @@ select:focus {
 }
 
 .client-modal-header {
+  position: relative;
+  z-index: 4;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -2215,7 +2216,8 @@ h5 {
   }
 
   .record-menu-dropdown {
-    width: min(320px, 100%);
+    right: 8px;
+    width: min(300px, calc(100% - 16px));
   }
 
   .profile-modal-header {
