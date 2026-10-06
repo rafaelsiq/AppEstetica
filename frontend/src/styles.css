@@ -2105,13 +2105,31 @@ h5 {
 
 .notification-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 48px;
 }
 
-.notification-heading h3 {
+.notification-heading > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.notification-heading h3,
+.notification-heading p {
   margin: 0;
+}
+
+.notification-heading .primary-btn {
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .notification-heading {
+    flex-direction: column;
+    gap: 16px;
+  }
 }
 
 .notification-choice,

@@ -209,14 +209,16 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
   return (
     <section className="card notification-lists">
       <div className="notification-heading">
-        <h3>Listas de notificação</h3>
+        <div>
+          <h3>Listas de notificação</h3>
+          <p className="muted-text">
+            Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso aparece no acompanhamento. Se a cliente permitiu notificações, o celular também mostra.
+          </p>
+        </div>
         <button type="button" className="primary-btn" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>
           Nova lista
         </button>
       </div>
-      <p className="muted-text">
-        Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso aparece no acompanhamento. Se a cliente permitiu notificações, o celular também mostra.
-      </p>
       <ul className="list">
         {lists.length === 0 ? <li className="empty">Nenhuma lista criada.</li> : null}
         {lists.map((list) => (
