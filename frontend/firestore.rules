@@ -76,6 +76,46 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
+    function noticeOk(notice) {
+      return notice.keys().hasOnly([
+          "listName",
+          "title",
+          "body",
+          "imageDataUrl",
+          "frequency",
+          "date",
+          "time",
+          "weekdays",
+          "monthDay",
+          "until",
+          "active"
+        ])
+        && notice.listName is string
+        && notice.listName.size() > 0
+        && notice.listName.size() <= 80
+        && notice.title is string
+        && notice.title.size() > 0
+        && notice.title.size() <= 80
+        && notice.body is string
+        && notice.body.size() > 0
+        && notice.body.size() <= 400
+        && notice.imageDataUrl is string
+        && notice.imageDataUrl.size() <= 450000
+        && notice.frequency in ["once", "daily", "weekly", "monthly"]
+        && notice.date is string
+        && (notice.date == "" || notice.date.matches("^\\d{4}-\\d{2}-\\d{2}$"))
+        && notice.time is string
+        && notice.time.matches("^\\d{2}:\\d{2}$")
+        && notice.weekdays is list
+        && notice.weekdays.size() <= 7
+        && notice.monthDay is int
+        && notice.monthDay >= 0
+        && notice.monthDay <= 28
+        && notice.until is string
+        && (notice.until == "" || notice.until.matches("^\\d{4}-\\d{2}-\\d{2}$"))
+        && notice.active is bool;
+    }
+
     function consentAnswersOk(answers) {
       return answers is map
         && answers.keys().hasOnly(["imageUse", "signatureName"])
@@ -125,6 +165,12 @@ service cloud.firestore {
           && request.resource.data.ownerId == request.auth.uid
           && request.resource.data.keys().hasOnly(["ownerId", "clientId", "phoneKey", "type"]);
         allow update, delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+      }
+
+      match /notices/{noticeId} {
+        allow get, list: if true;
+        allow create, update: if isLinkOwner(token) && noticeOk(request.resource.data);
+        allow delete: if isLinkOwner(token);
       }
 
       match /views/{phoneKey} {

@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { applyClinicIcon } from "./pageIcon";
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import ClientNotices from "./ClientNotices";
 import InstallAppPrompt from "./InstallAppPrompt";
 import ModalClose from "./ModalClose";
 import {
@@ -899,6 +900,7 @@ export default function ClientPortal() {
   if (link.status === "respondido" || link.status === "importado") {
     return (
       <>
+        {link.type === "acompanhamento" ? <ClientNotices token={token} active /> : null}
         <main className="quiz-page">
           <section className="quiz-card">
             {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
@@ -925,6 +927,7 @@ export default function ClientPortal() {
     if (evolution) {
       return (
         <>
+          <ClientNotices token={token} active />
           <EvolutionView
             evolution={evolution}
             fallbackName={link.clientFirstName}
@@ -1014,6 +1017,7 @@ export default function ClientPortal() {
 
   return (
     <>
+    {link.type === "acompanhamento" ? <ClientNotices token={token} active /> : null}
     <main className="quiz-page">
       <section className="quiz-card">
         {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}

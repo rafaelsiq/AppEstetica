@@ -127,6 +127,9 @@ export default function InstallAppPrompt({ clinicName }) {
     try {
       const result = await Notification.requestPermission();
       setPermission(result);
+      if (result === "granted") {
+        window.dispatchEvent(new Event("clinica-notifications-granted"));
+      }
       if (result !== "default" && (installed || isInstalled())) {
         dismiss();
       }

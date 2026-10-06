@@ -20,6 +20,7 @@ import { auth, db } from "./firebase";
 import ModalClose from "./ModalClose";
 import { phoneKey } from "./clientQuiz";
 import { applyClinicIcon } from "./pageIcon";
+import NotificationLists from "./NotificationLists";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
 import {
@@ -39,7 +40,8 @@ const TABS = {
   INICIO: "inicio",
   AGENDA: "agenda",
   CLIENTES: "clientes",
-  SERVICOS: "servicos"
+  SERVICOS: "servicos",
+  AVISOS: "avisos"
 };
 
 const UNDETERMINED_SERVICE_LABEL = "Serviço indeterminado";
@@ -4086,7 +4088,9 @@ export default function App() {
         ? "Clientes"
         : activeTab === TABS.SERVICOS
           ? "Serviços"
-          : "Início";
+          : activeTab === TABS.AVISOS
+            ? "Avisos"
+            : "Início";
 
   if (isLoadingAuth) {
     return <main className="page loading">Carregando...</main>;
@@ -4289,6 +4293,13 @@ export default function App() {
         >
           Serviços
         </button>
+        <button
+          type="button"
+          className={activeTab === TABS.AVISOS ? "active" : ""}
+          onClick={() => setActiveTab(TABS.AVISOS)}
+        >
+          Avisos
+        </button>
       </nav>
 
       <nav className="bottom-nav" aria-label="Menu principal">
@@ -4347,6 +4358,19 @@ export default function App() {
             </svg>
           </span>
           <span>Serviços</span>
+        </button>
+        <button
+          type="button"
+          className={activeTab === TABS.AVISOS ? "active" : ""}
+          onClick={() => setActiveTab(TABS.AVISOS)}
+        >
+          <span className="bottom-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M6 16h12l-1.2-2.2V10a4.8 4.8 0 0 0-9.6 0v3.8L6 16z" />
+              <path d="M10 16.5a2 2 0 0 0 4 0" />
+            </svg>
+          </span>
+          <span>Avisos</span>
         </button>
       </nav>
 
@@ -6011,6 +6035,10 @@ export default function App() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {activeTab === TABS.AVISOS ? (
+        <NotificationLists uid={user.uid} clients={clients} shareLinks={shareLinks} />
       ) : null}
 
       {activeTab === TABS.SERVICOS ? (

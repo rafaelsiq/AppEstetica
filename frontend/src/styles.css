@@ -420,7 +420,7 @@ label.logo-file-btn input {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -2007,6 +2007,123 @@ h5 {
   color: #54656f;
 }
 
+.notification-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notification-heading h3 {
+  margin: 0;
+}
+
+.notification-choice,
+.weekday-picker,
+.audience-picker {
+  display: grid;
+  gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.notification-choice legend {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.notification-choice label,
+.weekday-picker label,
+.audience-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.notification-choice input,
+.weekday-picker input,
+.audience-picker input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.weekday-picker {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.audience-picker {
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+}
+
+.notification-image-field {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: #2f4957;
+}
+
+.notification-file-btn {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.notification-file-btn input {
+  display: none;
+}
+
+.notification-image-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.notification-image-preview img {
+  width: min(240px, 100%);
+  border-radius: 12px;
+}
+
+.client-notices {
+  width: min(980px, calc(100% - 32px));
+  margin: 16px auto 0;
+  display: grid;
+  gap: 8px;
+}
+
+.client-notice {
+  width: min(520px, 100%);
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 12px 28px rgba(16, 29, 44, 0.16);
+  display: grid;
+  gap: 8px;
+}
+
+.client-notice-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.client-notice p {
+  margin: 0;
+}
+
+.client-notice img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
 .evolution-hero-foot {
   display: flex;
   align-items: center;
@@ -2726,7 +2843,7 @@ h5 {
 
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: center;
     position: fixed;
     left: 12px;

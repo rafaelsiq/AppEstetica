@@ -9,3 +9,9 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", () => {});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = event.notification.data && event.notification.data.url;
+  event.waitUntil(clients.openWindow(target || "/"));
+});
