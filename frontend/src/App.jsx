@@ -19,6 +19,7 @@ import {
 import { auth, db } from "./firebase";
 import { phoneKey } from "./clientQuiz";
 import { createShareLink, importSubmittedLink, shareUrl, updateEvolutionLink } from "./shareLinks";
+import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
 import { consentDecisionLabel } from "./imageConsent";
 
 const TABS = {
@@ -2000,7 +2001,10 @@ export default function App() {
   const [shareLinks, setShareLinks] = useState([]);
   const [shareNotice, setShareNotice] = useState(null);
   const [shareBusy, setShareBusy] = useState("");
-  const [evolutionComment, setEvolutionComment] = useState("");
+  const [evolutionDraft, setEvolutionDraft] = useState({ highlight: "", comments: "", homeCare: "" });
+  const [isEvolutionComposerOpen, setIsEvolutionComposerOpen] = useState(false);
+  const [composerLinkReady, setComposerLinkReady] = useState(false);
+  const pendingEvolutionTokenRef = useRef("");
   const importingLinksRef = useRef(new Set());
   const shareLinksRef = useRef([]);
   const shareBusyRef = useRef(false);
@@ -2186,8 +2190,8 @@ export default function App() {
   );
 
   useEffect(() => {
-    setEvolutionComment(evolutionLink?.comments || "");
-  }, [selectedClientId, evolutionLink?.id]);
+    pendingEvolutionTokenRef.current = "";
+  }, [selectedClientId]);
 
   const pendingClientLinkIds = useMemo(
     () => shareLinks
@@ -2474,9 +2478,15 @@ export default function App() {
         clinicName: currentClinicName,
         type,
         moment,
-        comments: type === "evolucao" ? evolutionComment : "",
+        comments: type === "evolucao" ? evolutionDraft.comments : "",
+        highlight: type === "evolucao" ? evolutionDraft.highlight : "",
+        homeCare: type === "evolucao" ? evolutionDraft.homeCare : "",
         checkpoints: type === "evolucao" ? checkpoints : []
       });
+      if (type === "evolucao") {
+        pendingEvolutionTokenRef.current = token;
+        setComposerLinkReady(true);
+      }
       try {
         await navigator.clipboard.writeText(shareUrl(token));
         publishShareNotice(scope, "Link gerado e copiado.");
@@ -2491,11 +2501,29 @@ export default function App() {
     }
   };
 
-  const handleUpdateEvolution = async () => {
+  const openEvolutionComposer = () => {
+    if (!phoneKey(selectedClient?.phone)) {
+      return;
+    }
+    setEvolutionDraft(sanitizeEvolutionStory({
+      highlight: evolutionLink?.highlight || "",
+      comments: evolutionLink?.comments || "",
+      homeCare: evolutionLink?.homeCare || ""
+    }));
+    setShareNotice(null);
+    setComposerLinkReady(Boolean(evolutionLink || pendingEvolutionTokenRef.current));
+    setIsRecordMenuOpen(false);
+    setIsEvolutionComposerOpen(true);
+  };
+
+  const handleUpdateEvolution = async (event) => {
+    event?.preventDefault?.();
     if (!user || !selectedClient || shareBusyRef.current) {
       return;
     }
-    if (!evolutionLink) {
+    const story = sanitizeEvolutionStory(evolutionDraft);
+    const token = evolutionLink?.id || pendingEvolutionTokenRef.current;
+    if (!token) {
       await handleCreateClientLink("evolucao");
       return;
     }
@@ -2504,14 +2532,16 @@ export default function App() {
     try {
       await updateEvolutionLink({
         uid: user.uid,
-        token: evolutionLink.id,
+        token,
         phone: selectedClient.phone,
-        comments: evolutionComment,
+        comments: story.comments,
+        highlight: story.highlight,
+        homeCare: story.homeCare,
         checkpoints,
         clinicName: currentClinicName,
         clientName: selectedClient.name
       });
-      publishShareNotice("charts", "Link da evolução atualizado com os gráficos e o recado.");
+      publishShareNotice("charts", "Link atualizado. A cliente já vê essas informações.");
     } catch (updateError) {
       publishShareNotice("charts", updateError.message || "Não foi possível atualizar o link.", "error");
     } finally {
@@ -2713,6 +2743,7 @@ export default function App() {
     setSelectedCheckpointId("");
     setIsPhotoComposerOpen(false);
     setIsRecordMenuOpen(false);
+    setIsEvolutionComposerOpen(false);
   };
 
   const handleStartEditAnamnese = () => {
@@ -4465,28 +4496,13 @@ export default function App() {
                             <button
                               type="button"
                               className="record-menu-hint"
-                              disabled={Boolean(shareBusy) || !phoneKey(selectedClient.phone)}
-                              onClick={handleUpdateEvolution}
+                              disabled={!phoneKey(selectedClient.phone)}
+                              onClick={openEvolutionComposer}
                             >
-                              {shareBusy === "charts"
-                                ? "..."
-                                : !phoneKey(selectedClient.phone)
-                                  ? "Sem telefone"
-                                  : evolutionLink
-                                    ? "Atualizar"
-                                    : "Enviar"}
+                              {!phoneKey(selectedClient.phone) ? "Sem telefone" : evolutionLink ? "Editar" : "Preparar"}
                             </button>
                           </span>
                         </div>
-                        {phoneKey(selectedClient.phone) ? (
-                          <input
-                            className="record-menu-note-input"
-                            value={evolutionComment}
-                            onChange={(event) => setEvolutionComment(event.target.value)}
-                            placeholder="Recado da evolução"
-                            aria-label="Recado da evolução"
-                          />
-                        ) : null}
                         {shareNotice ? (
                           <p className={shareNotice.tone === "error" ? "error-text record-menu-feedback" : "success-text record-menu-feedback"}>
                             {shareNotice.text}
@@ -5532,6 +5548,86 @@ export default function App() {
         </div>
       ) : null}
 
+
+      {isEvolutionComposerOpen && selectedClient ? (
+        <div
+          className="client-modal-backdrop evolution-composer-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) setIsEvolutionComposerOpen(false);
+          }}
+        >
+          <section
+            className="profile-modal evolution-composer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Preparar evolução"
+            data-evolution-composer
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>Evolução de {selectedClient.name.split(" ")[0]}</h4>
+                <p>A cliente vê o que você escrever aqui, junto com os gráficos de bem-estar, dor, estresse e sono.</p>
+              </div>
+              <button type="button" className="secondary-btn" onClick={() => setIsEvolutionComposerOpen(false)}>
+                Fechar
+              </button>
+            </header>
+            <form className="form" onSubmit={handleUpdateEvolution}>
+              <label>
+                Destaque
+                <input
+                  value={evolutionDraft.highlight}
+                  maxLength={EVOLUTION_HIGHLIGHT_LIMIT}
+                  placeholder="Ex: Menos dor depois de 4 sessões"
+                  onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, highlight: event.target.value }))}
+                />
+                <span className="field-hint">Frase curta no topo da tela e na imagem para as redes. {evolutionDraft.highlight.length}/{EVOLUTION_HIGHLIGHT_LIMIT}</span>
+              </label>
+              <label>
+                Recado da clínica
+                <textarea
+                  value={evolutionDraft.comments}
+                  maxLength={EVOLUTION_TEXT_LIMIT}
+                  rows={4}
+                  placeholder="Uma mensagem para a cliente ler no link"
+                  onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, comments: event.target.value }))}
+                />
+                <span className="field-hint">{evolutionDraft.comments.length}/{EVOLUTION_TEXT_LIMIT}</span>
+              </label>
+              <label>
+                Cuidados em casa
+                <textarea
+                  value={evolutionDraft.homeCare}
+                  maxLength={EVOLUTION_TEXT_LIMIT}
+                  rows={4}
+                  placeholder={"Um cuidado por linha\nEx: Hidratar a pele de manhã e à noite"}
+                  onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, homeCare: event.target.value }))}
+                />
+                <span className="field-hint">Um cuidado por linha. {evolutionDraft.homeCare.length}/{EVOLUTION_TEXT_LIMIT}</span>
+              </label>
+              {shareNotice?.scope === "charts" ? (
+                <p className={shareNotice.tone === "error" ? "error-text" : "success-text"}>{shareNotice.text}</p>
+              ) : null}
+              <div className="evolution-composer-actions">
+                <button className="primary-btn" type="submit" disabled={Boolean(shareBusy)}>
+                  {shareBusy === "charts" ? "Salvando..." : evolutionLink || composerLinkReady ? "Atualizar link" : "Gerar link"}
+                </button>
+                {evolutionLink || composerLinkReady ? (
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    disabled={Boolean(shareBusy)}
+                    onClick={() => copyShareLink(evolutionLink?.id || pendingEvolutionTokenRef.current, "charts")}
+                  >
+                    Copiar link
+                  </button>
+                ) : null}
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
 
       {isClientFormOpen ? (
         <div

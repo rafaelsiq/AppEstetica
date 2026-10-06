@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
@@ -10,17 +10,16 @@ import {
   sanitizeFollowupAnswers
 } from "./clientQuiz";
 import { IMAGE_CONSENT_TEXT } from "./imageConsent";
-
-function formatDatePt(dateValue) {
-  if (!dateValue) {
-    return "--";
-  }
-  const parsed = new Date(`${dateValue}T00:00`);
-  if (Number.isNaN(parsed.getTime())) {
-    return dateValue;
-  }
-  return parsed.toLocaleDateString("pt-BR");
-}
+import {
+  canvasToBlob,
+  downloadEvolutionImage,
+  evolutionSeries,
+  formatMetric,
+  metricTrend,
+  renderEvolutionCanvas,
+  sanitizeEvolutionStory,
+  shareEvolutionImage
+} from "./evolutionStory";
 
 function toneColor(value) {
   const safe = Math.min(10, Math.max(0, Number(value) || 0));
@@ -57,65 +56,255 @@ function QuizScale({ label, hint, value, onChange }) {
   );
 }
 
-function EvolutionCharts({ checkpoints }) {
-  const points = checkpoints.filter((item) => item.date);
-  if (points.length < 2) {
-    return <p className="muted-text">A clínica ainda está reunindo dados suficientes para os gráficos.</p>;
-  }
-
-  const series = [
-    { title: "Dor", field: "painLevel", max: 10 },
-    { title: "Estresse", field: "stressLevel", max: 10 },
-    { title: "Sono (horas)", field: "sleepHours", max: 12 }
-  ];
-
-  return (
-    <div className="quiz-charts">
-      <WellnessChart points={points} />
-      {series.map((seriesItem) => (
-        <SimpleLineChart key={seriesItem.field} points={points} {...seriesItem} />
-      ))}
-    </div>
-  );
-}
-
-function WellnessChart({ points }) {
-  const scores = points.map((item) => {
-    const pain = Math.min(Math.max(Number(item.painLevel) || 0, 0), 10);
-    const stress = Math.min(Math.max(Number(item.stressLevel) || 0, 0), 10);
-    const sleep = Math.min(Math.max(Number(item.sleepHours) || 0, 0), 10);
-    return Math.round(((10 - pain) * 0.4 + (10 - stress) * 0.3 + sleep * 0.3) * 10);
-  });
-  return <SimpleLineChart title="Bem-estar" values={scores} labels={points.map((item) => formatDatePt(item.date))} max={100} />;
-}
-
-function SimpleLineChart({ title, points, field, values, labels, max }) {
-  const seriesValues = values || (points || []).map((item) => Number(item[field]) || 0);
-  const seriesLabels = labels || (points || []).map((item) => formatDatePt(item.date));
+function SimpleLineChart({ title, values, labels, max, wide = false }) {
+  const seriesValues = values || [];
+  const seriesLabels = labels || [];
   const width = 360;
-  const height = 180;
-  const padding = 28;
+  const height = 188;
+  const padX = 16;
+  const padTop = 16;
+  const padBottom = 28;
   const maxValue = max || 10;
-  const getX = (index) =>
-    seriesValues.length === 1 ? padding : padding + (index * (width - padding * 2)) / (seriesValues.length - 1);
-  const getY = (value) => padding + (1 - Math.min(Math.max(value, 0), maxValue) / maxValue) * (height - padding * 2);
+  const getX = (index) => (
+    seriesValues.length === 1
+      ? width / 2
+      : padX + (index * (width - padX * 2)) / (seriesValues.length - 1)
+  );
+  const getY = (value) => padTop + (1 - Math.min(Math.max(value, 0), maxValue) / maxValue) * (height - padTop - padBottom);
   const path = seriesValues.map((value, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(value)}`).join(" ");
+  const labelIndexes = seriesValues.length <= 3
+    ? seriesValues.map((_, index) => index)
+    : [0, seriesValues.length - 1];
 
   return (
-    <article className="chart-card">
+    <article className={wide ? "chart-card chart-card-span-2" : "chart-card"}>
       <h5>{title}</h5>
       <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label={title}>
         <path d={path} className="chart-line chart-line-primary" />
         {seriesValues.map((value, index) => (
-          <g key={`${seriesLabels[index]}-${index}`}>
-            <circle cx={getX(index)} cy={getY(value)} r="3.5" className="chart-point-primary" />
-            <text x={getX(index)} y={height - 6} textAnchor="middle" className="chart-axis-x">
-              {seriesLabels[index]}
-            </text>
-          </g>
+          <circle key={`${seriesLabels[index]}-${index}`} cx={getX(index)} cy={getY(value)} r="4" className="chart-point-primary" />
+        ))}
+        {labelIndexes.map((index) => (
+          <text
+            key={`label-${index}`}
+            x={index === 0 ? 4 : index === seriesValues.length - 1 ? width - 4 : getX(index)}
+            y={height - 6}
+            textAnchor={index === 0 ? "start" : index === seriesValues.length - 1 ? "end" : "middle"}
+            className="chart-axis-x"
+          >
+            {seriesLabels[index]}
+          </text>
         ))}
       </svg>
     </article>
+  );
+}
+
+function EvolutionStat({ label, value, trend }) {
+  return (
+    <article className="evolution-stat">
+      <span>{label}</span>
+      <strong>{formatMetric(value)}</strong>
+      {trend ? <small className={`evolution-trend is-${trend.tone}`}>{trend.label}</small> : null}
+    </article>
+  );
+}
+
+function EvolutionView({ evolution, fallbackName, clinicName }) {
+  const story = sanitizeEvolutionStory(evolution || {});
+  const series = evolutionSeries(evolution?.checkpoints || []);
+  const name = evolution?.clientFirstName || fallbackName;
+  const hasChart = series.points.length >= 2;
+  const hasStory = Boolean(story.comments || story.homeCare);
+  const careLines = story.homeCare.split("\n").map((line) => line.trim()).filter(Boolean);
+  const [pick, setPick] = useState({
+    highlight: Boolean(story.highlight),
+    comments: false,
+    homeCare: false,
+    wellness: hasChart,
+    pain: hasChart,
+    stress: false,
+    sleep: false
+  });
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [imageBlob, setImageBlob] = useState(null);
+  const [imageMessage, setImageMessage] = useState("");
+  const [imageBusy, setImageBusy] = useState(false);
+  const previewRef = useRef("");
+
+  useEffect(() => () => {
+    if (previewRef.current) {
+      URL.revokeObjectURL(previewRef.current);
+    }
+  }, []);
+
+  const options = [
+    ["highlight", "Destaque", Boolean(story.highlight)],
+    ["comments", "Recado", Boolean(story.comments)],
+    ["homeCare", "Cuidados", Boolean(story.homeCare)],
+    ["wellness", "Bem-estar", hasChart],
+    ["pain", "Dor", hasChart],
+    ["stress", "Estresse", hasChart],
+    ["sleep", "Sono", hasChart]
+  ];
+  const selectedCount = options.filter(([key, , available]) => available && pick[key]).length;
+  const range = series.labels.length > 1 ? `${series.labels[0]} a ${series.labels[series.labels.length - 1]}` : series.labels[0] || "";
+
+  const clearPreview = () => {
+    if (previewRef.current) {
+      URL.revokeObjectURL(previewRef.current);
+      previewRef.current = "";
+    }
+    setPreviewUrl("");
+    setImageBlob(null);
+  };
+
+  const togglePick = (key) => {
+    clearPreview();
+    setImageMessage("");
+    setPick((previous) => ({ ...previous, [key]: !previous[key] }));
+  };
+
+  const createImage = async () => {
+    setImageBusy(true);
+    setImageMessage("");
+    try {
+      const canvas = renderEvolutionCanvas({
+        clinicName: evolution?.clinicName || clinicName,
+        clientFirstName: name,
+        highlight: story.highlight,
+        comments: story.comments,
+        homeCare: story.homeCare,
+        checkpoints: series.points,
+        include: pick
+      });
+      const blob = await canvasToBlob(canvas);
+      const url = URL.createObjectURL(blob);
+      if (previewRef.current) {
+        URL.revokeObjectURL(previewRef.current);
+      }
+      previewRef.current = url;
+      setPreviewUrl(url);
+      setImageBlob(blob);
+    } catch (imageError) {
+      setImageMessage("Não foi possível gerar a imagem.");
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  const downloadImage = async () => {
+    if (!imageBlob) {
+      return;
+    }
+    await downloadEvolutionImage(imageBlob);
+    setImageMessage("Imagem baixada. Publique a partir da galeria.");
+  };
+
+  const shareImage = async () => {
+    if (!imageBlob) {
+      return;
+    }
+    try {
+      const result = await shareEvolutionImage(imageBlob, story.highlight || `Evolução na ${clinicName || "clínica"}`);
+      setImageMessage(result === "shared" ? "Escolha onde publicar." : "Seu navegador baixou a imagem. Publique a partir da galeria.");
+    } catch (shareError) {
+      if (shareError?.name === "AbortError") {
+        setImageMessage("");
+        return;
+      }
+      setImageMessage("Não foi possível compartilhar. Baixe a imagem e publique da galeria.");
+    }
+  };
+
+  const showTrend = series.points.length >= 2;
+
+  return (
+    <main className="evolution-page">
+      <section className="evolution-shell">
+        <header className="evolution-hero">
+          <p className="quiz-kicker">{evolution?.clinicName || clinicName}</p>
+          <h1>Sua evolução, {name}</h1>
+          {story.highlight ? <p className="evolution-highlight">{story.highlight}</p> : null}
+          {range ? <p className="evolution-meta">{series.points.length} registros · {range}</p> : null}
+          <a className="primary-btn evolution-share-jump" href="#imagem-redes">Imagem para as redes</a>
+        </header>
+
+        {series.points.length ? (
+          <div className="evolution-stats">
+            <EvolutionStat label="Bem-estar" value={series.wellness[series.wellness.length - 1]} trend={showTrend ? metricTrend(series.wellness[0], series.wellness[series.wellness.length - 1]) : null} />
+            <EvolutionStat label="Dor" value={series.pain[series.pain.length - 1]} trend={showTrend ? metricTrend(series.pain[0], series.pain[series.pain.length - 1], true) : null} />
+            <EvolutionStat label="Estresse" value={series.stress[series.stress.length - 1]} trend={showTrend ? metricTrend(series.stress[0], series.stress[series.stress.length - 1], true) : null} />
+            <EvolutionStat label="Sono (h)" value={series.sleep[series.sleep.length - 1]} trend={showTrend ? metricTrend(series.sleep[0], series.sleep[series.sleep.length - 1]) : null} />
+          </div>
+        ) : null}
+
+        <div className={hasStory ? "evolution-layout" : "evolution-layout is-charts-only"}>
+          {hasStory ? (
+            <aside className="evolution-story">
+              {story.comments ? (
+                <article className="quiz-note">
+                  <h2>Recado da clínica</h2>
+                  <p className="evolution-copy">{story.comments}</p>
+                </article>
+              ) : null}
+              {careLines.length ? (
+                <article className="quiz-note">
+                  <h2>Cuidados em casa</h2>
+                  <ul className="evolution-care">
+                    {careLines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}
+                  </ul>
+                </article>
+              ) : null}
+            </aside>
+          ) : null}
+          <div className="evolution-charts">
+            {hasChart ? (
+              <>
+                <SimpleLineChart wide title="Bem-estar" values={series.wellness} labels={series.labels} max={100} />
+                <SimpleLineChart title="Dor" values={series.pain} labels={series.labels} max={10} />
+                <SimpleLineChart title="Estresse" values={series.stress} labels={series.labels} max={10} />
+                <SimpleLineChart title="Sono (horas)" values={series.sleep} labels={series.labels} max={12} />
+              </>
+            ) : (
+              <p className="muted-text">A clínica ainda está reunindo dados suficientes para os gráficos.</p>
+            )}
+          </div>
+        </div>
+
+        <section className="evolution-share" id="imagem-redes">
+          <h2>Imagem para as redes</h2>
+          <p>Escolha o que entra na imagem. Ela sai quadrada, pronta para publicar.</p>
+          <div className="evolution-share-options">
+            {options.map(([key, label, available]) => (
+              <label key={key} className={available ? "" : "is-disabled"}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(available && pick[key])}
+                  disabled={!available}
+                  onChange={() => togglePick(key)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          {!hasChart ? <p className="field-hint">Os gráficos entram quando houver pelo menos duas datas.</p> : null}
+          <div className="evolution-share-actions">
+            <button type="button" className="primary-btn" onClick={createImage} disabled={imageBusy || selectedCount === 0}>
+              {imageBusy ? "Criando..." : "Criar imagem"}
+            </button>
+            <button type="button" className="secondary-btn" onClick={downloadImage} disabled={!imageBlob}>
+              Baixar
+            </button>
+            <button type="button" className="secondary-btn" onClick={shareImage} disabled={!imageBlob}>
+              Compartilhar
+            </button>
+          </div>
+          {imageMessage ? <p className="evolution-share-message">{imageMessage}</p> : null}
+          {previewUrl ? <img className="evolution-share-preview" src={previewUrl} alt="Prévia da imagem para as redes" /> : null}
+        </section>
+      </section>
+    </main>
   );
 }
 
@@ -294,41 +483,35 @@ export default function ClientPortal() {
   }
 
   if (link.type === "evolucao") {
+    if (evolution) {
+      return (
+        <EvolutionView
+          evolution={evolution}
+          fallbackName={link.clientFirstName}
+          clinicName={link.clinicName}
+        />
+      );
+    }
     return (
-      <main className="quiz-page">
-        <section className="quiz-card">
+      <main className="evolution-page">
+        <section className="quiz-card evolution-lock">
           <p className="quiz-kicker">{link.clinicName}</p>
-          {evolution ? (
-            <>
-              <h1>Sua evolução, {evolution.clientFirstName || link.clientFirstName}</h1>
-              {evolution.comments ? (
-                <article className="quiz-note">
-                  <h2>Recado da clínica</h2>
-                  <p>{evolution.comments}</p>
-                </article>
-              ) : null}
-              <EvolutionCharts checkpoints={evolution.checkpoints || []} />
-            </>
-          ) : (
-            <>
-              <h1>Olá, {link.clientFirstName}</h1>
-              <p>Para ver sua evolução, confirme o telefone cadastrado na clínica.</p>
-              <form className="form" onSubmit={unlockEvolution}>
-                <label>
-                  Telefone com DDD
-                  <input
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    inputMode="tel"
-                    placeholder="(00) 00000-0000"
-                    required
-                  />
-                </label>
-                {phoneError ? <p className="error-text">{phoneError}</p> : null}
-                <button className="primary-btn" type="submit">Ver evolução</button>
-              </form>
-            </>
-          )}
+          <h1>Olá, {link.clientFirstName}</h1>
+          <p>Para ver sua evolução, confirme o telefone cadastrado na clínica.</p>
+          <form className="form" onSubmit={unlockEvolution}>
+            <label>
+              Telefone com DDD
+              <input
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                inputMode="tel"
+                placeholder="(00) 00000-0000"
+                required
+              />
+            </label>
+            {phoneError ? <p className="error-text">{phoneError}</p> : null}
+            <button className="primary-btn" type="submit">Ver evolução</button>
+          </form>
         </section>
       </main>
     );

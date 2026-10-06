@@ -930,13 +930,6 @@ select:focus {
   background: #e6eef1;
 }
 
-.record-menu-note-input {
-  width: calc(100% - 16px);
-  margin: 0 8px 6px;
-  padding: 8px 10px;
-  font-size: 14px;
-}
-
 .record-menu-feedback {
   margin: 2px 10px 8px;
   font-size: 13px;
@@ -1634,6 +1627,262 @@ h5 {
 .quiz-charts {
   display: grid;
   gap: 12px;
+}
+
+.field-hint {
+  color: #6a7a84;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.evolution-composer-backdrop {
+  z-index: 140;
+}
+
+.evolution-composer {
+  width: min(520px, 100%);
+}
+
+.evolution-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.evolution-composer-actions .primary-btn,
+.evolution-composer-actions .secondary-btn {
+  flex: 1 1 160px;
+}
+
+.evolution-page {
+  min-height: 100dvh;
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(28px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+
+.evolution-shell {
+  width: min(980px, 100%);
+  display: grid;
+  gap: 14px;
+}
+
+.evolution-lock {
+  width: min(480px, 100%);
+}
+
+.evolution-hero,
+.evolution-share {
+  background: #ffffff;
+  border: 1px solid #e6eef1;
+  border-radius: 24px;
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+  box-shadow: 0 12px 28px rgba(16, 29, 44, 0.06);
+}
+
+.evolution-hero h1,
+.evolution-share h2 {
+  margin: 0;
+  color: #1d3550;
+  line-height: 1.15;
+}
+
+.evolution-hero h1 {
+  font-size: clamp(28px, 7vw, 40px);
+  overflow-wrap: anywhere;
+}
+
+.evolution-highlight {
+  margin: 0;
+  font-size: clamp(20px, 4.5vw, 30px);
+  line-height: 1.25;
+  font-weight: 700;
+  color: #24695c;
+  overflow-wrap: anywhere;
+}
+
+.evolution-meta,
+.evolution-share p,
+.evolution-share-message {
+  margin: 0;
+  color: #54656f;
+}
+
+.evolution-share-jump {
+  text-decoration: none;
+  text-align: center;
+  width: 100%;
+}
+
+.evolution-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.evolution-stat {
+  background: #ffffff;
+  border: 1px solid #e6eef1;
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.evolution-stat span,
+.evolution-trend {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.evolution-stat span {
+  color: #6a7a84;
+}
+
+.evolution-stat strong {
+  font-size: clamp(26px, 6vw, 32px);
+  color: #1d3550;
+  line-height: 1.1;
+}
+
+.evolution-trend.is-up {
+  color: #24695c;
+}
+
+.evolution-trend.is-down {
+  color: #9e2525;
+}
+
+.evolution-trend.is-flat {
+  color: #6a7a84;
+}
+
+.evolution-layout,
+.evolution-story,
+.evolution-charts {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.evolution-copy {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.evolution-care {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: #24343d;
+}
+
+.evolution-share {
+  scroll-margin-top: 12px;
+}
+
+.evolution-share-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.evolution-share-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-weight: 700;
+  color: #24343d;
+}
+
+.evolution-share-options label.is-disabled {
+  color: #8b98a5;
+}
+
+.evolution-share-options input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.evolution-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.evolution-share-actions button {
+  flex: 1 1 140px;
+}
+
+.evolution-share-preview {
+  width: min(420px, 100%);
+  height: auto;
+  border-radius: 18px;
+  border: 1px solid #e6eef1;
+  justify-self: center;
+}
+
+.evolution-charts .chart-card {
+  min-width: 0;
+}
+
+.evolution-charts .chart-card-span-2 {
+  grid-column: auto;
+}
+
+.evolution-charts .chart-card h5 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #1d3550;
+}
+
+@media (min-width: 720px) {
+  .evolution-share-jump {
+    width: auto;
+    min-width: 220px;
+    justify-self: start;
+  }
+
+  .evolution-charts {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .evolution-charts .chart-card-span-2 {
+    grid-column: 1 / -1;
+  }
+
+  .evolution-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .evolution-layout {
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .evolution-layout.is-charts-only {
+    grid-template-columns: 1fr;
+  }
+
+  .evolution-story {
+    position: sticky;
+    top: 16px;
+  }
 }
 
 .photo-measurement-editor {

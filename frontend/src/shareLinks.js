@@ -1,6 +1,7 @@
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { phoneKey, sanitizeAnamneseAnswers, sanitizeFollowupAnswers } from "./clientQuiz";
+import { sanitizeEvolutionStory } from "./evolutionStory";
 import { IMAGE_CONSENT_TEXT, IMAGE_CONSENT_VERSION } from "./imageConsent";
 
 export function shareUrl(token) {
@@ -33,6 +34,8 @@ export async function createShareLink({
   type,
   moment = "",
   comments = "",
+  highlight = "",
+  homeCare = "",
   checkpoints = []
 }) {
   const token = crypto.randomUUID().replace(/-/g, "");
@@ -61,11 +64,14 @@ export async function createShareLink({
     createdAt: serverTimestamp()
   });
 
+  const story = type === "evolucao" ? sanitizeEvolutionStory({ comments, highlight, homeCare }) : null;
   if (type === "evolucao") {
     await setDoc(doc(db, "clientLinks", token, "views", normalizedPhone), {
       clientFirstName: firstName,
       clinicName: clinicName || "Clínica",
-      comments: comments.trim(),
+      highlight: story.highlight,
+      comments: story.comments,
+      homeCare: story.homeCare,
       checkpoints: slimCheckpoints(checkpoints)
     });
   }
@@ -76,7 +82,8 @@ export async function createShareLink({
     clientId: client.id,
     clientName: client.name || "",
     moment: moment || "",
-    comments: comments.trim(),
+    comments: story ? story.comments : comments.trim(),
+    ...(story ? { highlight: story.highlight, homeCare: story.homeCare } : {}),
     status: type === "evolucao" ? "ativo" : "aberto",
     imported: false,
     ...(type === "consentimento"
@@ -88,11 +95,22 @@ export async function createShareLink({
   return token;
 }
 
-export async function updateEvolutionLink({ uid, token, phone, comments, checkpoints, clinicName, clientName }) {
+export async function updateEvolutionLink({
+  uid,
+  token,
+  phone,
+  comments,
+  highlight = "",
+  homeCare = "",
+  checkpoints,
+  clinicName,
+  clientName
+}) {
   const normalizedPhone = phoneKey(phone);
   if (!normalizedPhone) {
     throw new Error("Cadastre o telefone da cliente antes de atualizar a evolução.");
   }
+  const story = sanitizeEvolutionStory({ comments, highlight, homeCare });
   const secretRef = doc(db, "clientLinks", token, "secret", "access");
   const secretSnap = await getDoc(secretRef);
   const previousKey = secretSnap.exists() ? secretSnap.data().phoneKey : "";
@@ -103,14 +121,18 @@ export async function updateEvolutionLink({ uid, token, phone, comments, checkpo
   await setDoc(doc(db, "clientLinks", token, "views", normalizedPhone), {
     clientFirstName: firstName,
     clinicName: clinicName || "Clínica",
-    comments: comments.trim(),
+    highlight: story.highlight,
+    comments: story.comments,
+    homeCare: story.homeCare,
     checkpoints: slimCheckpoints(checkpoints)
   });
   if (previousKey && previousKey !== normalizedPhone) {
     await deleteDoc(doc(db, "clientLinks", token, "views", previousKey));
   }
   await updateDoc(doc(db, "users", uid, "shareLinks", token), {
-    comments: comments.trim()
+    comments: story.comments,
+    highlight: story.highlight,
+    homeCare: story.homeCare
   });
 }
 
@@ -223,6 +245,8 @@ async function refreshEvolutionSnapshot(uid, link, checkpoints) {
     token: evolution.id,
     phone,
     comments: evolution.comments || "",
+    highlight: evolution.highlight || "",
+    homeCare: evolution.homeCare || "",
     checkpoints,
     clinicName: publicSnap.exists() ? publicSnap.data().clinicName : "",
     clientName: link.clientName || clientSnap.data()?.name || ""
