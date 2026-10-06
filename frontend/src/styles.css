@@ -2308,6 +2308,68 @@ h5 {
 
 .evolution-stat span {
   color: #6a7a84;
+  overflow-wrap: anywhere;
+}
+
+.tracking-parameters {
+  display: grid;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #e6eef1;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.tracking-parameters h5 {
+  margin: 0;
+}
+
+.tracking-parameter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tracking-parameter-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #f4f7f8;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.tracking-parameter-list span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tracking-parameter-list small {
+  color: #6a7a84;
+}
+
+.tracking-parameter-list button {
+  border: none;
+  background: transparent;
+  color: #9e2525;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tracking-parameter-form {
+  display: grid;
+  gap: 10px;
+}
+
+@media (min-width: 800px) {
+  .tracking-parameter-form {
+    grid-template-columns: minmax(0, 1.4fr) minmax(90px, 0.5fr) minmax(160px, 1fr) auto;
+    align-items: end;
+  }
 }
 
 .evolution-stat strong {

@@ -4,6 +4,7 @@ import { phoneKey, sanitizeAnamneseAnswers, sanitizeFollowupAnswers } from "./cl
 import { clinicHandle, sanitizeEvolutionStory } from "./evolutionStory";
 import { FIRST_CONTACT_SERVICE } from "./firstContact";
 import { IMAGE_CONSENT_TEXT, IMAGE_CONSENT_VERSION } from "./imageConsent";
+import { normalizeReadings } from "./trackingParameters";
 
 export function shareUrl(token) {
   return `${window.location.origin}/c/${token}`;
@@ -24,7 +25,8 @@ export function slimCheckpoints(checkpoints) {
       stressLevel: Number(item.stressLevel || 0),
       sleepHours: Number(item.sleepHours || 0),
       sessionType: item.sessionType || "",
-      moment: item.moment || "clinica"
+      moment: item.moment || "clinica",
+      parameters: normalizeReadings(item.parameters)
     }));
 }
 

@@ -47,6 +47,17 @@ import {
   normalizeClosure
 } from "./agendaOff";
 import { publishAgendaAvailability } from "./agendaAvailability";
+import {
+  chartCeiling,
+  checkpointParameterSummary,
+  emptyParameterForm,
+  formatParameterValue,
+  normalizeParameter,
+  normalizeReadings,
+  parameterSeries,
+  readingsFromForm,
+  validateParameter
+} from "./trackingParameters";
 
 const TABS = {
   INICIO: "inicio",
@@ -507,7 +518,8 @@ function buildEmptyCheckpoint() {
     painLevel: "0",
     stressLevel: "0",
     sleepHours: "",
-    observations: ""
+    observations: "",
+    parameterValues: {}
   };
 }
 
@@ -1467,6 +1479,135 @@ function PhotoMeasurementEditor({
   );
 }
 
+function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAdd, onRemove }) {
+  return (
+    <section className="tracking-parameters">
+      <div>
+        <h5>Parâmetros</h5>
+        <p className="muted-text">
+          Crie uma medida desta cliente e a unidade. Ex.: alcance do ombro direito, em cm.
+        </p>
+      </div>
+      {parameters.length ? (
+        <ul className="tracking-parameter-list">
+          {parameters.map((parameter) => (
+            <li key={parameter.id}>
+              <span>
+                <strong>{parameter.name}</strong>
+                <small>
+                  {parameter.unit} · melhora quando {parameter.improveWhen === "down" ? "diminui" : "aumenta"}
+                </small>
+              </span>
+              <button type="button" onClick={() => onRemove(parameter.id)} disabled={busy}>
+                Remover
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted-text">Nenhum parâmetro ainda. Dor, estresse e sono continuam em toda sessão.</p>
+      )}
+      <form className="tracking-parameter-form" onSubmit={onAdd}>
+        <label>
+          Nome
+          <input
+            value={form.name}
+            onChange={(event) => onChange({ name: event.target.value })}
+            placeholder="Alcance do ombro direito"
+            maxLength={60}
+            required
+          />
+        </label>
+        <label>
+          Unidade
+          <input
+            value={form.unit}
+            onChange={(event) => onChange({ unit: event.target.value })}
+            placeholder="cm"
+            maxLength={16}
+            required
+          />
+        </label>
+        <label>
+          A melhora aparece quando
+          <select value={form.improveWhen} onChange={(event) => onChange({ improveWhen: event.target.value })}>
+            <option value="up">O valor aumenta</option>
+            <option value="down">O valor diminui</option>
+          </select>
+        </label>
+        <button className="secondary-btn" type="submit" disabled={busy}>
+          Adicionar parâmetro
+        </button>
+      </form>
+      {error ? <p className="error-text">{error}</p> : null}
+    </section>
+  );
+}
+
+function ParameterProgressChart({ series }) {
+  const points = series.points || [];
+  const title = `${series.name} (${series.unit})`;
+  if (points.length < 2) {
+    return (
+      <div className="chart-card">
+        <h5>{title}</h5>
+        <p className="muted-text">
+          {points.length === 0
+            ? "Ainda não há medição deste parâmetro."
+            : "Registre esta medida em pelo menos 2 sessões para gerar o gráfico."}
+        </p>
+      </div>
+    );
+  }
+
+  const width = 420;
+  const height = 200;
+  const padding = 36;
+  const maxValue = chartCeiling(points.map((item) => item.value));
+  const plotWidth = width - padding * 2;
+  const plotHeight = height - padding * 2;
+  const yLabels = [0, maxValue / 2, maxValue];
+  const getX = (index) => (
+    points.length === 1 ? padding : padding + (index * plotWidth) / (points.length - 1)
+  );
+  const getY = (value) => padding + (1 - Math.min(Math.max(Number(value) || 0, 0), maxValue) / maxValue) * plotHeight;
+  const linePath = points
+    .map((item, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(item.value)}`)
+    .join(" ");
+  const formatTick = (value) => (Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10));
+
+  return (
+    <div className="chart-card">
+      <h5>{title}</h5>
+      <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label={title}>
+        {yLabels.map((marker) => {
+          const y = getY(marker);
+          return (
+            <g key={marker}>
+              <line x1={padding} y1={y} x2={width - padding} y2={y} className="chart-grid" />
+              <text x={4} y={y + 4} className="chart-axis">
+                {formatTick(marker)}
+              </text>
+            </g>
+          );
+        })}
+        <path d={linePath} className="chart-line chart-line-primary" />
+        {points.map((item, index) => (
+          <g key={`${item.date}-${index}`}>
+            <circle cx={getX(index)} cy={getY(item.value)} r="3" className="chart-point-primary" />
+            <text x={getX(index)} y={height - 8} textAnchor="middle" className="chart-axis-x">
+              {formatDatePt(item.date)}
+            </text>
+          </g>
+        ))}
+      </svg>
+      <p className="muted-text chart-footnote">
+        Unidade: {series.unit}. A melhora aparece quando o valor {series.improveWhen === "down" ? "diminui" : "aumenta"}.
+      </p>
+    </div>
+  );
+}
+
 function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
   if (!checkpoint) {
     return (
@@ -1503,6 +1644,9 @@ function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
         <span>Dor {checkpoint.painLevel ?? 0}</span>
         <span>Estresse {checkpoint.stressLevel ?? 0}</span>
         <span>Sono {checkpoint.sleepHours ?? 0}h</span>
+        {normalizeReadings(checkpoint.parameters).map((item) => (
+          <span key={item.id}>{item.name} {formatParameterValue(item.value, item.unit)}</span>
+        ))}
       </div>
       {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
       {feedback ? null : (
@@ -2102,6 +2246,11 @@ export default function App() {
   const [isEditingAnamnese, setIsEditingAnamnese] = useState(false);
   const [clientHasAnamnese, setClientHasAnamnese] = useState(false);
   const [checkpoints, setCheckpoints] = useState([]);
+  const [trackingParameters, setTrackingParameters] = useState([]);
+  const [parameterForm, setParameterForm] = useState(() => emptyParameterForm());
+  const [parameterError, setParameterError] = useState("");
+  const [parameterBusy, setParameterBusy] = useState(false);
+  const [checkpointError, setCheckpointError] = useState("");
   const [photoAnalyses, setPhotoAnalyses] = useState([]);
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
   const [photoForm, setPhotoForm] = useState(buildEmptyPhotoAnalysis());
@@ -2561,6 +2710,9 @@ export default function App() {
       setIsEditingAnamnese(false);
       setClientHasAnamnese(false);
       setCheckpoints([]);
+      setTrackingParameters([]);
+      setParameterForm(emptyParameterForm());
+      setParameterError("");
       setPhotoAnalyses([]);
       setPhotoForm(buildEmptyPhotoAnalysis());
       setDraftPhotos([]);
@@ -2572,6 +2724,7 @@ export default function App() {
 
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
     const checkpointsRef = collection(db, "users", user.uid, "anamneses", selectedClient.id, "checkpoints");
+    const parametersRef = collection(db, "users", user.uid, "anamneses", selectedClient.id, "parameters");
     const photoAnalysesRef = collection(
       db,
       "users",
@@ -2603,6 +2756,14 @@ export default function App() {
       setCheckpoints(sortByDate(loaded));
     });
 
+    const unsubscribeParameters = onSnapshot(parametersRef, (snapshot) => {
+      const loaded = snapshot.docs
+        .map((item) => normalizeParameter(item.id, item.data()))
+        .filter(Boolean);
+      loaded.sort((first, second) => first.name.localeCompare(second.name, "pt-BR"));
+      setTrackingParameters(loaded);
+    });
+
     const unsubscribePhotoAnalyses = onSnapshot(photoAnalysesRef, (snapshot) => {
       const loaded = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       setPhotoAnalyses(sortByDate(loaded));
@@ -2611,6 +2772,7 @@ export default function App() {
     return () => {
       unsubscribeAnamnese();
       unsubscribeCheckpoints();
+      unsubscribeParameters();
       unsubscribePhotoAnalyses();
     };
   }, [user, selectedClient]);
@@ -3607,7 +3769,53 @@ export default function App() {
   };
 
   const handleCheckpointFieldChange = (fieldName, value) => {
+    setCheckpointError("");
     setCheckpointForm((previous) => ({ ...previous, [fieldName]: value }));
+  };
+
+  const handleParameterFieldChange = (patch) => {
+    setParameterError("");
+    setParameterForm((previous) => ({ ...previous, ...patch }));
+  };
+
+  const handleAddParameter = async (event) => {
+    event.preventDefault();
+    if (!user || !selectedClient || parameterBusy) {
+      return;
+    }
+    const result = validateParameter(parameterForm, trackingParameters);
+    if (result.error) {
+      setParameterError(result.error);
+      return;
+    }
+    setParameterBusy(true);
+    setParameterError("");
+    try {
+      await addDoc(collection(db, "users", user.uid, "anamneses", selectedClient.id, "parameters"), {
+        ...result.parameter,
+        createdAt: serverTimestamp()
+      });
+      setParameterForm(emptyParameterForm());
+    } catch (parameterSaveError) {
+      setParameterError("Não foi possível salvar o parâmetro. Tente novamente.");
+    } finally {
+      setParameterBusy(false);
+    }
+  };
+
+  const handleRemoveParameter = async (parameterId) => {
+    if (!user || !selectedClient || parameterBusy) {
+      return;
+    }
+    setParameterBusy(true);
+    setParameterError("");
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "anamneses", selectedClient.id, "parameters", parameterId));
+    } catch (parameterDeleteError) {
+      setParameterError("Não foi possível remover o parâmetro. Tente novamente.");
+    } finally {
+      setParameterBusy(false);
+    }
   };
 
   const handleAddCheckpoint = async (event) => {
@@ -3626,7 +3834,14 @@ export default function App() {
       photosToSave = [...photosToSave, draftResult.photo];
     }
 
+    const parsedParameters = readingsFromForm(trackingParameters, checkpointForm.parameterValues);
+    if (parsedParameters.error) {
+      setCheckpointError(parsedParameters.error);
+      return;
+    }
+
     setIsSavingCheckpoint(true);
+    setCheckpointError("");
     try {
       const batch = writeBatch(db);
       const checkpointRef = doc(
@@ -3640,6 +3855,7 @@ export default function App() {
         stressLevel: Number(checkpointForm.stressLevel || 0),
         sleepHours: Number(checkpointForm.sleepHours || 0),
         observations: checkpointForm.observations.trim(),
+        parameters: parsedParameters.readings,
         createdAt: serverTimestamp()
       });
       photosToSave.forEach((photo) => {
@@ -3813,6 +4029,11 @@ export default function App() {
     return sortByDate(checkpoints).filter((item) => item.date && !isClientFeedback(item));
   }, [checkpoints]);
 
+  const parameterChartSeries = useMemo(
+    () => parameterSeries(checkpointChartData, trackingParameters),
+    [checkpointChartData, trackingParameters]
+  );
+
   const photosByCheckpoint = useMemo(
     () => groupPhotosByCheckpoint(checkpoints, photoAnalyses),
     [checkpoints, photoAnalyses]
@@ -3854,6 +4075,9 @@ export default function App() {
       secondMetric={{ field: "stressLevel", label: "Estresse" }}
       maxValue={10}
     />,
+    ...parameterChartSeries.map((series) => (
+      <ParameterProgressChart key={series.id} series={series} />
+    )),
     <SleepBarChart key="sleep" points={checkpointChartData} />,
     <SessionTypeDistributionChart key="session-type" points={checkpointChartData} />,
     <InitialVsCurrentChart key="initial-current" points={checkpointChartData} />
@@ -5863,6 +6087,15 @@ export default function App() {
                           Nova sessão
                         </button>
                       </div>
+                      <TrackingParameterEditor
+                        parameters={trackingParameters}
+                        form={parameterForm}
+                        error={parameterError}
+                        busy={parameterBusy}
+                        onChange={handleParameterFieldChange}
+                        onAdd={handleAddParameter}
+                        onRemove={handleRemoveParameter}
+                      />
                       <ul className="list">
                         {checkpoints.length === 0 ? (
                           <li className="empty">Nenhum registro ainda.</li>
@@ -5896,6 +6129,7 @@ export default function App() {
                                   <p>
                                     {checkpoint.sessionType || "Tipo não informado"} · Dor {checkpoint.painLevel ?? 0} ·
                                     Estresse {checkpoint.stressLevel ?? 0} · Sono {checkpoint.sleepHours ?? 0}h
+                                    {checkpointParameterSummary(checkpoint) ? ` · ${checkpointParameterSummary(checkpoint)}` : ""}
                                   </p>
                                 </button>
                               </li>
@@ -5957,6 +6191,15 @@ export default function App() {
                     </button>
                   </div>
 
+                  <TrackingParameterEditor
+                    parameters={trackingParameters}
+                    form={parameterForm}
+                    error={parameterError}
+                    busy={parameterBusy}
+                    onChange={handleParameterFieldChange}
+                    onAdd={handleAddParameter}
+                    onRemove={handleRemoveParameter}
+                  />
                   <form
                     id="followup-checkpoint-form"
                     className="form grid-form"
@@ -6006,6 +6249,22 @@ export default function App() {
                         onChange={(event) => handleCheckpointFieldChange("sleepHours", event.target.value)}
                       />
                     </label>
+                    {trackingParameters.map((parameter) => (
+                      <label key={parameter.id}>
+                        {parameter.name} ({parameter.unit})
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={checkpointForm.parameterValues?.[parameter.id] ?? ""}
+                          onChange={(event) => handleCheckpointFieldChange("parameterValues", {
+                            ...(checkpointForm.parameterValues || {}),
+                            [parameter.id]: event.target.value
+                          })}
+                          placeholder={`Medida em ${parameter.unit}`}
+                        />
+                      </label>
+                    ))}
+                    {checkpointError ? <p className="error-text full-row">{checkpointError}</p> : null}
                     <label className="full-row">
                       Observações da sessão
                       <textarea

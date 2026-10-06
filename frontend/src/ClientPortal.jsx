@@ -54,6 +54,7 @@ import {
   canvasToBlob,
   downloadEvolutionImage,
   evolutionSeries,
+  formatDatePt,
   formatMetric,
   metricTrend,
   renderEvolutionCanvas,
@@ -62,6 +63,7 @@ import {
   shareEvolutionImage,
   zipStoredFiles
 } from "./evolutionStory";
+import { chartCeiling, parameterSeries } from "./trackingParameters";
 
 function toneColor(value) {
   const safe = Math.min(10, Math.max(0, Number(value) || 0));
@@ -167,11 +169,11 @@ function ClinicLogo({ src }) {
   return <img className="client-logo" src={logo} alt="Logo da clínica" />;
 }
 
-function EvolutionStat({ label, value, trend }) {
+function EvolutionStat({ label, value, trend, suffix = "" }) {
   return (
     <article className="evolution-stat">
       <span>{label}</span>
-      <strong>{formatMetric(value)}</strong>
+      <strong>{formatMetric(value)}{suffix ? ` ${suffix}` : ""}</strong>
       {trend ? <small className={`evolution-trend is-${trend.tone}`}>{trend.label}</small> : null}
     </article>
   );
@@ -373,6 +375,7 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
 function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
   const story = sanitizeEvolutionStory(evolution || {});
   const series = evolutionSeries(evolution?.checkpoints || []);
+  const customSeries = parameterSeries(evolution?.checkpoints || []).filter((item) => item.points.length > 0);
   const name = evolution?.clientFirstName || fallbackName;
   const hasChart = series.points.length >= 2;
   const hasStory = Boolean(story.comments || story.homeCare);
@@ -427,6 +430,19 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
             <EvolutionStat label="Dor" value={series.pain[series.pain.length - 1]} trend={showTrend ? metricTrend(series.pain[0], series.pain[series.pain.length - 1], true) : null} />
             <EvolutionStat label="Estresse" value={series.stress[series.stress.length - 1]} trend={showTrend ? metricTrend(series.stress[0], series.stress[series.stress.length - 1], true) : null} />
             <EvolutionStat label="Sono (h)" value={series.sleep[series.sleep.length - 1]} trend={showTrend ? metricTrend(series.sleep[0], series.sleep[series.sleep.length - 1]) : null} />
+            {customSeries.map((item) => {
+              const latest = item.points[item.points.length - 1].value;
+              const first = item.points[0].value;
+              return (
+                <EvolutionStat
+                  key={item.id}
+                  label={item.name}
+                  value={latest}
+                  suffix={item.unit}
+                  trend={item.points.length >= 2 ? metricTrend(first, latest, item.improveWhen === "down") : null}
+                />
+              );
+            })}
           </div>
         ) : null}
 
@@ -457,9 +473,18 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
                 <SimpleLineChart title="Estresse" values={series.stress} labels={series.labels} max={10} onShare={() => openChartShare("stress", "Estresse", "evolucao-estresse.png")} />
                 <SimpleLineChart title="Sono (horas)" values={series.sleep} labels={series.labels} max={12} onShare={() => openChartShare("sleep", "Sono", "evolucao-sono.png")} />
               </>
-            ) : (
+            ) : customSeries.some((item) => item.points.length >= 2) ? null : (
               <p className="muted-text">A clínica ainda está reunindo dados suficientes para os gráficos.</p>
             )}
+            {customSeries.filter((item) => item.points.length >= 2).map((item) => (
+              <SimpleLineChart
+                key={item.id}
+                title={`${item.name} (${item.unit})`}
+                values={item.points.map((point) => point.value)}
+                labels={item.points.map((point) => formatDatePt(point.date))}
+                max={chartCeiling(item.points.map((point) => point.value))}
+              />
+            ))}
           </div>
         </div>
 
