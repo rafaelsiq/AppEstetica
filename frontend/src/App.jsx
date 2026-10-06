@@ -18,8 +18,18 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { phoneKey } from "./clientQuiz";
-import { createShareLink, importSubmittedLink, shareUrl, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
+import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, shareUrl, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
+import {
+  appointmentAgendaDate,
+  approvalMessage,
+  bookingStatusLabel,
+  formatPhoneBr,
+  periodLabel,
+  refusalMessage,
+  rescheduleMessage,
+  whatsAppUrl
+} from "./firstContact";
 import { consentDecisionLabel } from "./imageConsent";
 
 const TABS = {
@@ -209,6 +219,14 @@ const SESSION_TYPES = ["Miofascial", "Relaxante", "Facial", "Drenagem", "Esporti
 const PHOTO_POSITION_OPTIONS = ["Frente", "Costas", "Perfil esquerdo", "Perfil direito"];
 const PHOTO_POSITION_OTHER = "Outra posição";
 const MEASUREMENT_COLORS = ["#24695c", "#c06b19", "#3a5ac7", "#9b3d6b", "#1f7a8c", "#6b4c9a"];
+
+function BookingBadge({ status }) {
+  const label = bookingStatusLabel(status);
+  if (!label) {
+    return null;
+  }
+  return <span className={`booking-badge is-${status}`}>{label}</span>;
+}
 
 function sortAppointments(items) {
   return [...items].sort((a, b) => {
@@ -2013,6 +2031,14 @@ export default function App() {
   const [appointmentTime, setAppointmentTime] = useState("");
   const [appointmentNotes, setAppointmentNotes] = useState("");
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+  const [agendaNotice, setAgendaNotice] = useState("");
+  const [firstContactBusy, setFirstContactBusy] = useState(false);
+  const [bookingReview, setBookingReview] = useState(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleReason, setRescheduleReason] = useState("");
+  const [bookingNotice, setBookingNotice] = useState("");
+  const [bookingBusy, setBookingBusy] = useState("");
+  const [bookingWhatsAppUrl, setBookingWhatsAppUrl] = useState("");
   const [agendaMode, setAgendaMode] = useState("month");
   const [agendaSelectedDate, setAgendaSelectedDate] = useState("");
   const [agendaVisibleMonth, setAgendaVisibleMonth] = useState(() => {
@@ -2055,6 +2081,7 @@ export default function App() {
   const [composerLinkReady, setComposerLinkReady] = useState(false);
   const pendingEvolutionTokenRef = useRef("");
   const importingLinksRef = useRef(new Set());
+  const importingRequestsRef = useRef(new Set());
   const shareLinksRef = useRef([]);
   const shareBusyRef = useRef(false);
 
@@ -2110,7 +2137,13 @@ export default function App() {
       setShareBusy("");
       setEvolutionDraft({ highlight: "", comments: "", homeCare: "" });
       setIsEvolutionComposerOpen(false);
+      setAgendaNotice("");
+      setFirstContactBusy(false);
+      setBookingReview(null);
+      setBookingNotice("");
+      setBookingWhatsAppUrl("");
       importingLinksRef.current.clear();
+      importingRequestsRef.current.clear();
       return undefined;
     }
 
@@ -2283,6 +2316,49 @@ export default function App() {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
   }, [user, pendingClientLinkIds]);
+
+  const firstContactTokenIds = useMemo(
+    () => shareLinks
+      .filter((link) => link.type === "primeiro")
+      .map((link) => link.id)
+      .sort()
+      .join(","),
+    [shareLinks]
+  );
+
+  const firstContactLink = useMemo(
+    () => shareLinks
+      .filter((link) => link.type === "primeiro")
+      .sort((first, second) => linkSortTime(second) - linkSortTime(first))[0] || null,
+    [shareLinks]
+  );
+
+  useEffect(() => {
+    if (!user || !firstContactTokenIds) {
+      return undefined;
+    }
+    const unsubscribers = firstContactTokenIds.split(",").map((token) => onSnapshot(
+      collection(db, "clientLinks", token, "requests"),
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "removed") {
+            return;
+          }
+          const requestId = change.doc.id;
+          if (importingRequestsRef.current.has(requestId)) {
+            return;
+          }
+          importingRequestsRef.current.add(requestId);
+          importFirstContactRequest(user.uid, token, requestId, change.doc.data()).catch(() => {
+            importingRequestsRef.current.delete(requestId);
+          });
+        });
+      }
+    ));
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [user, firstContactTokenIds]);
 
   const lastAppointmentByClientName = useMemo(() => {
     const summaryMap = new Map();
@@ -3076,6 +3152,18 @@ export default function App() {
       return;
     }
 
+    if (collectionName === "appointments") {
+      const appointment = appointments.find((item) => item.id === itemId);
+      if (appointment?.shareToken && appointment?.requestId) {
+        await updateDoc(doc(db, "clientLinks", appointment.shareToken, "requests", appointment.requestId), {
+          hidden: true
+        }).catch(() => {});
+        if (bookingReview?.id === itemId) {
+          closeBookingReview();
+        }
+      }
+    }
+
     await deleteDoc(doc(db, "users", user.uid, collectionName, itemId));
   };
 
@@ -3667,15 +3755,20 @@ export default function App() {
   const todayIsoDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 10);
-  const todayAppointments = appointments.filter((appointment) => appointment.date === todayIsoDate);
+  const todayAppointments = appointments.filter((appointment) => appointmentAgendaDate(appointment) === todayIsoDate);
   const selectedAgendaDate = agendaSelectedDate || todayIsoDate;
-  const selectedDayAppointments = appointments.filter((appointment) => appointment.date === selectedAgendaDate);
+  const selectedDayAppointments = appointments.filter((appointment) => appointmentAgendaDate(appointment) === selectedAgendaDate);
   const appointmentCountByDate = new Map();
+  const pendingDates = new Set();
   appointments.forEach((appointment) => {
-    if (!appointment.date) {
+    const date = appointmentAgendaDate(appointment);
+    if (!date) {
       return;
     }
-    appointmentCountByDate.set(appointment.date, (appointmentCountByDate.get(appointment.date) || 0) + 1);
+    appointmentCountByDate.set(date, (appointmentCountByDate.get(date) || 0) + 1);
+    if (appointment.status === "pendente" || appointment.status === "remarcacao") {
+      pendingDates.add(date);
+    }
   });
   const monthDays = buildMonthDays(agendaVisibleMonth);
   const visibleMonthLabel = MONTH_LABELS[agendaVisibleMonth.getMonth()];
@@ -3696,6 +3789,180 @@ export default function App() {
     setIsAppointmentModalOpen(false);
     setIsAppointmentClientListOpen(false);
     setIsAppointmentServiceListOpen(false);
+  };
+
+  const openBookingReview = (appointment) => {
+    setBookingReview(appointment);
+    setRescheduleDate(appointment.suggestedDate || "");
+    setRescheduleReason(appointment.rescheduleReason || "");
+    setBookingNotice("");
+    setBookingWhatsAppUrl("");
+    setBookingBusy("");
+  };
+
+  const closeBookingReview = () => {
+    setBookingReview(null);
+    setBookingNotice("");
+    setBookingWhatsAppUrl("");
+    setBookingBusy("");
+  };
+
+  const handleFirstContactLink = async () => {
+    if (!user || firstContactBusy) {
+      return;
+    }
+    const clinicPhone = phoneKey(userProfile?.phone);
+    if (!/^\d{10,13}$/.test(clinicPhone)) {
+      setAgendaNotice("Cadastre seu telefone em Meu cadastro para gerar o link.");
+      return;
+    }
+    setFirstContactBusy(true);
+    setAgendaNotice("");
+    try {
+      let token = firstContactLink?.id || "";
+      if (!token) {
+        token = await createFirstContactLink({
+          uid: user.uid,
+          clinicName: currentClinicName,
+          clinicPhone
+        });
+      } else {
+        await updateDoc(doc(db, "clientLinks", token), {
+          clinicPhone,
+          clinicName: currentClinicName
+        });
+      }
+      try {
+        await navigator.clipboard.writeText(shareUrl(token));
+        setAgendaNotice("Link do primeiro atendimento copiado.");
+      } catch (copyError) {
+        setAgendaNotice(shareUrl(token));
+      }
+    } catch (createError) {
+      setAgendaNotice(createError.message || "Não foi possível gerar o link.");
+    } finally {
+      setFirstContactBusy(false);
+    }
+  };
+
+  const ensureBookingClient = async (name, phone) => {
+    const trimmed = String(name || "").trim();
+    const normalized = trimmed.toLowerCase();
+    if (!user || !trimmed) {
+      return;
+    }
+    const existing = clients.find((client) => (client.name || "").trim().toLowerCase() === normalized);
+    if (existing) {
+      if (!phoneKey(existing.phone) && phone) {
+        await updateDoc(doc(db, "users", user.uid, "clients", existing.id), {
+          phone,
+          updatedAt: serverTimestamp()
+        });
+      }
+      return;
+    }
+    await addDoc(collection(db, "users", user.uid, "clients"), {
+      name: trimmed,
+      phone: phone || "",
+      email: "",
+      birthDate: "",
+      sex: "",
+      address: "",
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp()
+    });
+  };
+
+  const decideBooking = async (action) => {
+    if (!user || !bookingReview || bookingBusy) {
+      return;
+    }
+    const appointment = bookingReview;
+    let nextDate = appointment.date;
+    let suggestedDate = "";
+    let reason = "";
+    if (action === "aprovado" && appointment.status === "remarcacao" && appointment.suggestedDate) {
+      nextDate = appointment.suggestedDate;
+    }
+    if (action === "remarcacao") {
+      reason = rescheduleReason.trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(rescheduleDate) || rescheduleDate < todayIsoDate) {
+        setBookingNotice("Escolha uma data a partir de hoje.");
+        return;
+      }
+      if (reason.length < 2) {
+        setBookingNotice("Escreva o motivo da remarcação.");
+        return;
+      }
+      suggestedDate = rescheduleDate;
+    }
+    const popup = window.open("", "_blank");
+    setBookingBusy(action);
+    setBookingNotice("");
+    try {
+      const patch = {
+        status: action,
+        date: nextDate,
+        suggestedDate,
+        rescheduleReason: action === "remarcacao" ? reason : ""
+      };
+      await updateDoc(doc(db, "users", user.uid, "appointments", appointment.id), patch);
+      if (appointment.shareToken && appointment.requestId) {
+        await updateDoc(doc(db, "clientLinks", appointment.shareToken, "requests", appointment.requestId), {
+          status: action,
+          suggestedDate,
+          rescheduleReason: action === "remarcacao" ? reason : "",
+          decidedAt: serverTimestamp()
+        });
+      }
+      if (action === "aprovado") {
+        await ensureBookingClient(appointment.client, appointment.clientPhone).catch(() => {});
+      }
+      const message = action === "aprovado"
+        ? approvalMessage({
+          clinicName: currentClinicName,
+          clientName: appointment.client,
+          date: nextDate,
+          period: appointment.period
+        })
+        : action === "recusado"
+          ? refusalMessage({
+            clinicName: currentClinicName,
+            clientName: appointment.client,
+            date: appointment.date
+          })
+          : rescheduleMessage({
+            clinicName: currentClinicName,
+            clientName: appointment.client,
+            suggestedDate,
+            reason
+          });
+      const url = whatsAppUrl(appointment.clientPhone, message);
+      setBookingWhatsAppUrl(url);
+      setBookingReview({ ...appointment, ...patch });
+      if (popup) {
+        popup.location.href = url;
+        setBookingNotice(
+          action === "aprovado"
+            ? "Consulta aprovada. O WhatsApp foi aberto para a cliente."
+            : action === "recusado"
+              ? "Consulta recusada. O WhatsApp foi aberto para a cliente."
+              : "Nova data sugerida. O WhatsApp foi aberto para a cliente confirmar."
+        );
+      } else {
+        setBookingNotice("Pedido atualizado. Toque em Abrir WhatsApp para avisar a cliente.");
+      }
+      if (action === "remarcacao") {
+        setAgendaSelectedDate(suggestedDate);
+      }
+    } catch (decisionError) {
+      if (popup) {
+        popup.close();
+      }
+      setBookingNotice("Não foi possível atualizar o pedido.");
+    } finally {
+      setBookingBusy("");
+    }
   };
 
   const goToAgendaToday = () => {
@@ -4033,14 +4300,28 @@ export default function App() {
                 <li className="empty">Nada marcado para hoje.</li>
               ) : (
                 todayAppointments.map((appointment) => (
-                  <li key={`home-${appointment.id}`}>
+                  <li key={`home-${appointment.id}`} className={appointment.status === "recusado" ? "is-muted" : ""}>
                     <div>
                       <strong>
-                        {appointment.time || "--:--"} · {appointment.client}
+                        {(appointment.time || (appointment.period ? periodLabel(appointment.period) : "--:--"))} · {appointment.client}
                       </strong>
+                      {appointment.requestId ? <BookingBadge status={appointment.status} /> : null}
                       <p>{appointment.service}</p>
                       {appointment.notes ? <p>{appointment.notes}</p> : null}
                     </div>
+                    {appointment.requestId ? (
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => {
+                          setAgendaSelectedDate(appointmentAgendaDate(appointment));
+                          setActiveTab(TABS.AGENDA);
+                          openBookingReview(appointment);
+                        }}
+                      >
+                        Ver pedido
+                      </button>
+                    ) : null}
                   </li>
                 ))
               )}
@@ -4068,10 +4349,20 @@ export default function App() {
                 Dia
               </button>
             </div>
-            <button className="primary-btn" type="button" onClick={openAppointmentModal}>
-              Inserir atendimento
-            </button>
+            <div className="agenda-toolbar-actions">
+              <button className="secondary-btn" type="button" onClick={handleFirstContactLink} disabled={firstContactBusy}>
+                {firstContactBusy
+                  ? "Gerando link..."
+                  : firstContactLink
+                    ? "Copiar link do primeiro atendimento"
+                    : "Gerar link do primeiro atendimento"}
+              </button>
+              <button className="primary-btn" type="button" onClick={openAppointmentModal}>
+                Inserir atendimento
+              </button>
+            </div>
           </div>
+          {agendaNotice ? <p className="muted-text agenda-notice">{agendaNotice}</p> : null}
 
           <div className={agendaMode === "month" ? "agenda-layout" : "agenda-layout agenda-layout-day"}>
             <article className="card agenda-card">
@@ -4112,7 +4403,9 @@ export default function App() {
                         type="button"
                         className={`month-day ${isoDate === selectedAgendaDate ? "is-selected" : ""} ${
                           isoDate === todayIsoDate ? "is-today" : ""
-                        } ${appointmentCountByDate.get(isoDate) ? "has-appointments" : ""}`}
+                        } ${appointmentCountByDate.get(isoDate) ? "has-appointments" : ""} ${
+                          pendingDates.has(isoDate) ? "has-pending" : ""
+                        }`}
                         aria-pressed={isoDate === selectedAgendaDate}
                         aria-label={`${formatAgendaDayLabel(isoDate)}${
                           appointmentCountByDate.get(isoDate)
@@ -4141,21 +4434,37 @@ export default function App() {
                   <li className="empty">Nenhum atendimento neste dia.</li>
                 ) : (
                   selectedDayAppointments.map((appointment) => (
-                    <li key={appointment.id}>
+                    <li key={appointment.id} className={appointment.status === "recusado" ? "is-muted" : ""}>
                       <div>
                         <strong>
-                          {appointment.time || "Sem horário"} · {appointment.client}
+                          {appointment.time || (appointment.period ? periodLabel(appointment.period) : "Sem horário")} · {appointment.client}
                         </strong>
+                        {appointment.requestId ? <BookingBadge status={appointment.status} /> : null}
                         <p>{appointment.service}</p>
+                        {appointment.status === "remarcacao" && appointment.date ? (
+                          <p>
+                            Pedido original em {formatDatePt(appointment.date)}. A confirmação da cliente é pelo WhatsApp.
+                          </p>
+                        ) : null}
+                        {appointment.requestId && Array.isArray(appointment.reasons) && appointment.reasons.length > 0 ? (
+                          <p>{appointment.reasons.join(", ")}</p>
+                        ) : null}
                         {appointment.notes ? <p>{appointment.notes}</p> : null}
                       </div>
-                      <button
-                        type="button"
-                        className="danger-btn"
-                        onClick={() => handleDeleteByCollection("appointments", appointment.id)}
-                      >
-                        Excluir
-                      </button>
+                      <div className="inline-actions">
+                        {appointment.requestId ? (
+                          <button type="button" className="secondary-btn" onClick={() => openBookingReview(appointment)}>
+                            Ver pedido
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="danger-btn"
+                          onClick={() => handleDeleteByCollection("appointments", appointment.id)}
+                        >
+                          Excluir
+                        </button>
+                      </div>
                     </li>
                   ))
                 )}
@@ -4331,6 +4640,102 @@ export default function App() {
               Salvar atendimento
             </button>
           </form>
+          </section>
+        </div>
+      ) : null}
+
+      {bookingReview ? (
+        <div
+          className="client-modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) closeBookingReview();
+          }}
+        >
+          <section
+            className="appointment-modal booking-review"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pedido de primeiro atendimento"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>{bookingReview.client}</h4>
+                <p>Primeiro atendimento</p>
+              </div>
+              <button type="button" className="secondary-btn" onClick={closeBookingReview}>
+                Fechar
+              </button>
+            </header>
+            <BookingBadge status={bookingReview.status} />
+            <dl className="booking-details">
+              <div>
+                <dt>Telefone</dt>
+                <dd>{formatPhoneBr(bookingReview.clientPhone) || "Não informado"}</dd>
+              </div>
+              <div>
+                <dt>Dia pedido</dt>
+                <dd>{formatDatePt(bookingReview.date)}</dd>
+              </div>
+              <div>
+                <dt>Período</dt>
+                <dd>{periodLabel(bookingReview.period)}</dd>
+              </div>
+              <div>
+                <dt>Motivo</dt>
+                <dd>{Array.isArray(bookingReview.reasons) && bookingReview.reasons.length > 0 ? bookingReview.reasons.join(", ") : "Não informado"}</dd>
+              </div>
+              {bookingReview.status === "remarcacao" && bookingReview.suggestedDate ? (
+                <div>
+                  <dt>Nova data sugerida</dt>
+                  <dd>
+                    {formatDatePt(bookingReview.suggestedDate)}
+                    {bookingReview.rescheduleReason ? `. ${bookingReview.rescheduleReason}` : ""}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+            <div className="booking-actions">
+              <button type="button" className="primary-btn" onClick={() => decideBooking("aprovado")} disabled={Boolean(bookingBusy)}>
+                {bookingBusy === "aprovado" ? "Aprovando..." : "Aprovar"}
+              </button>
+              <button type="button" className="danger-btn" onClick={() => decideBooking("recusado")} disabled={Boolean(bookingBusy)}>
+                {bookingBusy === "recusado" ? "Recusando..." : "Recusar"}
+              </button>
+            </div>
+            <form
+              className="form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                decideBooking("remarcacao");
+              }}
+            >
+              <label>
+                Sugerir outra data
+                <input
+                  type="date"
+                  value={rescheduleDate}
+                  min={todayIsoDate}
+                  onChange={(event) => setRescheduleDate(event.target.value)}
+                />
+              </label>
+              <label>
+                Motivo da remarcação
+                <textarea
+                  value={rescheduleReason}
+                  maxLength={400}
+                  onChange={(event) => setRescheduleReason(event.target.value)}
+                  placeholder="Conte por que esse dia não funciona"
+                />
+              </label>
+              <button className="secondary-btn" type="submit" disabled={Boolean(bookingBusy)}>
+                {bookingBusy === "remarcacao" ? "Enviando..." : "Remarcar e pedir confirmação"}
+              </button>
+            </form>
+            {bookingNotice ? <p className="muted-text">{bookingNotice}</p> : null}
+            {bookingWhatsAppUrl ? (
+              <a className="primary-btn" href={bookingWhatsAppUrl} target="_blank" rel="noreferrer">Abrir WhatsApp</a>
+            ) : null}
           </section>
         </div>
       ) : null}

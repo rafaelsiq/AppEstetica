@@ -40,6 +40,42 @@ service cloud.firestore {
         && answers.keys().hasOnly(["painLevel", "stressLevel", "sleepHours", "sessionType"]);
     }
 
+    function linkPublic(token) {
+      return get(/databases/$(database)/documents/clientLinks/$(token)).data;
+    }
+
+    function bookingRequestOk() {
+      return request.resource.data.keys().hasOnly([
+          "clientName",
+          "clientPhone",
+          "date",
+          "period",
+          "reasons",
+          "status",
+          "createdAt"
+        ])
+        && request.resource.data.clientName is string
+        && request.resource.data.clientName.size() >= 2
+        && request.resource.data.clientName.size() <= 80
+        && request.resource.data.clientPhone is string
+        && request.resource.data.clientPhone.matches("^\\d{10,13}$")
+        && request.resource.data.date is string
+        && request.resource.data.date.matches("^\\d{4}-\\d{2}-\\d{2}$")
+        && request.resource.data.period in ["manha", "tarde", "noite", "qualquer"]
+        && request.resource.data.reasons is list
+        && request.resource.data.reasons.size() >= 1
+        && request.resource.data.reasons.size() <= 5
+        && request.resource.data.reasons.hasOnly([
+          "Massagem",
+          "Alívio de dor",
+          "Estética facial",
+          "Estética corporal",
+          "Avaliação"
+        ])
+        && request.resource.data.status == "pendente"
+        && request.resource.data.createdAt == request.time;
+    }
+
     function consentAnswersOk(answers) {
       return answers is map
         && answers.keys().hasOnly(["imageUse", "signatureName"])
@@ -57,7 +93,7 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create: if isLinkOwner(token)
-        && request.resource.data.type in ["anamnese", "acompanhamento", "evolucao", "consentimento"]
+        && request.resource.data.type in ["anamnese", "acompanhamento", "evolucao", "consentimento", "primeiro"]
         && !request.resource.data.keys().hasAny(["phoneKey", "observations", "comments", "checkpoints", "ownerId", "clientId", "answers"]);
       allow update: if isLinkOwner(token)
         || (
@@ -95,6 +131,34 @@ service cloud.firestore {
         allow get: if phoneKey == linkSecret(token).phoneKey || isLinkOwner(token);
         allow list: if false;
         allow create, update, delete: if isLinkOwner(token);
+      }
+
+      match /requests/{requestId} {
+        allow get, list: if isLinkOwner(token);
+        allow create: if linkSecret(token).type == "primeiro"
+          && linkPublic(token).status == "ativo"
+          && bookingRequestOk();
+        allow update: if isLinkOwner(token)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hidden"])
+          && request.resource.data.hidden == true
+          || isLinkOwner(token)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "suggestedDate", "rescheduleReason", "decidedAt"])
+          && request.resource.data.status in ["aprovado", "recusado", "remarcacao"]
+          && request.resource.data.suggestedDate is string
+          && (
+            request.resource.data.suggestedDate == ""
+            || request.resource.data.suggestedDate.matches("^\\d{4}-\\d{2}-\\d{2}$")
+          )
+          && request.resource.data.rescheduleReason is string
+          && request.resource.data.rescheduleReason.size() <= 400
+          && (
+            request.resource.data.status != "remarcacao"
+            || (
+              request.resource.data.rescheduleReason.size() >= 2
+              && request.resource.data.suggestedDate.matches("^\\d{4}-\\d{2}-\\d{2}$")
+            )
+          );
+        allow delete: if isLinkOwner(token);
       }
     }
 

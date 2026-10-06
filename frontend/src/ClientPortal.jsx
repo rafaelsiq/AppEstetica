@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import {
   buildAnamneseSteps,
@@ -9,6 +9,14 @@ import {
   sanitizeAnamneseAnswers,
   sanitizeFollowupAnswers
 } from "./clientQuiz";
+import {
+  clientRequestMessage,
+  FIRST_CONTACT_PERIODS,
+  FIRST_CONTACT_REASONS,
+  isAllowedPeriod,
+  normalizeReasons,
+  whatsAppUrl
+} from "./firstContact";
 import { IMAGE_CONSENT_TEXT } from "./imageConsent";
 import {
   canvasToBlob,
@@ -309,6 +317,219 @@ function EvolutionView({ evolution, fallbackName, clinicName }) {
   );
 }
 
+function localToday() {
+  return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function FirstContactRequest({ link, token }) {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [date, setDate] = useState("");
+  const [period, setPeriod] = useState("");
+  const [reasons, setReasons] = useState([]);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(null);
+  const today = localToday();
+  const steps = ["nome", "telefone", "dia", "periodo", "motivo"];
+  const safeIndex = Math.min(stepIndex, steps.length - 1);
+
+  const toggleReason = (reason) => {
+    setReasons((current) => (
+      current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason]
+    ));
+    setError("");
+  };
+
+  const goNext = () => {
+    const trimmed = name.trim();
+    const key = phoneKey(phone);
+    if (steps[safeIndex] === "nome" && (trimmed.length < 2 || trimmed.length > 80)) {
+      setError("Informe seu nome.");
+      return;
+    }
+    if (steps[safeIndex] === "telefone" && !/^\d{10,13}$/.test(key)) {
+      setError("Informe o telefone com DDD.");
+      return;
+    }
+    if (steps[safeIndex] === "dia" && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today)) {
+      setError("Escolha um dia a partir de hoje.");
+      return;
+    }
+    if (steps[safeIndex] === "periodo" && !isAllowedPeriod(period)) {
+      setError("Escolha o período.");
+      return;
+    }
+    setError("");
+    setStepIndex(safeIndex + 1);
+  };
+
+  const submitRequest = async () => {
+    const trimmed = name.trim();
+    const key = phoneKey(phone);
+    const picked = normalizeReasons(reasons);
+    if (picked.length < 1) {
+      setError("Escolha pelo menos um motivo.");
+      return;
+    }
+    if (submitting) {
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      await addDoc(collection(db, "clientLinks", token, "requests"), {
+        clientName: trimmed,
+        clientPhone: key,
+        date,
+        period,
+        reasons: picked,
+        status: "pendente",
+        createdAt: serverTimestamp()
+      });
+      setSent({ clientName: trimmed, date, period, reasons: picked });
+    } catch (submitError) {
+      setError("Não foi possível enviar o pedido. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (sent) {
+    const message = clientRequestMessage({
+      clientName: sent.clientName,
+      clinicName: link.clinicName,
+      date: sent.date,
+      period: sent.period,
+      reasons: sent.reasons
+    });
+    const whatsApp = link.clinicPhone ? whatsAppUrl(link.clinicPhone, message) : "";
+    return (
+      <main className="quiz-page">
+        <section className="quiz-card">
+          <p className="quiz-kicker">{link.clinicName}</p>
+          <h1>Pedido enviado</h1>
+          <p>Seu primeiro atendimento já está na agenda da clínica, pendente de aprovação.</p>
+          <p>Se quiser, envie o mesmo pedido pelo WhatsApp. A clínica recebe o horário mesmo que você não envie.</p>
+          {whatsApp ? (
+            <a className="primary-btn" href={whatsApp} target="_blank" rel="noreferrer">Enviar no WhatsApp</a>
+          ) : null}
+        </section>
+      </main>
+    );
+  }
+
+  const progress = Math.round(((safeIndex + 1) / steps.length) * 100);
+
+  return (
+    <main className="quiz-page">
+      <section className="quiz-card">
+        <p className="quiz-kicker">{link.clinicName}</p>
+        <h1>Primeiro atendimento</h1>
+        <p className="muted-text">Conte o dia e o motivo da visita. A clínica confirma o horário com você.</p>
+        <div className="quiz-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
+        <p className="quiz-count">Pergunta {safeIndex + 1} de {steps.length}</p>
+
+        {steps[safeIndex] === "nome" ? (
+          <div className="quiz-step">
+            <h2>Qual é o seu nome?</h2>
+            <label>
+              Nome
+              <input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoComplete="name" />
+            </label>
+          </div>
+        ) : null}
+
+        {steps[safeIndex] === "telefone" ? (
+          <div className="quiz-step">
+            <h2>Qual é o seu WhatsApp?</h2>
+            <label>
+              Telefone com DDD
+              <input
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="(00) 00000-0000"
+              />
+            </label>
+          </div>
+        ) : null}
+
+        {steps[safeIndex] === "dia" ? (
+          <div className="quiz-step">
+            <h2>Qual dia você prefere?</h2>
+            <label>
+              Dia
+              <input type="date" value={date} min={today} onChange={(event) => setDate(event.target.value)} />
+            </label>
+          </div>
+        ) : null}
+
+        {steps[safeIndex] === "periodo" ? (
+          <div className="quiz-step">
+            <h2>Qual período fica melhor?</h2>
+            <div className="quiz-options">
+              {FIRST_CONTACT_PERIODS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={period === item.value ? "quiz-option active" : "quiz-option"}
+                  onClick={() => setPeriod(item.value)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {steps[safeIndex] === "motivo" ? (
+          <div className="quiz-step">
+            <h2>Qual o motivo do atendimento?</h2>
+            <p>Pode marcar mais de uma opção.</p>
+            <div className="quiz-options">
+              {FIRST_CONTACT_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  className={reasons.includes(reason) ? "quiz-option active" : "quiz-option"}
+                  onClick={() => toggleReason(reason)}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {error ? <p className="error-text">{error}</p> : null}
+        <div className="quiz-nav">
+          <button
+            type="button"
+            className="secondary-btn"
+            onClick={() => {
+              setError("");
+              setStepIndex(Math.max(0, safeIndex - 1));
+            }}
+            disabled={safeIndex === 0 || submitting}
+          >
+            Voltar
+          </button>
+          {safeIndex < steps.length - 1 ? (
+            <button type="button" className="primary-btn" onClick={goNext}>Continuar</button>
+          ) : (
+            <button type="button" className="primary-btn" onClick={submitRequest} disabled={submitting}>
+              {submitting ? "Enviando..." : "Enviar pedido"}
+            </button>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function ClientPortal() {
   const { token } = useParams();
   const [link, setLink] = useState(null);
@@ -465,6 +686,10 @@ export default function ClientPortal() {
 
   if (error && !link) {
     return <main className="quiz-page"><section className="quiz-card"><h1>Link indisponível</h1><p>{error}</p></section></main>;
+  }
+
+  if (link.type === "primeiro") {
+    return <FirstContactRequest link={link} token={token} />;
   }
 
   if (link.status === "respondido" || link.status === "importado") {

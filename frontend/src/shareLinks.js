@@ -1,7 +1,8 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, runTransaction, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { phoneKey, sanitizeAnamneseAnswers, sanitizeFollowupAnswers } from "./clientQuiz";
 import { clinicHandle, sanitizeEvolutionStory } from "./evolutionStory";
+import { FIRST_CONTACT_SERVICE } from "./firstContact";
 import { IMAGE_CONSENT_TEXT, IMAGE_CONSENT_VERSION } from "./imageConsent";
 
 export function shareUrl(token) {
@@ -96,6 +97,76 @@ export async function createShareLink({
   });
 
   return token;
+}
+
+export async function createFirstContactLink({ uid, clinicName, clinicPhone }) {
+  const normalizedPhone = phoneKey(clinicPhone);
+  if (!/^\d{10,13}$/.test(normalizedPhone)) {
+    throw new Error("Cadastre seu telefone em Meu cadastro antes de gerar o link.");
+  }
+  const token = crypto.randomUUID().replace(/-/g, "");
+  await setDoc(doc(db, "clientLinks", token, "secret", "access"), {
+    ownerId: uid,
+    clientId: "",
+    phoneKey: "",
+    type: "primeiro"
+  });
+  await setDoc(doc(db, "clientLinks", token), {
+    type: "primeiro",
+    clinicName: clinicName || "Clínica",
+    clinicPhone: normalizedPhone,
+    status: "ativo",
+    createdAt: serverTimestamp()
+  });
+  await setDoc(doc(db, "users", uid, "shareLinks", token), {
+    token,
+    type: "primeiro",
+    clientId: "",
+    clientName: "",
+    status: "ativo",
+    imported: false,
+    clinicPhone: normalizedPhone,
+    createdAt: serverTimestamp()
+  });
+  return token;
+}
+
+export async function importFirstContactRequest(uid, token, requestId, data) {
+  if (data?.hidden === true) {
+    return false;
+  }
+  const clientName = String(data?.clientName || "").trim();
+  const date = String(data?.date || "");
+  if (!clientName || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return false;
+  }
+  const appointmentRef = doc(db, "users", uid, "appointments", `pedido-${requestId}`);
+  const status = ["pendente", "aprovado", "recusado", "remarcacao"].includes(data.status)
+    ? data.status
+    : "pendente";
+  return runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(appointmentRef);
+    if (existing.exists()) {
+      return false;
+    }
+    transaction.set(appointmentRef, {
+      client: clientName,
+      service: FIRST_CONTACT_SERVICE,
+      date,
+      time: "",
+      notes: "",
+      status,
+      clientPhone: String(data.clientPhone || ""),
+      period: String(data.period || ""),
+      reasons: Array.isArray(data.reasons) ? data.reasons.filter((item) => typeof item === "string") : [],
+      requestId,
+      shareToken: token,
+      suggestedDate: typeof data.suggestedDate === "string" ? data.suggestedDate : "",
+      rescheduleReason: typeof data.rescheduleReason === "string" ? data.rescheduleReason : "",
+      createdAt: serverTimestamp()
+    });
+    return true;
+  });
 }
 
 export async function updateEvolutionLink({

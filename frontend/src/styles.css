@@ -136,6 +136,12 @@ select:focus {
   color: #ffffff;
 }
 
+a.primary-btn {
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
+}
+
 .primary-btn:disabled,
 .secondary-btn:disabled {
   opacity: 0.55;
@@ -509,8 +515,13 @@ label.logo-file-btn input {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   background: #fbfcfd;
+}
+
+.list li.is-muted {
+  opacity: 0.72;
 }
 
 .list p {
@@ -627,6 +638,18 @@ label.logo-file-btn input {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.agenda-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agenda-notice {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .agenda-switch {
@@ -761,6 +784,73 @@ label.logo-file-btn input {
 
 .month-day.is-selected.has-appointments .month-day-dot {
   background: #ffffff;
+}
+
+.month-day.has-pending .month-day-dot {
+  background: #c06b19;
+}
+
+.month-day.is-selected.has-pending .month-day-dot {
+  background: #ffffff;
+}
+
+.booking-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #f4efe4;
+  color: #8a5a12;
+}
+
+.booking-badge.is-aprovado {
+  background: #e7f3ef;
+  color: #24695c;
+}
+
+.booking-badge.is-recusado {
+  background: #f4e8e8;
+  color: #8d3b3b;
+}
+
+.booking-badge.is-remarcacao {
+  background: #e8eef8;
+  color: #2d4c86;
+}
+
+.booking-review {
+  display: grid;
+  gap: 14px;
+}
+
+.booking-details {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.booking-details div {
+  display: grid;
+  gap: 2px;
+}
+
+.booking-details dt {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8b98a5;
+}
+
+.booking-details dd {
+  margin: 0;
+  color: #1d2b33;
+}
+
+.booking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .day-heading {
@@ -2432,6 +2522,10 @@ h5 {
   .agenda-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .agenda-toolbar-actions {
+    display: grid;
   }
 
   .agenda-switch {
