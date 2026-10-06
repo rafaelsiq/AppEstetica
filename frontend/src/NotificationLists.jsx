@@ -215,7 +215,7 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
         </button>
       </div>
       <p className="muted-text">
-        Escolha a frequência, quem recebe e o conteúdo. A cliente vê o aviso ao abrir o acompanhamento, se tiver permitido notificações neste celular.
+        Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso aparece no acompanhamento. Se a cliente permitiu notificações, o celular também mostra.
       </p>
       <ul className="list">
         {lists.length === 0 ? <li className="empty">Nenhuma lista criada.</li> : null}

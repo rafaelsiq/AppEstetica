@@ -959,7 +959,7 @@ export default function ClientPortal() {
   if (link.status === "respondido" || link.status === "importado") {
     return (
       <>
-        {link.type === "acompanhamento" ? <ClientNotices token={token} active /> : null}
+        {link.type === "acompanhamento" || link.type === "anamnese" || link.type === "consentimento" ? <ClientNotices token={token} active /> : null}
         <main className="quiz-page">
           <section className="quiz-card">
             {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
@@ -974,14 +974,19 @@ export default function ClientPortal() {
             </p>
           </section>
         </main>
-        {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} /> : null}
+        {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} unlocked /> : null}
       </>
     );
   }
 
   if (link.type === "evolucao") {
     if (!evolution && restoringAccess) {
-      return <main className="quiz-page"><p>Carregando...</p></main>;
+      return (
+        <>
+          <ClientNotices token={token} active />
+          <main className="quiz-page"><p>Carregando...</p></main>
+        </>
+      );
     }
     if (evolution) {
       return (
@@ -999,6 +1004,7 @@ export default function ClientPortal() {
     }
     return (
       <>
+      <ClientNotices token={token} active />
       <main className="evolution-page">
         <section className="quiz-card evolution-lock">
           <ClinicLogo src={link.logoDataUrl} />
@@ -1030,6 +1036,8 @@ export default function ClientPortal() {
   if (link.type === "consentimento") {
     const term = link.termText || IMAGE_CONSENT_TEXT;
     return (
+      <>
+      <ClientNotices token={token} active />
       <main className="quiz-page">
         <section className="quiz-card">
           <p className="quiz-kicker">{link.clinicName}</p>
@@ -1068,6 +1076,7 @@ export default function ClientPortal() {
           </button>
         </section>
       </main>
+      </>
     );
   }
 
@@ -1076,7 +1085,7 @@ export default function ClientPortal() {
 
   return (
     <>
-    {link.type === "acompanhamento" ? <ClientNotices token={token} active /> : null}
+    {link.type === "acompanhamento" || link.type === "anamnese" ? <ClientNotices token={token} active /> : null}
     <main className="quiz-page">
       <section className="quiz-card">
         {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
@@ -1142,7 +1151,7 @@ export default function ClientPortal() {
         </div>
       </section>
     </main>
-    {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} /> : null}
+    {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} unlocked /> : null}
     </>
   );
 }

@@ -75,10 +75,12 @@ export function targetClientIds(list, clients) {
   return all;
 }
 
+const NOTICE_LINK_TYPES = new Set(["anamnese", "acompanhamento", "evolucao", "consentimento"]);
+
 export function targetTokens(list, clients, shareLinks) {
   const ids = new Set(targetClientIds(list, clients));
   const tokens = (shareLinks || [])
-    .filter((link) => ids.has(link.clientId) && (link.type === "evolucao" || link.type === "acompanhamento"))
+    .filter((link) => ids.has(link.clientId) && NOTICE_LINK_TYPES.has(link.type))
     .map((link) => link.token || link.id);
   return [...new Set(tokens)];
 }
@@ -116,6 +118,50 @@ function minutesOf(time) {
     return null;
   }
   return hours * 60 + minutes;
+}
+
+export function nextNoticeAt(notice, now = new Date()) {
+  if (!notice || notice.active === false) {
+    return null;
+  }
+  const scheduled = minutesOf(notice.time);
+  if (scheduled == null) {
+    return null;
+  }
+  const hours = Math.floor(scheduled / 60);
+  const minutes = scheduled % 60;
+  if (notice.frequency === "once") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(notice.date || "")) {
+      return null;
+    }
+    const [year, month, day] = notice.date.split("-").map(Number);
+    const at = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    return at.getTime() > now.getTime() ? at : null;
+  }
+  for (let offset = 0; offset < 370; offset += 1) {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const key = dateKey(date);
+    if (notice.date && key < notice.date) {
+      continue;
+    }
+    if (notice.until && key > notice.until) {
+      return null;
+    }
+    if (notice.frequency === "weekly" && !(notice.weekdays || []).map(Number).includes(date.getDay())) {
+      continue;
+    }
+    if (notice.frequency === "monthly" && date.getDate() !== Number(notice.monthDay)) {
+      continue;
+    }
+    if (notice.frequency !== "daily" && notice.frequency !== "weekly" && notice.frequency !== "monthly") {
+      return null;
+    }
+    const at = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes, 0, 0);
+    if (at.getTime() > now.getTime()) {
+      return at;
+    }
+  }
+  return null;
 }
 
 export function occurrenceKey(notice, now = new Date()) {
