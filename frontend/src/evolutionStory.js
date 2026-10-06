@@ -319,22 +319,22 @@ export function renderEvolutionCanvas({
   const handle = clinicHandle(instagram);
   const bottom = cardY + cardH - 36;
   const footerH = handle ? 96 : 52;
-  const chartMin = charts.length > 2 ? 340 : 280;
 
   const measureBlocks = (lineCap) => blocks.map((block) => {
     ctx.font = `600 ${block.size}px sans-serif`;
-    const lines = wrapLines(ctx, block.text, textW - 48, block.title ? lineCap : block.lines);
+    const lines = wrapLines(ctx, block.text, textW - 48, block.title ? lineCap : Math.min(block.lines, lineCap));
     const height = (block.title ? 36 : 8) + lines.length * (block.size + 10) + 28;
     return { ...block, lines, height };
   });
 
   const blockSpaceOf = (items) => items.reduce((sum, block) => sum + block.height + 16, 0);
+  const chartFloor = charts.length > 2 ? 220 : charts.length ? 180 : 0;
   let drawnBlocks = measureBlocks(3);
-  if (charts.length && cursor + blockSpaceOf(drawnBlocks) + chartMin + footerH > bottom) {
+  if (chartFloor && cursor + blockSpaceOf(drawnBlocks) + chartFloor + footerH > bottom) {
     drawnBlocks = measureBlocks(2);
   }
-  while (charts.length && drawnBlocks.length && cursor + blockSpaceOf(drawnBlocks) + 220 + footerH > bottom) {
-    drawnBlocks.pop();
+  if (chartFloor && cursor + blockSpaceOf(drawnBlocks) + chartFloor + footerH > bottom) {
+    drawnBlocks = measureBlocks(1);
   }
 
   drawnBlocks.forEach((block) => {
@@ -406,15 +406,140 @@ export function canvasToBlob(canvas) {
   });
 }
 
-export async function downloadEvolutionImage(blob) {
+export async function downloadEvolutionImage(blob, filename = "minha-evolucao.png") {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "minha-evolucao.png";
+  anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+const SHARE_OPTIONS = [
+  ["highlight", "Destaque", "destaque"],
+  ["comments", "Recado", "recado"],
+  ["homeCare", "Cuidados", "cuidados"],
+  ["wellness", "Bem-estar", "bem-estar"],
+  ["pain", "Dor", "dor"],
+  ["stress", "Estresse", "estresse"],
+  ["sleep", "Sono", "sono"]
+];
+
+function emptyShareInclude() {
+  return {
+    highlight: false,
+    comments: false,
+    homeCare: false,
+    wellness: false,
+    pain: false,
+    stress: false,
+    sleep: false
+  };
+}
+
+export function buildEvolutionSlides({ highlight, comments, homeCare, hasChart }) {
+  const available = {
+    highlight: Boolean(highlight),
+    comments: Boolean(comments),
+    homeCare: Boolean(homeCare),
+    wellness: Boolean(hasChart),
+    pain: Boolean(hasChart),
+    stress: Boolean(hasChart),
+    sleep: Boolean(hasChart)
+  };
+  const keys = SHARE_OPTIONS.map(([key]) => key).filter((key) => available[key]);
+  const slides = [];
+  if (!keys.length) {
+    return slides;
+  }
+  const all = emptyShareInclude();
+  keys.forEach((key) => {
+    all[key] = true;
+  });
+  slides.push({ title: "Todas as opções", file: "evolucao-todas.png", include: all });
+  const withoutNote = emptyShareInclude();
+  keys.filter((key) => key !== "comments").forEach((key) => {
+    withoutNote[key] = true;
+  });
+  slides.push({ title: "Todas as opções, sem o recado", file: "evolucao-sem-recado.png", include: withoutNote });
+  if (available.stress && available.sleep) {
+    slides.push({
+      title: "Estresse e sono",
+      file: "evolucao-estresse-sono.png",
+      include: { ...emptyShareInclude(), stress: true, sleep: true }
+    });
+  }
+  SHARE_OPTIONS.forEach(([key, label, file]) => {
+    if (!available[key]) {
+      return;
+    }
+    slides.push({
+      title: label,
+      file: `evolucao-${file}.png`,
+      include: { ...emptyShareInclude(), [key]: true }
+    });
+  });
+  return slides;
+}
+
+function zipCrc32(bytes) {
+  let crc = ~0;
+  for (let index = 0; index < bytes.length; index += 1) {
+    crc ^= bytes[index];
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return ~crc >>> 0;
+}
+
+export function zipStoredFiles(files) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  files.forEach((file) => {
+    const name = new TextEncoder().encode(file.name);
+    const data = file.data;
+    const crc = zipCrc32(data);
+    const local = new Uint8Array(30 + name.length + data.length);
+    const localView = new DataView(local.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, data.length, true);
+    localView.setUint32(22, data.length, true);
+    localView.setUint16(26, name.length, true);
+    local.set(name, 30);
+    local.set(data, 30 + name.length);
+    locals.push(local);
+
+    const central = new Uint8Array(46 + name.length);
+    const centralView = new DataView(central.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, data.length, true);
+    centralView.setUint32(24, data.length, true);
+    centralView.setUint16(28, name.length, true);
+    centralView.setUint32(42, offset, true);
+    central.set(name, 46);
+    centrals.push(central);
+    offset += local.length;
+  });
+  const centralSize = centrals.reduce((sum, item) => sum + item.length, 0);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+  return new Blob([...locals, ...centrals, end], { type: "application/zip" });
 }
 
 export async function shareEvolutionImage(blob, text) {

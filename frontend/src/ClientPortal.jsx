@@ -19,6 +19,7 @@ import {
 } from "./firstContact";
 import { IMAGE_CONSENT_TEXT } from "./imageConsent";
 import {
+  buildEvolutionSlides,
   canvasToBlob,
   downloadEvolutionImage,
   evolutionSeries,
@@ -26,7 +27,7 @@ import {
   metricTrend,
   renderEvolutionCanvas,
   sanitizeEvolutionStory,
-  shareEvolutionImage
+  zipStoredFiles
 } from "./evolutionStory";
 
 function toneColor(value) {
@@ -118,6 +119,176 @@ function EvolutionStat({ label, value, trend }) {
   );
 }
 
+function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicName, clientName, checkpoints }) {
+  const [index, setIndex] = useState(0);
+  const [images, setImages] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const dragStart = useRef(0);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    let cancelled = false;
+    const urls = [];
+    setIndex(0);
+    setImages([]);
+    setMessage("");
+    setBusy(true);
+    (async () => {
+      try {
+        const built = [];
+        for (const slide of slides) {
+          const canvas = renderEvolutionCanvas({
+            clinicName: evolution?.clinicName || clinicName,
+            clientFirstName: clientName,
+            highlight: story.highlight,
+            comments: story.comments,
+            homeCare: story.homeCare,
+            checkpoints,
+            include: slide.include,
+            instagram: evolution?.instagram || ""
+          });
+          const blob = await canvasToBlob(canvas);
+          if (cancelled) {
+            return;
+          }
+          const url = URL.createObjectURL(blob);
+          urls.push(url);
+          built.push({ ...slide, blob, url });
+        }
+        if (!cancelled) {
+          setImages(built);
+        }
+      } catch (imageError) {
+        if (!cancelled) {
+          setMessage("Não foi possível gerar as imagens.");
+        }
+      } finally {
+        if (!cancelled) {
+          setBusy(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [open, slides, story, evolution, clinicName, clientName, checkpoints]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+      if (event.key === "ArrowRight") {
+        setIndex((current) => Math.min(images.length - 1, current + 1));
+      }
+      if (event.key === "ArrowLeft") {
+        setIndex((current) => Math.max(0, current - 1));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, images.length]);
+
+  if (!open) {
+    return null;
+  }
+
+  const current = images[index];
+  const total = images.length || slides.length;
+
+  const downloadCurrent = () => {
+    if (!current?.blob) {
+      return;
+    }
+    downloadEvolutionImage(current.blob, current.file);
+    setMessage("Imagem baixada. Publique a partir da galeria.");
+  };
+
+  const downloadAll = async () => {
+    if (!images.length) {
+      return;
+    }
+    const files = await Promise.all(images.map(async (item) => ({
+      name: item.file,
+      data: new Uint8Array(await item.blob.arrayBuffer())
+    })));
+    downloadEvolutionImage(zipStoredFiles(files), "evolucao-redes.zip");
+    setMessage("Todas as imagens foram baixadas em um arquivo só.");
+  };
+
+  return (
+    <div
+      className="client-modal-backdrop evolution-carousel-backdrop"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className="evolution-carousel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Imagens para as redes"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="profile-modal-header">
+          <div>
+            <h4>Imagem para as redes</h4>
+            <p>{total ? `${Math.min(index + 1, total)} de ${total}` : "Preparando"}{current ? ` · ${current.title}` : ""}</p>
+          </div>
+          <button type="button" className="secondary-btn" onClick={onClose}>Fechar</button>
+        </header>
+        {busy ? <p>Preparando as imagens...</p> : null}
+        {message ? <p className="evolution-share-message">{message}</p> : null}
+        {!busy && !images.length ? <p>Ainda não há informações suficientes para montar as imagens.</p> : null}
+        {current ? (
+          <div
+            className="evolution-carousel-stage"
+            onPointerDown={(event) => {
+              dragStart.current = event.clientX;
+            }}
+            onPointerUp={(event) => {
+              const delta = event.clientX - dragStart.current;
+              if (delta > 48) {
+                setIndex((value) => Math.max(0, value - 1));
+              } else if (delta < -48) {
+                setIndex((value) => Math.min(images.length - 1, value + 1));
+              }
+            }}
+          >
+            <img src={current.url} alt={current.title} />
+          </div>
+        ) : null}
+        <div className="evolution-carousel-nav">
+          <button type="button" className="secondary-btn" onClick={() => setIndex((value) => Math.max(0, value - 1))} disabled={index === 0 || !images.length}>
+            Anterior
+          </button>
+          <p>{current?.title || ""}</p>
+          <button type="button" className="secondary-btn" onClick={() => setIndex((value) => Math.min(images.length - 1, value + 1))} disabled={!images.length || index >= images.length - 1}>
+            Próxima
+          </button>
+        </div>
+        <div className="evolution-carousel-actions">
+          <button type="button" className="primary-btn" onClick={downloadCurrent} disabled={!current}>
+            Baixar esta
+          </button>
+          <button type="button" className="secondary-btn" onClick={downloadAll} disabled={images.length < 2}>
+            Baixar todas
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function EvolutionView({ evolution, fallbackName, clinicName }) {
   const story = sanitizeEvolutionStory(evolution || {});
   const series = evolutionSeries(evolution?.checkpoints || []);
@@ -125,106 +296,14 @@ function EvolutionView({ evolution, fallbackName, clinicName }) {
   const hasChart = series.points.length >= 2;
   const hasStory = Boolean(story.comments || story.homeCare);
   const careLines = story.homeCare.split("\n").map((line) => line.trim()).filter(Boolean);
-  const [pick, setPick] = useState({
-    highlight: Boolean(story.highlight),
-    comments: false,
-    homeCare: false,
-    wellness: hasChart,
-    pain: hasChart,
-    stress: false,
-    sleep: false
-  });
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [imageBlob, setImageBlob] = useState(null);
-  const [imageMessage, setImageMessage] = useState("");
-  const [imageBusy, setImageBusy] = useState(false);
-  const previewRef = useRef("");
-
-  useEffect(() => () => {
-    if (previewRef.current) {
-      URL.revokeObjectURL(previewRef.current);
-    }
-  }, []);
-
-  const options = [
-    ["highlight", "Destaque", Boolean(story.highlight)],
-    ["comments", "Recado", Boolean(story.comments)],
-    ["homeCare", "Cuidados", Boolean(story.homeCare)],
-    ["wellness", "Bem-estar", hasChart],
-    ["pain", "Dor", hasChart],
-    ["stress", "Estresse", hasChart],
-    ["sleep", "Sono", hasChart]
-  ];
-  const selectedCount = options.filter(([key, , available]) => available && pick[key]).length;
+  const [shareOpen, setShareOpen] = useState(false);
   const range = series.labels.length > 1 ? `${series.labels[0]} a ${series.labels[series.labels.length - 1]}` : series.labels[0] || "";
-
-  const clearPreview = () => {
-    if (previewRef.current) {
-      URL.revokeObjectURL(previewRef.current);
-      previewRef.current = "";
-    }
-    setPreviewUrl("");
-    setImageBlob(null);
-  };
-
-  const togglePick = (key) => {
-    clearPreview();
-    setImageMessage("");
-    setPick((previous) => ({ ...previous, [key]: !previous[key] }));
-  };
-
-  const createImage = async () => {
-    setImageBusy(true);
-    setImageMessage("");
-    try {
-      const canvas = renderEvolutionCanvas({
-        clinicName: evolution?.clinicName || clinicName,
-        clientFirstName: name,
-        highlight: story.highlight,
-        comments: story.comments,
-        homeCare: story.homeCare,
-        checkpoints: series.points,
-        include: pick,
-        instagram: evolution?.instagram || ""
-      });
-      const blob = await canvasToBlob(canvas);
-      const url = URL.createObjectURL(blob);
-      if (previewRef.current) {
-        URL.revokeObjectURL(previewRef.current);
-      }
-      previewRef.current = url;
-      setPreviewUrl(url);
-      setImageBlob(blob);
-    } catch (imageError) {
-      setImageMessage("Não foi possível gerar a imagem.");
-    } finally {
-      setImageBusy(false);
-    }
-  };
-
-  const downloadImage = async () => {
-    if (!imageBlob) {
-      return;
-    }
-    await downloadEvolutionImage(imageBlob);
-    setImageMessage("Imagem baixada. Publique a partir da galeria.");
-  };
-
-  const shareImage = async () => {
-    if (!imageBlob) {
-      return;
-    }
-    try {
-      const result = await shareEvolutionImage(imageBlob, story.highlight || `Evolução na ${clinicName || "clínica"}`);
-      setImageMessage(result === "shared" ? "Escolha onde publicar." : "Seu navegador baixou a imagem. Publique a partir da galeria.");
-    } catch (shareError) {
-      if (shareError?.name === "AbortError") {
-        setImageMessage("");
-        return;
-      }
-      setImageMessage("Não foi possível compartilhar. Baixe a imagem e publique da galeria.");
-    }
-  };
+  const slides = useMemo(() => buildEvolutionSlides({
+    highlight: story.highlight,
+    comments: story.comments,
+    homeCare: story.homeCare,
+    hasChart
+  }), [story.highlight, story.comments, story.homeCare, hasChart]);
 
   const showTrend = series.points.length >= 2;
 
@@ -236,7 +315,9 @@ function EvolutionView({ evolution, fallbackName, clinicName }) {
           <h1>Sua evolução, {name}</h1>
           {story.highlight ? <p className="evolution-highlight">{story.highlight}</p> : null}
           {range ? <p className="evolution-meta">{series.points.length} registros · {range}</p> : null}
-          <a className="primary-btn evolution-share-jump" href="#imagem-redes">Imagem para as redes</a>
+          <button type="button" className="primary-btn evolution-share-jump" onClick={() => setShareOpen(true)}>
+            Imagem para as redes
+          </button>
         </header>
 
         {series.points.length ? (
@@ -281,38 +362,17 @@ function EvolutionView({ evolution, fallbackName, clinicName }) {
           </div>
         </div>
 
-        <section className="evolution-share" id="imagem-redes">
-          <h2>Imagem para as redes</h2>
-          <p>Escolha o que entra na imagem. Ela sai quadrada, pronta para publicar.</p>
-          <div className="evolution-share-options">
-            {options.map(([key, label, available]) => (
-              <label key={key} className={available ? "" : "is-disabled"}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(available && pick[key])}
-                  disabled={!available}
-                  onChange={() => togglePick(key)}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-          {!hasChart ? <p className="field-hint">Os gráficos entram quando houver pelo menos duas datas.</p> : null}
-          <div className="evolution-share-actions">
-            <button type="button" className="primary-btn" onClick={createImage} disabled={imageBusy || selectedCount === 0}>
-              {imageBusy ? "Criando..." : "Criar imagem"}
-            </button>
-            <button type="button" className="secondary-btn" onClick={downloadImage} disabled={!imageBlob}>
-              Baixar
-            </button>
-            <button type="button" className="secondary-btn" onClick={shareImage} disabled={!imageBlob}>
-              Compartilhar
-            </button>
-          </div>
-          {imageMessage ? <p className="evolution-share-message">{imageMessage}</p> : null}
-          {previewUrl ? <img className="evolution-share-preview" src={previewUrl} alt="Prévia da imagem para as redes" /> : null}
-        </section>
       </section>
+      <EvolutionShareModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        slides={slides}
+        story={story}
+        evolution={evolution}
+        clinicName={clinicName}
+        clientName={name}
+        checkpoints={series.points}
+      />
     </main>
   );
 }
