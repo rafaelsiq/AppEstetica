@@ -19,6 +19,7 @@ import {
 import { auth, db } from "./firebase";
 import { phoneKey } from "./clientQuiz";
 import { createShareLink, importSubmittedLink, shareUrl, updateEvolutionLink } from "./shareLinks";
+import { consentDecisionLabel } from "./imageConsent";
 
 const TABS = {
   INICIO: "inicio",
@@ -32,7 +33,8 @@ const UNDETERMINED_SERVICE_LABEL = "Serviço indeterminado";
 const CLIENT_VIEWS = {
   ANAMNESE: "anamnese",
   FOLLOWUP: "followup",
-  CHARTS: "charts"
+  CHARTS: "charts",
+  TERMS: "terms"
 };
 
 const PAIN_AREAS = [
@@ -2178,6 +2180,10 @@ export default function App() {
     () => selectedClientLinks.find((link) => link.type === "evolucao") || null,
     [selectedClientLinks]
   );
+  const consentLinks = useMemo(
+    () => selectedClientLinks.filter((link) => link.type === "consentimento"),
+    [selectedClientLinks]
+  );
 
   useEffect(() => {
     setEvolutionComment(evolutionLink?.comments || "");
@@ -2185,7 +2191,7 @@ export default function App() {
 
   const pendingClientLinkIds = useMemo(
     () => shareLinks
-      .filter((link) => !link.imported && link.status !== "importado" && (link.type === "anamnese" || link.type === "acompanhamento"))
+      .filter((link) => !link.imported && link.status !== "importado" && (link.type === "anamnese" || link.type === "acompanhamento" || link.type === "consentimento"))
       .map((link) => link.id)
       .sort()
       .join(","),
@@ -2451,7 +2457,13 @@ export default function App() {
     if (!user || !selectedClient || shareBusyRef.current) {
       return;
     }
-    const scope = type === "anamnese" ? "anamnese" : type === "evolucao" ? "charts" : "followup";
+    const scope = type === "anamnese"
+      ? "anamnese"
+      : type === "evolucao"
+        ? "charts"
+        : type === "consentimento"
+          ? "consent"
+          : "followup";
     const busyKey = type === "acompanhamento" ? `followup-${moment}` : scope;
     shareBusyRef.current = true;
     setShareBusy(busyKey);
@@ -3509,6 +3521,7 @@ export default function App() {
   const isAnamneseViewOpen = selectedClientView === CLIENT_VIEWS.ANAMNESE;
   const isFollowupViewOpen = selectedClientView === CLIENT_VIEWS.FOLLOWUP;
   const isChartsViewOpen = selectedClientView === CLIENT_VIEWS.CHARTS;
+  const isTermsViewOpen = selectedClientView === CLIENT_VIEWS.TERMS;
   const followupChartCards = [
     <AngleProgressChart key="angle" series={angleChartSeries} />,
     <ProgressLineChart
@@ -4429,6 +4442,13 @@ export default function App() {
                           onCreate={() => handleCreateClientLink("acompanhamento", "depois")}
                           onCopy={() => copyShareLink(followupLinks.find((link) => link.moment === "depois").id, "followup")}
                         />
+                        <RecordLinkRow
+                          label="Uso de imagem"
+                          link={consentLinks[0]}
+                          busy={shareBusy === "consent"}
+                          onCreate={() => handleCreateClientLink("consentimento")}
+                          onCopy={() => copyShareLink(consentLinks[0].id, "consent")}
+                        />
                         <div className="record-menu-row">
                           <span>Evolução</span>
                           <span className="record-menu-row-actions">
@@ -4503,6 +4523,15 @@ export default function App() {
                     onClick={() => setSelectedClientView(CLIENT_VIEWS.CHARTS)}
                   >
                     Gráficos
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={isTermsViewOpen}
+                    className={isTermsViewOpen ? "client-modal-tab active" : "client-modal-tab"}
+                    onClick={() => setSelectedClientView(CLIENT_VIEWS.TERMS)}
+                  >
+                    Termos e Consentimentos
                   </button>
                 </div>
                 <div className="client-modal-content">
@@ -5317,6 +5346,45 @@ export default function App() {
                     />
                     {followupChartCards}
                   </div>
+                </section>
+              ) : null}
+
+              {isTermsViewOpen ? (
+                <section className="followup-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h4>Termos e Consentimentos</h4>
+                      <p>Autorização de uso de imagem enviada pela cliente.</p>
+                    </div>
+                  </div>
+                  {consentLinks.length === 0 ? (
+                    <p className="empty">Nenhum termo enviado. O link fica no menu do prontuário.</p>
+                  ) : (
+                    <ul className="consent-list">
+                      {consentLinks.map((link) => {
+                        const decision = consentDecisionLabel(link);
+                        const when = getTimestampMillis(link.respondedAt || link.createdAt);
+                        return (
+                          <li key={link.id} className="consent-card">
+                            <div className="consent-card-header">
+                              <strong className={
+                                link.imageUse === "negado"
+                                  ? "consent-status is-denied"
+                                  : link.imageUse === "autorizado"
+                                    ? "consent-status"
+                                    : "consent-status is-waiting"
+                              }>
+                                {decision}
+                              </strong>
+                              {when ? <span>{new Date(when).toLocaleDateString("pt-BR")}</span> : null}
+                            </div>
+                            {link.signatureName ? <p>Confirmado por {link.signatureName}</p> : null}
+                            {link.termText ? <p className="consent-term">{link.termText}</p> : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </section>
               ) : null}
                 </div>

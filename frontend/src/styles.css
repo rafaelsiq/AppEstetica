@@ -945,6 +945,51 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.consent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.consent-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e6eef1;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.consent-card p {
+  margin: 0;
+  color: #54656f;
+}
+
+.consent-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.consent-status {
+  color: #24695c;
+}
+
+.consent-status.is-denied {
+  color: #9e2525;
+}
+
+.consent-status.is-waiting {
+  color: #8b98a5;
+}
+
+.consent-term {
+  white-space: pre-wrap;
+}
+
 .client-modal {
   position: relative;
   width: min(1080px, 100%);
@@ -978,7 +1023,7 @@ select:focus {
 
 .client-modal-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   padding: 0 8px;
   border-bottom: 1px solid #d7dde3;
@@ -997,7 +1042,7 @@ select:focus {
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
   cursor: pointer;
 }
 

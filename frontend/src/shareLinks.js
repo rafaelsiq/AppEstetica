@@ -1,6 +1,7 @@
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { phoneKey, sanitizeAnamneseAnswers, sanitizeFollowupAnswers } from "./clientQuiz";
+import { IMAGE_CONSENT_TEXT, IMAGE_CONSENT_VERSION } from "./imageConsent";
 
 export function shareUrl(token) {
   return `${window.location.origin}/c/${token}`;
@@ -54,6 +55,9 @@ export async function createShareLink({
     clinicName: clinicName || "Clínica",
     status: type === "evolucao" ? "ativo" : "aberto",
     moment: moment || "",
+    ...(type === "consentimento"
+      ? { termVersion: IMAGE_CONSENT_VERSION, termText: IMAGE_CONSENT_TEXT }
+      : {}),
     createdAt: serverTimestamp()
   });
 
@@ -75,6 +79,9 @@ export async function createShareLink({
     comments: comments.trim(),
     status: type === "evolucao" ? "ativo" : "aberto",
     imported: false,
+    ...(type === "consentimento"
+      ? { termVersion: IMAGE_CONSENT_VERSION, termText: IMAGE_CONSENT_TEXT }
+      : {}),
     createdAt: serverTimestamp()
   });
 
@@ -113,6 +120,27 @@ export async function importSubmittedLink(uid, link, helpers) {
     return;
   }
   const data = publicSnap.data();
+
+  if (data.type === "consentimento") {
+    const imageUse = data.answers?.imageUse === "autorizado"
+      ? "autorizado"
+      : data.answers?.imageUse === "negado"
+        ? "negado"
+        : "";
+    if (!imageUse) {
+      return;
+    }
+    await updateDoc(doc(db, "users", uid, "shareLinks", link.id), {
+      imported: true,
+      status: "importado",
+      imageUse,
+      signatureName: String(data.answers?.signatureName || "").trim().slice(0, 80),
+      termText: typeof data.termText === "string" ? data.termText : "",
+      termVersion: typeof data.termVersion === "string" ? data.termVersion : "",
+      respondedAt: serverTimestamp()
+    });
+    return;
+  }
 
   if (data.type === "anamnese") {
     const answers = sanitizeAnamneseAnswers(data.answers || {});

@@ -40,6 +40,15 @@ service cloud.firestore {
         && answers.keys().hasOnly(["painLevel", "stressLevel", "sleepHours", "sessionType"]);
     }
 
+    function consentAnswersOk(answers) {
+      return answers is map
+        && answers.keys().hasOnly(["imageUse", "signatureName"])
+        && answers.imageUse in ["autorizado", "negado"]
+        && answers.signatureName is string
+        && answers.signatureName.size() > 0
+        && answers.signatureName.size() <= 80;
+    }
+
     match /users/{userId}/{document=**} {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
@@ -48,7 +57,7 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create: if isLinkOwner(token)
-        && request.resource.data.type in ["anamnese", "acompanhamento", "evolucao"]
+        && request.resource.data.type in ["anamnese", "acompanhamento", "evolucao", "consentimento"]
         && !request.resource.data.keys().hasAny(["phoneKey", "observations", "comments", "checkpoints", "ownerId", "clientId", "answers"]);
       allow update: if isLinkOwner(token)
         || (
@@ -64,6 +73,13 @@ service cloud.firestore {
           && request.resource.data.status == "respondido"
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["answers", "status", "submittedAt"])
           && followupAnswersOk(request.resource.data.answers)
+        )
+        || (
+          resource.data.status == "aberto"
+          && resource.data.type == "consentimento"
+          && request.resource.data.status == "respondido"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["answers", "status", "submittedAt"])
+          && consentAnswersOk(request.resource.data.answers)
         );
       allow delete: if isLinkOwner(token);
 

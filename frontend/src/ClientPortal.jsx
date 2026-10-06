@@ -9,6 +9,7 @@ import {
   sanitizeAnamneseAnswers,
   sanitizeFollowupAnswers
 } from "./clientQuiz";
+import { IMAGE_CONSENT_TEXT } from "./imageConsent";
 
 function formatDatePt(dateValue) {
   if (!dateValue) {
@@ -129,6 +130,8 @@ export default function ClientPortal() {
   const [phone, setPhone] = useState("");
   const [evolution, setEvolution] = useState(null);
   const [phoneError, setPhoneError] = useState("");
+  const [imageChoice, setImageChoice] = useState("");
+  const [signatureName, setSignatureName] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -193,6 +196,38 @@ export default function ClientPortal() {
     });
   };
 
+  const submitConsent = async () => {
+    const name = signatureName.trim();
+    if (!link || submitting) {
+      return;
+    }
+    if (imageChoice !== "autorizado" && imageChoice !== "negado") {
+      setError("Escolha se autoriza o uso da imagem.");
+      return;
+    }
+    if (name.length < 2) {
+      setError("Confirme seu nome para registrar a resposta.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      await updateDoc(doc(db, "clientLinks", token), {
+        answers: {
+          imageUse: imageChoice,
+          signatureName: name.slice(0, 80)
+        },
+        status: "respondido",
+        submittedAt: serverTimestamp()
+      });
+      setLink((previous) => ({ ...previous, status: "respondido" }));
+    } catch (submitError) {
+      setError("Não foi possível enviar. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submitQuiz = async () => {
     if (!link || submitting) {
       return;
@@ -248,7 +283,11 @@ export default function ClientPortal() {
         <section className="quiz-card">
           <p className="quiz-kicker">{link.clinicName}</p>
           <h1>Obrigado, {link.clientFirstName}!</h1>
-          <p>Suas respostas chegaram na clínica. As observações da profissional continuam só com ela.</p>
+          <p>
+            {link.type === "consentimento"
+              ? "Sua resposta sobre o uso de imagem chegou na clínica."
+              : "Suas respostas chegaram na clínica. As observações da profissional continuam só com ela."}
+          </p>
         </section>
       </main>
     );
@@ -290,6 +329,50 @@ export default function ClientPortal() {
               </form>
             </>
           )}
+        </section>
+      </main>
+    );
+  }
+
+  if (link.type === "consentimento") {
+    const term = link.termText || IMAGE_CONSENT_TEXT;
+    return (
+      <main className="quiz-page">
+        <section className="quiz-card">
+          <p className="quiz-kicker">{link.clinicName}</p>
+          <h1>Uso de imagem</h1>
+          {term.split("\n\n").map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+          <div className="quiz-options">
+            <button
+              type="button"
+              className={imageChoice === "autorizado" ? "quiz-option active" : "quiz-option"}
+              onClick={() => setImageChoice("autorizado")}
+            >
+              Autorizo o uso da imagem
+            </button>
+            <button
+              type="button"
+              className={imageChoice === "negado" ? "quiz-option active" : "quiz-option"}
+              onClick={() => setImageChoice("negado")}
+            >
+              Não autorizo
+            </button>
+          </div>
+          <label>
+            Nome completo
+            <input
+              value={signatureName}
+              onChange={(event) => setSignatureName(event.target.value)}
+              placeholder="Confirme seu nome"
+              maxLength={80}
+            />
+          </label>
+          {error ? <p className="error-text">{error}</p> : null}
+          <button type="button" className="primary-btn" onClick={submitConsent} disabled={submitting}>
+            {submitting ? "Enviando..." : "Confirmar"}
+          </button>
         </section>
       </main>
     );
