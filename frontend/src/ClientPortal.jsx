@@ -20,6 +20,31 @@ import {
   whatsAppUrl
 } from "./firstContact";
 import { IMAGE_CONSENT_TEXT } from "./imageConsent";
+
+function accessStorageKey(token) {
+  return `clinica-acesso:${token}`;
+}
+
+function readSavedPhoneKey(token) {
+  try {
+    const raw = localStorage.getItem(accessStorageKey(token));
+    if (!raw) {
+      return "";
+    }
+    const data = JSON.parse(raw);
+    return phoneKey(data?.phoneKey || "");
+  } catch (error) {
+    return "";
+  }
+}
+
+function savePhoneKey(token, key) {
+  localStorage.setItem(accessStorageKey(token), JSON.stringify({ phoneKey: key }));
+}
+
+function clearSavedPhoneKey(token) {
+  localStorage.removeItem(accessStorageKey(token));
+}
 import {
   buildEvolutionSlides,
   canvasToBlob,
@@ -603,6 +628,7 @@ export default function ClientPortal() {
   const [phone, setPhone] = useState("");
   const [evolution, setEvolution] = useState(null);
   const [phoneError, setPhoneError] = useState("");
+  const [restoringAccess, setRestoringAccess] = useState(() => Boolean(readSavedPhoneKey(token)));
   const [imageChoice, setImageChoice] = useState("");
   const [signatureName, setSignatureName] = useState("");
 
@@ -637,6 +663,44 @@ export default function ClientPortal() {
   useEffect(() => {
     applyClinicIcon(link?.logoDataUrl || "");
   }, [link?.logoDataUrl]);
+
+  useEffect(() => {
+    if (!link || link.type !== "evolucao") {
+      setRestoringAccess(false);
+      return undefined;
+    }
+    const key = readSavedPhoneKey(token);
+    if (!key) {
+      setRestoringAccess(false);
+      return undefined;
+    }
+    let active = true;
+    setRestoringAccess(true);
+    getDoc(doc(db, "clientLinks", token, "views", key))
+      .then((snapshot) => {
+        if (!active) {
+          return;
+        }
+        if (!snapshot.exists()) {
+          clearSavedPhoneKey(token);
+          return;
+        }
+        setEvolution(snapshot.data());
+      })
+      .catch((restoreError) => {
+        if (active && restoreError?.code === "permission-denied") {
+          clearSavedPhoneKey(token);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setRestoringAccess(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [link, token]);
 
   const steps = useMemo(() => {
     if (!link) {
@@ -740,6 +804,7 @@ export default function ClientPortal() {
         setPhoneError("Telefone não confere com o cadastro.");
         return;
       }
+      savePhoneKey(token, key);
       setEvolution(snapshot.data());
     } catch (unlockError) {
       setPhoneError("Telefone não confere com o cadastro.");
@@ -777,6 +842,9 @@ export default function ClientPortal() {
   }
 
   if (link.type === "evolucao") {
+    if (!evolution && restoringAccess) {
+      return <main className="quiz-page"><p>Carregando...</p></main>;
+    }
     if (evolution) {
       return (
         <EvolutionView
