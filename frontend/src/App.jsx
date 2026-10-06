@@ -818,12 +818,28 @@ async function compressImageFile(file, maxDimension = 1280, quality = 0.82) {
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+function socialHandle(value, host) {
+  const escapedHost = host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(value || "")
+    .trim()
+    .replace(/^@+/, "")
+    .replace(new RegExp(`^(https?:\\/\\/)?(www\\.)?${escapedHost}\\/`, "i"), "")
+    .replace(/^@+/, "")
+    .split(/[/?#\s]/)[0]
+    .replace(/[^A-Za-z0-9._]/g, "")
+    .slice(0, 30);
+}
+
 function buildEmptyUserProfile() {
   return {
     fullName: "",
     clinicName: "",
     phone: "",
-    professionalRole: ""
+    professionalRole: "",
+    instagram: "",
+    tiktok: "",
+    facebook: "",
+    website: ""
   };
 }
 
@@ -2568,6 +2584,10 @@ export default function App() {
             clinicName: "Clínica Estética",
             phone: "",
             professionalRole: "",
+            instagram: "",
+            tiktok: "",
+            facebook: "",
+            website: "",
             email: authEmail,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
@@ -2590,7 +2610,11 @@ export default function App() {
       fullName: userProfile?.fullName || formattedUserName || "",
       clinicName: userProfile?.clinicName || "Clínica Estética",
       phone: userProfile?.phone || "",
-      professionalRole: userProfile?.professionalRole || ""
+      professionalRole: userProfile?.professionalRole || "",
+      instagram: socialHandle(userProfile?.instagram, "instagram.com"),
+      tiktok: socialHandle(userProfile?.tiktok, "tiktok.com"),
+      facebook: String(userProfile?.facebook || "").trim().slice(0, 80),
+      website: String(userProfile?.website || "").trim().slice(0, 120)
     });
     setIsProfileModalOpen(true);
   };
@@ -2622,6 +2646,10 @@ export default function App() {
       clinicName: profileForm.clinicName.trim() || "Clínica Estética",
       phone: profileForm.phone.trim(),
       professionalRole: profileForm.professionalRole.trim(),
+      instagram: socialHandle(profileForm.instagram, "instagram.com"),
+      tiktok: socialHandle(profileForm.tiktok, "tiktok.com"),
+      facebook: profileForm.facebook.trim().slice(0, 80),
+      website: profileForm.website.trim().replace(/\s+/g, "").slice(0, 120),
       email: user.email || "",
       updatedAt: serverTimestamp()
     };
@@ -3758,6 +3786,10 @@ export default function App() {
           <div className="topbar-popover topbar-popover-left">
             <p className="topbar-popover-title">{currentClinicName}</p>
             {userProfile?.professionalRole ? <p>{userProfile.professionalRole}</p> : null}
+            {userProfile?.instagram ? <p>Instagram @{userProfile.instagram}</p> : null}
+            {userProfile?.tiktok ? <p>TikTok @{userProfile.tiktok}</p> : null}
+            {userProfile?.facebook ? <p>Facebook {userProfile.facebook}</p> : null}
+            {userProfile?.website ? <p>{userProfile.website}</p> : null}
             <button
               type="button"
               onClick={() => {
@@ -5522,6 +5554,51 @@ export default function App() {
                     handleProfileFieldChange("professionalRole", event.target.value)
                   }
                   placeholder="Ex: Esteticista"
+                />
+              </label>
+              <h5 className="full-row profile-section-title">Redes sociais</h5>
+              <label>
+                Instagram
+                <span className="handle-field">
+                  <span>@</span>
+                  <input
+                    value={profileForm.instagram}
+                    maxLength={80}
+                    placeholder="suaclinica"
+                    aria-label="Instagram"
+                    onChange={(event) => handleProfileFieldChange("instagram", socialHandle(event.target.value, "instagram.com"))}
+                  />
+                </span>
+              </label>
+              <label>
+                TikTok
+                <span className="handle-field">
+                  <span>@</span>
+                  <input
+                    value={profileForm.tiktok}
+                    maxLength={80}
+                    placeholder="suaclinica"
+                    aria-label="TikTok"
+                    onChange={(event) => handleProfileFieldChange("tiktok", socialHandle(event.target.value, "tiktok.com"))}
+                  />
+                </span>
+              </label>
+              <label>
+                Facebook
+                <input
+                  value={profileForm.facebook}
+                  maxLength={80}
+                  placeholder="Página ou link"
+                  onChange={(event) => handleProfileFieldChange("facebook", event.target.value)}
+                />
+              </label>
+              <label>
+                Site
+                <input
+                  value={profileForm.website}
+                  maxLength={120}
+                  placeholder="www.suaclinica.com"
+                  onChange={(event) => handleProfileFieldChange("website", event.target.value)}
                 />
               </label>
               <label className="full-row">
