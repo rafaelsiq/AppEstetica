@@ -11,6 +11,7 @@ import {
   targetTokens,
   validateNotificationList
 } from "./notificationSchedule";
+import TestDeviceTokens from "./TestDeviceTokens";
 
 function todayIso() {
   const now = new Date();
@@ -207,6 +208,8 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
   };
 
   return (
+    <>
+    <TestDeviceTokens />
     <section className="card notification-lists">
       <div className="notification-heading">
         <h3>Listas de notificação</h3>
@@ -365,5 +368,6 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
         </div>
       ) : null}
     </section>
+    </>
   );
 }

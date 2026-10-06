@@ -56,7 +56,12 @@ VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_VAPID_KEY=
 ```
+
+A chave `VITE_FIREBASE_VAPID_KEY` fica em Firebase Console → Project settings → Cloud Messaging → Web Push certificates.
+
+Na aba **Avisos**, a seção **Testar no dispositivo** mostra o ID de instalação e o token FCM para colar no Console.
 
 4. Rode em desenvolvimento:
 

@@ -156,6 +156,13 @@ export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
     try {
       const result = await Notification.requestPermission();
       if (result === "granted") {
+        try {
+          const { getFcmRegistrationToken } = await import("./fcmTokens");
+          const token = await getFcmRegistrationToken();
+          console.log("FCM token:", token);
+        } catch (error) {
+          console.warn("FCM token:", error?.message || error);
+        }
         window.dispatchEvent(new Event("clinica-notifications-granted"));
       }
       if (result !== "default") {

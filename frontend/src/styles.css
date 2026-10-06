@@ -2110,6 +2110,41 @@ h5 {
   gap: 12px;
 }
 
+.test-device-tokens {
+  margin-bottom: 16px;
+}
+
+.test-device-row {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.test-device-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.test-device-value {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eef2f1;
+  color: #1f2a2e;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.test-device-errors {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #a33b3b;
+}
+
 .notification-heading h3 {
   margin: 0;
 }
