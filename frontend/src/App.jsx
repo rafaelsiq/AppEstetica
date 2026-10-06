@@ -2349,7 +2349,8 @@ export default function App() {
             return;
           }
           importingRequestsRef.current.add(requestId);
-          importFirstContactRequest(user.uid, token, requestId, change.doc.data()).catch(() => {
+          importFirstContactRequest(user.uid, token, requestId, change.doc.data()).catch((error) => {
+            console.error(error);
             importingRequestsRef.current.delete(requestId);
           });
         });
