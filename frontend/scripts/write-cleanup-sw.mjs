@@ -1,18 +1,12 @@
-import { writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 
-const serviceWorker = `self.addEventListener("install", (event) => {
-  event.waitUntil(self.skipWaiting());
-});
+const dist = new URL("../dist/", import.meta.url);
+const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url));
+await writeFile(new URL("sw.js", dist), serviceWorker);
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    (async () => {
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
-      await self.registration.unregister();
-    })()
-  );
-});
-`;
-
-await writeFile(new URL("../dist/sw.js", import.meta.url), serviceWorker);
+const generated = await readdir(dist);
+await Promise.all(
+  generated
+    .filter((name) => name.startsWith("workbox-"))
+    .map((name) => rm(new URL(name, dist), { force: true }))
+);

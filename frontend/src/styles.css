@@ -1047,6 +1047,36 @@ label.logo-file-btn input {
   padding: 16px;
 }
 
+.install-app-backdrop {
+  z-index: 180;
+}
+
+.install-app-modal {
+  width: min(440px, 100%);
+}
+
+.install-app-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.install-app-header h2 {
+  margin: 0;
+}
+
+.install-app-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.install-app-actions {
+  display: grid;
+  gap: 8px;
+}
+
 .client-modal-header-actions {
   display: flex;
   align-items: center;

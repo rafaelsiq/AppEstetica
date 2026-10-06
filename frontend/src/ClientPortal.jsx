@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { applyClinicIcon } from "./pageIcon";
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import InstallAppPrompt from "./InstallAppPrompt";
 import ModalClose from "./ModalClose";
 import {
   buildAnamneseSteps,
@@ -839,20 +840,23 @@ export default function ClientPortal() {
 
   if (link.status === "respondido" || link.status === "importado") {
     return (
-      <main className="quiz-page">
-        <section className="quiz-card">
-          {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
-          <p className="quiz-kicker">{link.clinicName}</p>
-          <h1>Obrigado, {link.clientFirstName}!</h1>
-          <p>
-            {link.type === "consentimento"
-              ? "Sua resposta sobre o uso de imagem chegou na clínica."
-              : link.type === "acompanhamento"
-                ? "Seu feedback chegou na clínica."
-                : "Suas respostas chegaram na clínica. As observações da profissional continuam só com ela."}
-          </p>
-        </section>
-      </main>
+      <>
+        <main className="quiz-page">
+          <section className="quiz-card">
+            {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
+            <p className="quiz-kicker">{link.clinicName}</p>
+            <h1>Obrigado, {link.clientFirstName}!</h1>
+            <p>
+              {link.type === "consentimento"
+                ? "Sua resposta sobre o uso de imagem chegou na clínica."
+                : link.type === "acompanhamento"
+                  ? "Seu feedback chegou na clínica."
+                  : "Suas respostas chegaram na clínica. As observações da profissional continuam só com ela."}
+            </p>
+          </section>
+        </main>
+        {link.type === "acompanhamento" ? <InstallAppPrompt clinicName={link.clinicName} /> : null}
+      </>
     );
   }
 
@@ -862,15 +866,19 @@ export default function ClientPortal() {
     }
     if (evolution) {
       return (
-        <EvolutionView
-          evolution={evolution}
-          fallbackName={link.clientFirstName}
-          clinicName={link.clinicName}
-          logoUrl={link.logoDataUrl}
-        />
+        <>
+          <EvolutionView
+            evolution={evolution}
+            fallbackName={link.clientFirstName}
+            clinicName={link.clinicName}
+            logoUrl={link.logoDataUrl}
+          />
+          <InstallAppPrompt clinicName={link.clinicName} />
+        </>
       );
     }
     return (
+      <>
       <main className="evolution-page">
         <section className="quiz-card evolution-lock">
           <ClinicLogo src={link.logoDataUrl} />
@@ -894,6 +902,8 @@ export default function ClientPortal() {
           </form>
         </section>
       </main>
+      <InstallAppPrompt clinicName={link.clinicName} />
+      </>
     );
   }
 
@@ -945,6 +955,7 @@ export default function ClientPortal() {
   const selected = currentStep ? answers[currentStep.key] : undefined;
 
   return (
+    <>
     <main className="quiz-page">
       <section className="quiz-card">
         {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
@@ -1010,5 +1021,7 @@ export default function ClientPortal() {
         </div>
       </section>
     </main>
+    {link.type === "acompanhamento" ? <InstallAppPrompt clinicName={link.clinicName} /> : null}
+    </>
   );
 }

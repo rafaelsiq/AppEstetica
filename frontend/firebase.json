@@ -30,6 +30,19 @@
             "value": "no-cache"
           }
         ]
+      },
+      {
+        "source": "/manifest-cliente.webmanifest",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/manifest+json"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ],
     "rewrites": [
