@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { applyClinicIcon } from "./pageIcon";
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import {
@@ -631,6 +632,10 @@ export default function ClientPortal() {
       active = false;
     };
   }, [token]);
+
+  useEffect(() => {
+    applyClinicIcon(link?.logoDataUrl || "");
+  }, [link?.logoDataUrl]);
 
   const steps = useMemo(() => {
     if (!link) {

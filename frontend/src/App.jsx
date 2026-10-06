@@ -18,7 +18,8 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { phoneKey } from "./clientQuiz";
-import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, shareUrl, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
+import { applyClinicIcon } from "./pageIcon";
+import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
 import {
   appointmentAgendaDate,
@@ -892,43 +893,6 @@ function buildEmptyUserProfile() {
     website: "",
     logoDataUrl: ""
   };
-}
-
-let pageIconRequest = 0;
-
-function setPageIcon(href, type) {
-  document.querySelectorAll("link[rel='icon']").forEach((node) => node.remove());
-  const link = document.createElement("link");
-  link.rel = "icon";
-  link.type = type;
-  link.href = href;
-  document.head.appendChild(link);
-}
-
-function applyClinicIcon(dataUrl) {
-  const request = ++pageIconRequest;
-  if (!String(dataUrl || "").startsWith("data:image/")) {
-    setPageIcon("/icon.svg", "image/svg+xml");
-    return;
-  }
-  const image = new Image();
-  image.onload = () => {
-    if (request !== pageIconRequest) {
-      return;
-    }
-    const size = 64;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext("2d");
-    context.clearRect(0, 0, size, size);
-    const scale = Math.min(size / image.naturalWidth, size / image.naturalHeight);
-    const width = image.naturalWidth * scale;
-    const height = image.naturalHeight * scale;
-    context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height);
-    setPageIcon(canvas.toDataURL("image/png"), "image/png");
-  };
-  image.src = dataUrl;
 }
 
 function formatDatePt(dateValue) {
@@ -2117,6 +2081,7 @@ export default function App() {
   const [isEvolutionComposerOpen, setIsEvolutionComposerOpen] = useState(false);
   const [composerLinkReady, setComposerLinkReady] = useState(false);
   const pendingEvolutionTokenRef = useRef("");
+  const syncedLogoRef = useRef(null);
   const importingLinksRef = useRef(new Set());
   const importingRequestsRef = useRef(new Set());
   const shareLinksRef = useRef([]);
@@ -2275,6 +2240,30 @@ export default function App() {
   useEffect(() => {
     applyClinicIcon(userProfile?.logoDataUrl || "");
   }, [userProfile?.logoDataUrl]);
+
+  useEffect(() => {
+    if (!user || !userProfile) {
+      if (!user) {
+        syncedLogoRef.current = null;
+      }
+      return undefined;
+    }
+    const logo = sanitizeLogoDataUrl(userProfile.logoDataUrl);
+    if (syncedLogoRef.current === logo) {
+      return undefined;
+    }
+    syncedLogoRef.current = logo;
+    let active = true;
+    syncClinicLogo(user.uid, logo).catch((error) => {
+      console.error(error);
+      if (active && syncedLogoRef.current === logo) {
+        syncedLogoRef.current = null;
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [user, userProfile]);
 
   useEffect(() => {
     if (!editingClientId) {
@@ -2650,7 +2639,8 @@ export default function App() {
         highlight: type === "evolucao" ? evolutionDraft.highlight : "",
         homeCare: type === "evolucao" ? evolutionDraft.homeCare : "",
         checkpoints: type === "evolucao" ? checkpoints : [],
-        instagram: type === "evolucao" ? userProfile?.instagram || "" : ""
+        instagram: type === "evolucao" ? userProfile?.instagram || "" : "",
+        logoDataUrl: userProfile?.logoDataUrl || ""
       });
       if (type === "evolucao") {
         pendingEvolutionTokenRef.current = token;
@@ -3866,12 +3856,14 @@ export default function App() {
         token = await createFirstContactLink({
           uid: user.uid,
           clinicName: currentClinicName,
-          clinicPhone
+          clinicPhone,
+          logoDataUrl: userProfile?.logoDataUrl || ""
         });
       } else {
         await updateDoc(doc(db, "clientLinks", token), {
           clinicPhone,
-          clinicName: currentClinicName
+          clinicName: currentClinicName,
+          logoDataUrl: sanitizeLogoDataUrl(userProfile?.logoDataUrl)
         });
       }
       try {

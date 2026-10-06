@@ -28,6 +28,11 @@ function isEmptyAnswer(value) {
   return value == null || value === "" || (Array.isArray(value) && value.length === 0);
 }
 
+export function sanitizeLogoDataUrl(value) {
+  const logo = String(value || "");
+  return logo.startsWith("data:image/") ? logo : "";
+}
+
 export async function createShareLink({
   uid,
   client,
@@ -38,7 +43,8 @@ export async function createShareLink({
   highlight = "",
   homeCare = "",
   checkpoints = [],
-  instagram = ""
+  instagram = "",
+  logoDataUrl = ""
 }) {
   const token = crypto.randomUUID().replace(/-/g, "");
   const normalizedPhone = phoneKey(client.phone);
@@ -63,6 +69,7 @@ export async function createShareLink({
     ...(type === "consentimento"
       ? { termVersion: IMAGE_CONSENT_VERSION, termText: IMAGE_CONSENT_TEXT }
       : {}),
+    logoDataUrl: sanitizeLogoDataUrl(logoDataUrl),
     createdAt: serverTimestamp()
   });
 
@@ -99,7 +106,7 @@ export async function createShareLink({
   return token;
 }
 
-export async function createFirstContactLink({ uid, clinicName, clinicPhone }) {
+export async function createFirstContactLink({ uid, clinicName, clinicPhone, logoDataUrl = "" }) {
   const normalizedPhone = phoneKey(clinicPhone);
   if (!/^\d{10,13}$/.test(normalizedPhone)) {
     throw new Error("Cadastre seu telefone em Meu cadastro antes de gerar o link.");
@@ -116,6 +123,7 @@ export async function createFirstContactLink({ uid, clinicName, clinicPhone }) {
     clinicName: clinicName || "Clínica",
     clinicPhone: normalizedPhone,
     status: "ativo",
+    logoDataUrl: sanitizeLogoDataUrl(logoDataUrl),
     createdAt: serverTimestamp()
   });
   await setDoc(doc(db, "users", uid, "shareLinks", token), {
@@ -212,6 +220,19 @@ export async function updateEvolutionLink({
     homeCare: story.homeCare,
     instagram: handle
   });
+}
+
+export async function syncClinicLogo(uid, logoDataUrl) {
+  const logo = sanitizeLogoDataUrl(logoDataUrl);
+  const linksSnap = await getDocs(collection(db, "users", uid, "shareLinks"));
+  await Promise.all(linksSnap.docs.map(async (item) => {
+    const linkRef = doc(db, "clientLinks", item.id);
+    const snap = await getDoc(linkRef);
+    if (!snap.exists() || String(snap.data().logoDataUrl || "") === logo) {
+      return;
+    }
+    await updateDoc(linkRef, { logoDataUrl: logo });
+  }));
 }
 
 export async function syncEvolutionInstagram(uid, instagram) {
