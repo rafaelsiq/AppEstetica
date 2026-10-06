@@ -22,7 +22,6 @@ import { phoneKey } from "./clientQuiz";
 import { applyClinicIcon } from "./pageIcon";
 import NotificationLists from "./NotificationLists";
 import ClinicNoticeRunner from "./ClinicNoticeRunner";
-import ClientReceivedNotices, { clientNoticeTokens } from "./ClientReceivedNotices";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
 import {
@@ -1612,7 +1611,7 @@ function ParameterProgressChart({ series }) {
   );
 }
 
-function SessionDetail({ checkpoint, photos, onBack, onDelete, noticeAction = null }) {
+function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
   if (!checkpoint) {
     return (
       <>
@@ -1640,12 +1639,9 @@ function SessionDetail({ checkpoint, photos, onBack, onDelete, noticeAction = nu
           </h4>
           <p>{checkpoint.sessionType || "Tipo não informado"}</p>
         </div>
-        <div className="panel-header-actions">
-          {noticeAction}
-          <button type="button" className="secondary-btn" onClick={onBack}>
-            Voltar
-          </button>
-        </div>
+        <button type="button" className="secondary-btn" onClick={onBack}>
+          Voltar
+        </button>
       </div>
       <div className="session-detail-metrics">
         <span>Dor {checkpoint.painLevel ?? 0}</span>
@@ -2567,10 +2563,6 @@ export default function App() {
   );
   const consentLinks = useMemo(
     () => selectedClientLinks.filter((link) => link.type === "consentimento"),
-    [selectedClientLinks]
-  );
-  const selectedNoticeTokens = useMemo(
-    () => clientNoticeTokens(selectedClientLinks),
     [selectedClientLinks]
   );
 
@@ -6124,11 +6116,6 @@ export default function App() {
                           <h4>Acompanhamento</h4>
                           <p>Sessões da clínica e feedbacks enviados pela cliente.</p>
                         </div>
-                        <div className="panel-header-actions">
-                        <ClientReceivedNotices
-                          tokens={selectedNoticeTokens}
-                          onOpen={() => setIsRecordMenuOpen(false)}
-                        />
                         <button
                           type="button"
                           className="primary-btn"
@@ -6146,7 +6133,6 @@ export default function App() {
                         >
                           Nova sessão
                         </button>
-                        </div>
                       </div>
                       <TrackingParameterEditor
                         parameters={trackingParameters}
@@ -6221,12 +6207,6 @@ export default function App() {
                     <SessionDetail
                       checkpoint={checkpoints.find((item) => item.id === selectedCheckpointId)}
                       photos={photosByCheckpoint.grouped.get(selectedCheckpointId) || []}
-                      noticeAction={(
-                        <ClientReceivedNotices
-                          tokens={selectedNoticeTokens}
-                          onOpen={() => setIsRecordMenuOpen(false)}
-                        />
-                      )}
                       onBack={() => {
                         setFollowupScreen("list");
                         setSelectedCheckpointId("");
@@ -6246,11 +6226,6 @@ export default function App() {
                       <h4>Nova sessão</h4>
                       <p>Sessão {checkpointForm.sessionNumber || getNextSessionNumber(checkpoints)}</p>
                     </div>
-                    <div className="panel-header-actions">
-                    <ClientReceivedNotices
-                      tokens={selectedNoticeTokens}
-                      onOpen={() => setIsRecordMenuOpen(false)}
-                    />
                     <button
                       type="button"
                       className="secondary-btn"
@@ -6261,7 +6236,6 @@ export default function App() {
                     >
                       Voltar
                     </button>
-                    </div>
                   </div>
 
                   <TrackingParameterEditor

@@ -1543,55 +1543,6 @@ label.logo-file-btn input {
   gap: 12px;
 }
 
-.panel-header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.header-notice-menu {
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.header-notice-btn {
-  width: 40px;
-  height: 40px;
-  border: 1px solid #c6d0d7;
-  border-radius: 10px;
-  background: #f2f5f7;
-  color: #24343d;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  padding: 0;
-}
-
-.header-notice-btn[aria-expanded="true"] {
-  background: #e7f3ef;
-  border-color: #24695c;
-  color: #24695c;
-}
-
-.header-notice-btn svg {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.client-notice-panel.header-notice-panel {
-  position: fixed;
-  z-index: 80;
-  top: 0;
-  right: 12px;
-}
-
 .panel-header h4 {
   margin: 0;
 }
@@ -2167,6 +2118,11 @@ h5 {
   box-shadow: 0 12px 28px rgba(16, 29, 44, 0.06);
 }
 
+.evolution-hero {
+  position: relative;
+  z-index: 2;
+}
+
 .evolution-hero h1,
 .evolution-share h2 {
   margin: 0;
@@ -2310,31 +2266,37 @@ h5 {
   pointer-events: auto;
 }
 
-.client-quiz-header {
-  position: relative;
+.client-notice-embed {
+  flex: 0 0 auto;
+}
+
+.evolution-hero-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.client-quiz-header .quiz-kicker {
-  margin-top: 8px;
+.evolution-hero-intro {
+  min-width: 0;
 }
 
-.client-notice-embed {
-  flex: 0 0 auto;
+.evolution-hero .client-notice-embed .client-notice-menu {
+  position: relative;
 }
 
-.client-notice-embed .client-notice-menu {
-  position: static;
-}
-
-.client-notice-embed .client-notice-panel {
+.evolution-hero .client-notice-embed .client-notice-panel {
   top: calc(100% + 8px);
   right: 0;
-  left: 0;
-  width: auto;
+  left: auto;
+  width: min(360px, calc(100vw - 48px));
+  z-index: 6;
+}
+
+.evolution-hero .client-notice-bell {
+  width: 40px;
+  height: 40px;
+  box-shadow: none;
 }
 
 .client-notice-bell {
@@ -3301,13 +3263,6 @@ h5 {
 
   .panel-header {
     flex-direction: column;
-  }
-
-  .panel-header-actions {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-end;
-    width: 100%;
   }
 
   .inline-actions {
