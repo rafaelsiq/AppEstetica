@@ -896,6 +896,11 @@ select:focus {
   cursor: default;
 }
 
+.record-menu-row > span:first-child {
+  min-width: 0;
+  line-height: 1.25;
+}
+
 .record-menu-row-actions {
   display: flex;
   align-items: center;
