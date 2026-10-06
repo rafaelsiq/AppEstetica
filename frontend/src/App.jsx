@@ -2059,7 +2059,8 @@ export default function App() {
       setShareLinks([]);
       setShareNotice(null);
       setShareBusy("");
-      setEvolutionComment("");
+      setEvolutionDraft({ highlight: "", comments: "", homeCare: "" });
+      setIsEvolutionComposerOpen(false);
       importingLinksRef.current.clear();
       return undefined;
     }
