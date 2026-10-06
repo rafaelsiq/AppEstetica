@@ -18,7 +18,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { phoneKey } from "./clientQuiz";
-import { createShareLink, importSubmittedLink, shareUrl, updateEvolutionLink } from "./shareLinks";
+import { createShareLink, importSubmittedLink, shareUrl, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
 import { consentDecisionLabel } from "./imageConsent";
 
@@ -2498,7 +2498,8 @@ export default function App() {
         comments: type === "evolucao" ? evolutionDraft.comments : "",
         highlight: type === "evolucao" ? evolutionDraft.highlight : "",
         homeCare: type === "evolucao" ? evolutionDraft.homeCare : "",
-        checkpoints: type === "evolucao" ? checkpoints : []
+        checkpoints: type === "evolucao" ? checkpoints : [],
+        instagram: type === "evolucao" ? userProfile?.instagram || "" : ""
       });
       if (type === "evolucao") {
         pendingEvolutionTokenRef.current = token;
@@ -2556,7 +2557,8 @@ export default function App() {
         homeCare: story.homeCare,
         checkpoints,
         clinicName: currentClinicName,
-        clientName: selectedClient.name
+        clientName: selectedClient.name,
+        instagram: userProfile?.instagram || ""
       });
       publishShareNotice("charts", "Link atualizado. A cliente já vê essas informações.");
     } catch (updateError) {
@@ -2662,6 +2664,12 @@ export default function App() {
       },
       { merge: true }
     );
+    try {
+      await syncEvolutionInstagram(user.uid, payload.instagram);
+    } catch {
+      setProfileMessage("Cadastro salvo. Abra a evolução da cliente e toque em atualizar para o Instagram entrar na imagem.");
+      return;
+    }
 
     setProfileMessage(userProfile ? "Cadastro atualizado com sucesso." : "Cadastro criado com sucesso.");
     setTimeout(() => {

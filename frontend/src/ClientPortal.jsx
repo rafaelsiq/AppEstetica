@@ -176,7 +176,8 @@ function EvolutionView({ evolution, fallbackName, clinicName }) {
         comments: story.comments,
         homeCare: story.homeCare,
         checkpoints: series.points,
-        include: pick
+        include: pick,
+        instagram: evolution?.instagram || ""
       });
       const blob = await canvasToBlob(canvas);
       const url = URL.createObjectURL(blob);

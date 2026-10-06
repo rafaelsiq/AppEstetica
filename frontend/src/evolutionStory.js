@@ -235,6 +235,15 @@ function selectedCharts(series, include) {
     .map(([, title, values, max]) => ({ title, values, labels: series.labels, max }));
 }
 
+export function clinicHandle(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^@+/, "")
+    .split(/[/?#\s]/)[0]
+    .replace(/[^A-Za-z0-9._]/g, "")
+    .slice(0, 30);
+}
+
 export function renderEvolutionCanvas({
   clinicName,
   clientFirstName,
@@ -242,7 +251,8 @@ export function renderEvolutionCanvas({
   comments,
   homeCare,
   checkpoints,
-  include
+  include,
+  instagram
 }) {
   const canvas = document.createElement("canvas");
   canvas.width = IMAGE_SIZE;
@@ -306,8 +316,9 @@ export function renderEvolutionCanvas({
 
   const series = evolutionSeries(checkpoints);
   const charts = selectedCharts(series, include);
+  const handle = clinicHandle(instagram);
   const bottom = cardY + cardH - 36;
-  const footerH = 52;
+  const footerH = handle ? 96 : 52;
   const chartMin = charts.length > 2 ? 340 : 280;
 
   const measureBlocks = (lineCap) => blocks.map((block) => {
@@ -361,10 +372,24 @@ export function renderEvolutionCanvas({
       ? series.labels[0]
       : `${series.labels[0]}  –  ${series.labels[series.labels.length - 1]}`
     : "";
-  ctx.fillStyle = "#6a7a84";
-  ctx.font = "600 22px sans-serif";
+  const footerBottom = cardY + cardH - 28;
   ctx.textAlign = "center";
-  ctx.fillText(range, IMAGE_SIZE / 2, cardY + cardH - 28);
+  if (handle) {
+    const label = `@${handle}`;
+    let fontSize = 30;
+    ctx.font = `700 ${fontSize}px sans-serif`;
+    while (fontSize > 18 && ctx.measureText(label).width > textW) {
+      fontSize -= 2;
+      ctx.font = `700 ${fontSize}px sans-serif`;
+    }
+    ctx.fillStyle = "#24695c";
+    ctx.fillText(label, IMAGE_SIZE / 2, footerBottom);
+  }
+  if (range) {
+    ctx.fillStyle = "#6a7a84";
+    ctx.font = "600 22px sans-serif";
+    ctx.fillText(range, IMAGE_SIZE / 2, handle ? footerBottom - 42 : footerBottom);
+  }
   ctx.textAlign = "left";
   return canvas;
 }

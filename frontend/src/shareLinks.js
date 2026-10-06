@@ -1,7 +1,7 @@
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { phoneKey, sanitizeAnamneseAnswers, sanitizeFollowupAnswers } from "./clientQuiz";
-import { sanitizeEvolutionStory } from "./evolutionStory";
+import { clinicHandle, sanitizeEvolutionStory } from "./evolutionStory";
 import { IMAGE_CONSENT_TEXT, IMAGE_CONSENT_VERSION } from "./imageConsent";
 
 export function shareUrl(token) {
@@ -36,7 +36,8 @@ export async function createShareLink({
   comments = "",
   highlight = "",
   homeCare = "",
-  checkpoints = []
+  checkpoints = [],
+  instagram = ""
 }) {
   const token = crypto.randomUUID().replace(/-/g, "");
   const normalizedPhone = phoneKey(client.phone);
@@ -65,6 +66,7 @@ export async function createShareLink({
   });
 
   const story = type === "evolucao" ? sanitizeEvolutionStory({ comments, highlight, homeCare }) : null;
+  const handle = story ? clinicHandle(instagram) : "";
   if (type === "evolucao") {
     await setDoc(doc(db, "clientLinks", token, "views", normalizedPhone), {
       clientFirstName: firstName,
@@ -72,6 +74,7 @@ export async function createShareLink({
       highlight: story.highlight,
       comments: story.comments,
       homeCare: story.homeCare,
+      instagram: handle,
       checkpoints: slimCheckpoints(checkpoints)
     });
   }
@@ -83,7 +86,7 @@ export async function createShareLink({
     clientName: client.name || "",
     moment: moment || "",
     comments: story ? story.comments : comments.trim(),
-    ...(story ? { highlight: story.highlight, homeCare: story.homeCare } : {}),
+    ...(story ? { highlight: story.highlight, homeCare: story.homeCare, instagram: handle } : {}),
     status: type === "evolucao" ? "ativo" : "aberto",
     imported: false,
     ...(type === "consentimento"
@@ -104,13 +107,15 @@ export async function updateEvolutionLink({
   homeCare = "",
   checkpoints,
   clinicName,
-  clientName
+  clientName,
+  instagram = ""
 }) {
   const normalizedPhone = phoneKey(phone);
   if (!normalizedPhone) {
     throw new Error("Cadastre o telefone da cliente antes de atualizar a evolução.");
   }
   const story = sanitizeEvolutionStory({ comments, highlight, homeCare });
+  const handle = clinicHandle(instagram);
   const secretRef = doc(db, "clientLinks", token, "secret", "access");
   const secretSnap = await getDoc(secretRef);
   const previousKey = secretSnap.exists() ? secretSnap.data().phoneKey : "";
@@ -124,6 +129,7 @@ export async function updateEvolutionLink({
     highlight: story.highlight,
     comments: story.comments,
     homeCare: story.homeCare,
+    instagram: handle,
     checkpoints: slimCheckpoints(checkpoints)
   });
   if (previousKey && previousKey !== normalizedPhone) {
@@ -132,8 +138,23 @@ export async function updateEvolutionLink({
   await updateDoc(doc(db, "users", uid, "shareLinks", token), {
     comments: story.comments,
     highlight: story.highlight,
-    homeCare: story.homeCare
+    homeCare: story.homeCare,
+    instagram: handle
   });
+}
+
+export async function syncEvolutionInstagram(uid, instagram) {
+  const handle = clinicHandle(instagram);
+  const linksSnap = await getDocs(collection(db, "users", uid, "shareLinks"));
+  const evolutions = linksSnap.docs.filter((item) => item.data().type === "evolucao");
+  await Promise.all(evolutions.map(async (item) => {
+    const secretSnap = await getDoc(doc(db, "clientLinks", item.id, "secret", "access"));
+    const key = secretSnap.exists() ? secretSnap.data().phoneKey : "";
+    if (key) {
+      await setDoc(doc(db, "clientLinks", item.id, "views", key), { instagram: handle }, { merge: true });
+    }
+    await updateDoc(doc(db, "users", uid, "shareLinks", item.id), { instagram: handle });
+  }));
 }
 
 export async function importSubmittedLink(uid, link, helpers) {
@@ -240,6 +261,10 @@ async function refreshEvolutionSnapshot(uid, link, checkpoints) {
     return;
   }
   const publicSnap = await getDoc(doc(db, "clientLinks", evolution.id));
+  const profileSnap = await getDoc(doc(db, "users", uid, "settings", "profile"));
+  const instagram = clinicHandle(
+    (profileSnap.exists() && profileSnap.data().instagram) || evolution.instagram || ""
+  );
   await updateEvolutionLink({
     uid,
     token: evolution.id,
@@ -247,6 +272,7 @@ async function refreshEvolutionSnapshot(uid, link, checkpoints) {
     comments: evolution.comments || "",
     highlight: evolution.highlight || "",
     homeCare: evolution.homeCare || "",
+    instagram,
     checkpoints,
     clinicName: publicSnap.exists() ? publicSnap.data().clinicName : "",
     clientName: link.clientName || clientSnap.data()?.name || ""
