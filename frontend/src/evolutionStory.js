@@ -505,7 +505,8 @@ export function buildEvolutionSlides({ highlight, comments, homeCare, hasChart }
       include: { ...emptyShareInclude(), stress: true, sleep: true }
     });
   }
-  SHARE_OPTIONS.forEach(([key, label, file]) => {
+  const soloOptions = SHARE_OPTIONS.filter(([key]) => key !== "highlight" && key !== "comments" && key !== "homeCare");
+  soloOptions.forEach(([key, label, file]) => {
     if (!available[key]) {
       return;
     }
