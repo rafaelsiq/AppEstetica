@@ -19,7 +19,7 @@ import {
 import { auth, db } from "./firebase";
 import { phoneKey } from "./clientQuiz";
 import { applyClinicIcon } from "./pageIcon";
-import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
+import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
 import {
   appointmentAgendaDate,
@@ -497,13 +497,14 @@ function buildEmptyCheckpoint() {
 }
 
 function getNextSessionNumber(items) {
-  const numericSessionNumbers = items
+  const sessions = items.filter((item) => !isClientFeedback(item));
+  const numericSessionNumbers = sessions
     .map((item) => Number(item.sessionNumber))
     .filter((value) => Number.isFinite(value) && value > 0);
   if (numericSessionNumbers.length > 0) {
     return Math.max(...numericSessionNumbers) + 1;
   }
-  return items.length + 1;
+  return sessions.length + 1;
 }
 
 function hexToRgb(hex) {
@@ -787,6 +788,9 @@ function groupPhotosByCheckpoint(checkpoints, photos) {
   const grouped = new Map(checkpoints.map((checkpoint) => [checkpoint.id, []]));
   const checkpointsByDate = new Map();
   checkpoints.forEach((checkpoint) => {
+    if (isClientFeedback(checkpoint)) {
+      return;
+    }
     const matches = checkpointsByDate.get(checkpoint.date) || [];
     matches.push(checkpoint);
     checkpointsByDate.set(checkpoint.date, matches);
@@ -1455,10 +1459,12 @@ function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
         <button type="button" className="secondary-btn" onClick={onBack}>
           Voltar
         </button>
-        <p className="muted-text">Esta sessão não está mais disponível.</p>
+        <p className="muted-text">Este registro não está mais disponível.</p>
       </>
     );
   }
+
+  const feedback = isClientFeedback(checkpoint);
 
   return (
     <>
@@ -1466,7 +1472,11 @@ function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
         <div>
           <h4>
             {formatDatePt(checkpoint.date)}
-            {checkpoint.sessionNumber ? ` · Sessão ${checkpoint.sessionNumber}` : ""}
+            {feedback
+              ? " · Feedback do cliente"
+              : checkpoint.sessionNumber
+                ? ` · Sessão ${checkpoint.sessionNumber}`
+                : ""}
           </h4>
           <p>{checkpoint.sessionType || "Tipo não informado"}</p>
         </div>
@@ -1480,18 +1490,22 @@ function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
         <span>Sono {checkpoint.sleepHours ?? 0}h</span>
       </div>
       {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
-      <h5>Fotos</h5>
-      {photos.length === 0 ? (
-        <p className="muted-text">Nenhuma foto nesta sessão.</p>
-      ) : (
-        <ul className="list photo-analysis-list">
-          {photos.map((analysis) => (
-            <PhotoAnalysisSummary key={analysis.id} analysis={analysis} />
-          ))}
-        </ul>
+      {feedback ? null : (
+        <>
+          <h5>Fotos</h5>
+          {photos.length === 0 ? (
+            <p className="muted-text">Nenhuma foto nesta sessão.</p>
+          ) : (
+            <ul className="list photo-analysis-list">
+              {photos.map((analysis) => (
+                <PhotoAnalysisSummary key={analysis.id} analysis={analysis} />
+              ))}
+            </ul>
+          )}
+        </>
       )}
       <button type="button" className="danger-btn" onClick={() => onDelete(checkpoint.id)}>
-        Excluir sessão
+        {feedback ? "Excluir feedback" : "Excluir sessão"}
       </button>
     </>
   );
@@ -2188,15 +2202,9 @@ export default function App() {
     if (!selectedClientId) {
       return;
     }
-    const numericSessionNumbers = checkpoints
-      .map((item) => Number(item.sessionNumber))
-      .filter((value) => Number.isFinite(value) && value > 0);
-    const nextSessionNumber = numericSessionNumbers.length > 0
-      ? Math.max(...numericSessionNumbers) + 1
-      : checkpoints.length + 1;
     setCheckpointForm((previous) => ({
       ...previous,
-      sessionNumber: String(nextSessionNumber)
+      sessionNumber: String(getNextSessionNumber(checkpoints))
     }));
   }, [checkpoints, selectedClientId]);
 
@@ -2554,6 +2562,9 @@ export default function App() {
 
     const checkpointsByDate = new Map();
     checkpoints.forEach((checkpoint) => {
+      if (isClientFeedback(checkpoint)) {
+        return;
+      }
       const matches = checkpointsByDate.get(checkpoint.date) || [];
       matches.push(checkpoint);
       checkpointsByDate.set(checkpoint.date, matches);
@@ -3599,8 +3610,8 @@ export default function App() {
       return;
     }
     const checkpoint = checkpoints.find((item) => item.id === checkpointId);
-    const sameDateCount = checkpoint
-      ? checkpoints.filter((item) => item.date === checkpoint.date).length
+    const sameDateCount = checkpoint && !isClientFeedback(checkpoint)
+      ? checkpoints.filter((item) => item.date === checkpoint.date && !isClientFeedback(item)).length
       : 0;
     const relatedPhotos = photoAnalyses.filter((photo) => {
       if (photo.checkpointId === checkpointId) {
@@ -3731,7 +3742,7 @@ export default function App() {
   };
 
   const checkpointChartData = useMemo(() => {
-    return sortByDate(checkpoints).filter((item) => item.date);
+    return sortByDate(checkpoints).filter((item) => item.date && !isClientFeedback(item));
   }, [checkpoints]);
 
   const photosByCheckpoint = useMemo(
@@ -5002,18 +5013,11 @@ export default function App() {
                           onCopy={() => copyShareLink(anamneseLinks[0].id, "anamnese")}
                         />
                         <RecordLinkRow
-                          label="Antes do atendimento"
-                          link={followupLinks.find((link) => link.moment === "antes")}
-                          busy={shareBusy === "followup-antes"}
-                          onCreate={() => handleCreateClientLink("acompanhamento", "antes")}
-                          onCopy={() => copyShareLink(followupLinks.find((link) => link.moment === "antes").id, "followup")}
-                        />
-                        <RecordLinkRow
-                          label="Depois do atendimento"
-                          link={followupLinks.find((link) => link.moment === "depois")}
-                          busy={shareBusy === "followup-depois"}
-                          onCreate={() => handleCreateClientLink("acompanhamento", "depois")}
-                          onCopy={() => copyShareLink(followupLinks.find((link) => link.moment === "depois").id, "followup")}
+                          label="Coleta de feedback"
+                          link={followupLinks.find((link) => link.moment === "feedback")}
+                          busy={shareBusy === "followup-feedback"}
+                          onCreate={() => handleCreateClientLink("acompanhamento", "feedback")}
+                          onCopy={() => copyShareLink(followupLinks.find((link) => link.moment === "feedback").id, "followup")}
                         />
                         <RecordLinkRow
                           label="Uso de imagem"
@@ -5532,8 +5536,8 @@ export default function App() {
                     <>
                       <div className="panel-header">
                         <div>
-                          <h4>Sessões</h4>
-                          <p>Toque em uma sessão para ver os detalhes e as fotos.</p>
+                          <h4>Acompanhamento</h4>
+                          <p>Sessões da clínica e feedbacks enviados pela cliente.</p>
                         </div>
                         <button
                           type="button"
@@ -5555,7 +5559,7 @@ export default function App() {
                       </div>
                       <ul className="list">
                         {checkpoints.length === 0 ? (
-                          <li className="empty">Nenhuma sessão registrada.</li>
+                          <li className="empty">Nenhum registro ainda.</li>
                         ) : (
                           [...checkpoints]
                             .sort((first, second) => {
@@ -5577,19 +5581,16 @@ export default function App() {
                                 >
                                   <strong>
                                     {formatDatePt(checkpoint.date)}
-                                    {checkpoint.sessionNumber ? ` · Sessão ${checkpoint.sessionNumber}` : ""}
+                                    {isClientFeedback(checkpoint)
+                                      ? " · Feedback do cliente"
+                                      : checkpoint.sessionNumber
+                                        ? ` · Sessão ${checkpoint.sessionNumber}`
+                                        : ""}
                                   </strong>
                                   <p>
                                     {checkpoint.sessionType || "Tipo não informado"} · Dor {checkpoint.painLevel ?? 0} ·
                                     Estresse {checkpoint.stressLevel ?? 0} · Sono {checkpoint.sleepHours ?? 0}h
                                   </p>
-                                  {checkpoint.source === "cliente" ? (
-                                    <p>
-                                      {checkpoint.moment === "depois"
-                                        ? "Resposta da cliente depois do atendimento"
-                                        : "Resposta da cliente antes do atendimento"}
-                                    </p>
-                                  ) : null}
                                 </button>
                               </li>
                             ))

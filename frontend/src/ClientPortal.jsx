@@ -767,7 +767,9 @@ export default function ClientPortal() {
           <p>
             {link.type === "consentimento"
               ? "Sua resposta sobre o uso de imagem chegou na clínica."
-              : "Suas respostas chegaram na clínica. As observações da profissional continuam só com ela."}
+              : link.type === "acompanhamento"
+                ? "Seu feedback chegou na clínica."
+                : "Suas respostas chegaram na clínica. As observações da profissional continuam só com ela."}
           </p>
         </section>
       </main>
@@ -864,9 +866,7 @@ export default function ClientPortal() {
         <h1>{link.type === "acompanhamento" ? "Como você está?" : `Olá, ${link.clientFirstName}`}</h1>
         <p className="muted-text">
           {link.type === "acompanhamento"
-            ? link.moment === "depois"
-              ? "Conte como você ficou depois do atendimento."
-              : "Conte como você está antes do atendimento."
+            ? "Conte como você está. Seu retorno chega na clínica como feedback."
             : "Um questionário curto para a clínica te receber melhor."}
         </p>
         <div className="quiz-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>

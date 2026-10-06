@@ -9,9 +9,13 @@ export function shareUrl(token) {
   return `${window.location.origin}/c/${token}`;
 }
 
+export function isClientFeedback(item) {
+  return item?.kind === "feedback" || item?.source === "cliente";
+}
+
 export function slimCheckpoints(checkpoints) {
   return [...checkpoints]
-    .filter((item) => item.date)
+    .filter((item) => item.date && !isClientFeedback(item))
     .sort((first, second) => String(first.date).localeCompare(String(second.date)))
     .map((item) => ({
       date: item.date,
@@ -311,26 +315,23 @@ export async function importSubmittedLink(uid, link, helpers) {
     const existingSnap = await getDocs(checkpointsRef);
     const items = existingSnap.docs.map((item) => item.data());
     const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    const importedCheckpoint = {
-      date: today,
-      sessionNumber: String(helpers.nextSession(items)),
-      sessionType: answers.sessionType || "",
-      painLevel: Number(answers.painLevel || 0),
-      stressLevel: Number(answers.stressLevel || 0),
-      sleepHours: Number(answers.sleepHours || 0),
-      observations: "",
-      source: "cliente",
-      moment: link.moment || data.moment || "",
-      shareToken: link.id
-    };
     if (!items.some((item) => item.shareToken === link.id)) {
       await addDoc(checkpointsRef, {
-        ...importedCheckpoint,
+        date: today,
+        sessionNumber: "",
+        sessionType: answers.sessionType || "",
+        painLevel: Number(answers.painLevel || 0),
+        stressLevel: Number(answers.stressLevel || 0),
+        sleepHours: Number(answers.sleepHours || 0),
+        observations: "",
+        source: "cliente",
+        kind: "feedback",
+        moment: "feedback",
+        shareToken: link.id,
         createdAt: serverTimestamp()
       });
-      items.push(importedCheckpoint);
     }
-    await refreshEvolutionSnapshot(uid, link, items);
+    await refreshEvolutionSnapshot(uid, link, items.filter((item) => !isClientFeedback(item)));
   }
 
   await updateDoc(doc(db, "users", uid, "shareLinks", link.id), {

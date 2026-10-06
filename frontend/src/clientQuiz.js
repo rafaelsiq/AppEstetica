@@ -212,6 +212,6 @@ export function buildFollowupSteps() {
     { key: "painLevel", kind: "scale", title: "Como está a dor agora?", hint: "0 é nenhuma dor e 10 é o máximo." },
     { key: "stressLevel", kind: "scale", title: "Como está o estresse ou a tensão?", hint: "0 é tranquilo e 10 é muito tenso." },
     { key: "sleepHours", kind: "single", title: "Como foi o seu sono?", options: QUIZ_SLEEP_OPTIONS },
-    { key: "sessionType", kind: "single", title: "Qual atendimento você vai fazer ou fez?", options: QUIZ_SESSION_TYPES.map((item) => ({ value: item, label: item })) }
+    { key: "sessionType", kind: "single", title: "Qual atendimento você fez?", options: QUIZ_SESSION_TYPES.map((item) => ({ value: item, label: item })) }
   ];
 }
