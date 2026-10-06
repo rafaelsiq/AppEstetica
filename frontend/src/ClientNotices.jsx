@@ -3,10 +3,6 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import { isNoticeDue, nextNoticeAt, noticeHistory, occurrenceKey } from "./notificationSchedule";
 
-function seenKey(token, notice, now) {
-  return `clinica-aviso:${token}:${notice.id}:${occurrenceKey(notice, now)}`;
-}
-
 function systemKey(notice, now) {
   return `clinica-aviso-sistema:${notice.id}:${occurrenceKey(notice, now)}`;
 }
@@ -97,7 +93,6 @@ function formatReceivedAt(date) {
 export default function ClientNotices({ token, active, history = false }) {
   const [stored, setStored] = useState([]);
   const [now, setNow] = useState(() => new Date());
-  const [hidden, setHidden] = useState(() => new Set());
   const [historyOpen, setHistoryOpen] = useState(false);
   const inflight = useRef(new Set());
   const delivered = useRef(new Set());
@@ -197,73 +192,44 @@ export default function ClientNotices({ token, active, history = false }) {
     };
   }, [historyOpen]);
 
-  const due = stored.filter((notice) => isNoticeDue(notice, now) && storageGet(seenKey(token, notice, now)) !== "1");
-  const visible = due.filter((notice) => !hidden.has(`${notice.id}:${occurrenceKey(notice, now)}`));
-  const received = history ? noticeHistory(stored, now) : [];
-  if (!history && !visible.length) {
+  if (!history) {
     return null;
   }
 
+  const received = noticeHistory(stored, now);
   return (
-    <>
-    {history ? (
-      <div className="client-notice-top">
-        <div className="client-notice-menu" ref={menuRef}>
-          <button
-            type="button"
-            className="client-notice-bell"
-            aria-label="Notificações"
-            aria-expanded={historyOpen}
-            onClick={() => setHistoryOpen((open) => !open)}
-          >
-            <BellIcon />
-          </button>
-          {historyOpen ? (
-            <section className="client-notice-panel" aria-label="Notificações recebidas">
-              <header>
-                <strong>Notificações</strong>
-                <button type="button" onClick={() => setHistoryOpen(false)} aria-label="Fechar">×</button>
-              </header>
-              {received.length === 0 ? <p className="muted-text">Nenhum aviso recebido ainda.</p> : (
-                <ul>
-                  {received.map((item) => (
-                    <li key={`${item.id}:${item.occurrence}`}>
-                      <time dateTime={item.at.toISOString()}>{formatReceivedAt(item.at)}</time>
-                      <strong>{item.title}</strong>
-                      {item.body ? <p>{item.body}</p> : null}
-                      {item.imageDataUrl.startsWith("data:image/") ? <img src={item.imageDataUrl} alt="" /> : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ) : null}
-        </div>
+    <div className="client-notice-top">
+      <div className="client-notice-menu" ref={menuRef}>
+        <button
+          type="button"
+          className="client-notice-bell"
+          aria-label="Notificações"
+          aria-expanded={historyOpen}
+          onClick={() => setHistoryOpen((open) => !open)}
+        >
+          <BellIcon />
+        </button>
+        {historyOpen ? (
+          <section className="client-notice-panel" aria-label="Notificações recebidas">
+            <header>
+              <strong>Notificações</strong>
+              <button type="button" onClick={() => setHistoryOpen(false)} aria-label="Fechar">×</button>
+            </header>
+            {received.length === 0 ? <p className="muted-text">Nenhum aviso recebido ainda.</p> : (
+              <ul>
+                {received.map((item) => (
+                  <li key={`${item.id}:${item.occurrence}`}>
+                    <time dateTime={item.at.toISOString()}>{formatReceivedAt(item.at)}</time>
+                    <strong>{item.title}</strong>
+                    {item.body ? <p>{item.body}</p> : null}
+                    {item.imageDataUrl.startsWith("data:image/") ? <img src={item.imageDataUrl} alt="" /> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
       </div>
-    ) : null}
-    {visible.length ? (
-    <div className="client-notices">
-      {visible.map((notice) => (
-        <article key={`${notice.id}:${occurrenceKey(notice, now)}`} className="client-notice">
-          <div className="client-notice-heading">
-            <strong>{notice.title}</strong>
-            <button
-              type="button"
-              className="secondary-btn"
-              onClick={() => {
-                storageSet(seenKey(token, notice, now), "1");
-                setHidden((current) => new Set(current).add(`${notice.id}:${occurrenceKey(notice, now)}`));
-              }}
-            >
-              Ok
-            </button>
-          </div>
-          {notice.body ? <p>{notice.body}</p> : null}
-          {String(notice.imageDataUrl || "").startsWith("data:image/") ? <img src={notice.imageDataUrl} alt="" /> : null}
-        </article>
-      ))}
     </div>
-    ) : null}
-    </>
   );
 }

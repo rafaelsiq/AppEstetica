@@ -71,7 +71,13 @@ function installNeeded() {
 }
 
 function notifyNeeded() {
-  return notificationPermission() === "default" && !wasDismissed(NOTIFY_DISMISS_KEY);
+  if (notificationPermission() !== "default" || wasDismissed(NOTIFY_DISMISS_KEY)) {
+    return false;
+  }
+  if (isIos() && !isInstalled()) {
+    return false;
+  }
+  return true;
 }
 
 export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
@@ -183,6 +189,9 @@ export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
             A instalação segue o padrão de aplicativo e abre direto neste acompanhamento.
           </p>
           {ios ? (
+            <p>No iPhone, a notificação do celular só funciona depois que o acompanhamento está na tela inicial.</p>
+          ) : null}
+          {ios ? (
             <ol className="install-app-steps">
               <li>Toque em Compartilhar na barra do navegador.</li>
               <li>Escolha Adicionar à Tela de Início.</li>
@@ -214,7 +223,7 @@ export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
           <h2 id="notify-app-title">Ativar notificações</h2>
           <ModalClose onClick={dismissNotify} />
         </div>
-        <p>Permita as notificações para {clinicName || "a clínica"} avisar você neste celular.</p>
+        <p>Os avisos de {clinicName || "a clínica"} chegam na área de notificações do celular, como nos outros aplicativos.</p>
         <div className="install-app-actions">
           <button type="button" className="primary-btn" onClick={allowNotifications}>Permitir notificações</button>
           <button type="button" className="secondary-btn" onClick={dismissNotify}>Agora não</button>

@@ -212,7 +212,7 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
         <div>
           <h3>Listas de notificação</h3>
           <p className="muted-text">
-            Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso aparece no acompanhamento. Se a cliente permitiu notificações, o celular também mostra.
+            Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso chega na área de notificações do celular. A cliente precisa permitir as notificações. No iPhone, o acompanhamento precisa estar na tela inicial.
           </p>
         </div>
         <button type="button" className="primary-btn" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>

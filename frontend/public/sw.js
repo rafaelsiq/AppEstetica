@@ -12,6 +12,14 @@ self.addEventListener("fetch", () => {});
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = event.notification.data && event.notification.data.url;
-  event.waitUntil(clients.openWindow(target || "/"));
+  const target = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil((async () => {
+    const openClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    const current = openClients.find((client) => client.url === target) || openClients[0];
+    if (current) {
+      await current.focus();
+      return;
+    }
+    await clients.openWindow(target);
+  })());
 });
