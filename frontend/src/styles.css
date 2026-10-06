@@ -2311,6 +2311,7 @@ h5 {
 }
 
 .client-quiz-header {
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -2322,8 +2323,18 @@ h5 {
 }
 
 .client-notice-embed {
-  position: relative;
   flex: 0 0 auto;
+}
+
+.client-notice-embed .client-notice-menu {
+  position: static;
+}
+
+.client-notice-embed .client-notice-panel {
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  width: auto;
 }
 
 .client-notice-bell {

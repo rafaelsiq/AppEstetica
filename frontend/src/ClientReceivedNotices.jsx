@@ -83,9 +83,16 @@ export default function ClientReceivedNotices({ tokens, onOpen }) {
       if (!rect) {
         return;
       }
+      const margin = 12;
+      const width = Math.min(360, window.innerWidth - margin * 2);
+      const alignedRight = Math.max(margin, window.innerWidth - rect.right);
+      const maxRight = Math.max(margin, window.innerWidth - width - margin);
+      const top = rect.bottom + 8;
       setBox({
-        top: rect.bottom + 8,
-        right: Math.max(12, window.innerWidth - rect.right)
+        top,
+        right: Math.min(alignedRight, maxRight),
+        width,
+        maxHeight: Math.max(160, window.innerHeight - top - 16)
       });
     };
     place();
@@ -150,7 +157,7 @@ export default function ClientReceivedNotices({ tokens, onOpen }) {
         <section
           className="client-notice-panel header-notice-panel"
           aria-label="Notificações recebidas"
-          style={box ? { top: box.top, right: box.right } : undefined}
+          style={box ? { top: box.top, right: box.right, width: box.width, maxHeight: box.maxHeight } : undefined}
         >
           <header>
             <strong>Notificações recebidas</strong>
