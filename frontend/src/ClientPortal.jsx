@@ -984,11 +984,20 @@ export default function ClientPortal() {
   if (link.status === "respondido" || link.status === "importado") {
     return (
       <>
-        {link.type === "acompanhamento" || link.type === "anamnese" || link.type === "consentimento" ? <ClientNotices token={token} active history={link.type === "acompanhamento"} /> : null}
+        {link.type === "anamnese" || link.type === "consentimento" ? <ClientNotices token={token} active /> : null}
         <main className="quiz-page">
           <section className="quiz-card">
-            {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
-            <p className="quiz-kicker">{link.clinicName}</p>
+            {link.type === "acompanhamento" ? (
+              <header className="client-quiz-header">
+                <div>
+                  <ClinicLogo src={link.logoDataUrl} />
+                  <p className="quiz-kicker">{link.clinicName}</p>
+                </div>
+                <ClientNotices token={token} active history embedded />
+              </header>
+            ) : (
+              <p className="quiz-kicker">{link.clinicName}</p>
+            )}
             <h1>Obrigado, {link.clientFirstName}!</h1>
             <p>
               {link.type === "consentimento"
@@ -1110,11 +1119,20 @@ export default function ClientPortal() {
 
   return (
     <>
-    {link.type === "acompanhamento" || link.type === "anamnese" ? <ClientNotices token={token} active history={link.type === "acompanhamento"} /> : null}
+    {link.type === "anamnese" ? <ClientNotices token={token} active /> : null}
     <main className="quiz-page">
       <section className="quiz-card">
-        {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
-        <p className="quiz-kicker">{link.clinicName}</p>
+        {link.type === "acompanhamento" ? (
+          <header className="client-quiz-header">
+            <div>
+              <ClinicLogo src={link.logoDataUrl} />
+              <p className="quiz-kicker">{link.clinicName}</p>
+            </div>
+            <ClientNotices token={token} active history embedded />
+          </header>
+        ) : (
+          <p className="quiz-kicker">{link.clinicName}</p>
+        )}
         <h1>{link.type === "acompanhamento" ? "Como você está?" : `Olá, ${link.clientFirstName}`}</h1>
         <p className="muted-text">
           {link.type === "acompanhamento"

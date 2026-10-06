@@ -23,7 +23,7 @@ function formatReceivedAt(date) {
   return `${day}/${month}/${date.getFullYear()} às ${hours}:${minutes}`;
 }
 
-export default function ClientNotices({ token, active, history = false }) {
+export default function ClientNotices({ token, active, history = false, embedded = false }) {
   const [stored, setStored] = useState([]);
   const [now, setNow] = useState(() => new Date());
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -80,7 +80,7 @@ export default function ClientNotices({ token, active, history = false }) {
 
   const received = noticeHistory(stored, now);
   return (
-    <div className="client-notice-top">
+    <div className={embedded ? "client-notice-embed" : "client-notice-top"}>
       <div className="client-notice-menu" ref={menuRef}>
         <button
           type="button"
