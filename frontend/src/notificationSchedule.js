@@ -177,6 +177,66 @@ export function occurrenceKey(notice, now = new Date()) {
   return dateKey(now);
 }
 
+function noticeAt(year, monthIndex, day, hours, minutes) {
+  return new Date(year, monthIndex, day, hours, minutes, 0, 0);
+}
+
+export function noticeHistory(notices, now = new Date()) {
+  const items = [];
+  (notices || []).forEach((notice) => {
+    const scheduled = minutesOf(notice?.time);
+    if (!notice || scheduled == null) {
+      return;
+    }
+    const hours = Math.floor(scheduled / 60);
+    const minutes = scheduled % 60;
+    const push = (at, occurrence) => {
+      if (at.getTime() > now.getTime()) {
+        return;
+      }
+      items.push({
+        id: notice.id || notice.title || occurrence,
+        occurrence,
+        at,
+        title: String(notice.title || "Aviso da clínica").trim() || "Aviso da clínica",
+        body: String(notice.body || "").trim(),
+        imageDataUrl: String(notice.imageDataUrl || "")
+      });
+    };
+    if (notice.frequency === "once") {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(notice.date || "")) {
+        return;
+      }
+      const [year, month, day] = notice.date.split("-").map(Number);
+      push(noticeAt(year, month - 1, day, hours, minutes), "once");
+      return;
+    }
+    if (notice.frequency !== "daily" && notice.frequency !== "weekly" && notice.frequency !== "monthly") {
+      return;
+    }
+    for (let offset = 0; offset < 90; offset += 1) {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+      const key = dateKey(date);
+      if (notice.date && key < notice.date) {
+        break;
+      }
+      if (notice.until && key > notice.until) {
+        continue;
+      }
+      if (notice.frequency === "weekly" && !(notice.weekdays || []).map(Number).includes(date.getDay())) {
+        continue;
+      }
+      if (notice.frequency === "monthly" && date.getDate() !== Number(notice.monthDay)) {
+        continue;
+      }
+      const occurrence = notice.frequency === "monthly" ? key.slice(0, 7) : key;
+      push(noticeAt(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes), occurrence);
+    }
+  });
+  items.sort((first, second) => second.at.getTime() - first.at.getTime() || first.title.localeCompare(second.title, "pt-BR"));
+  return items.slice(0, 40);
+}
+
 export function isNoticeDue(notice, now = new Date()) {
   if (!notice || notice.active === false) {
     return false;

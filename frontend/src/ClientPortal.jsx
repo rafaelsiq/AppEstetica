@@ -984,7 +984,7 @@ export default function ClientPortal() {
   if (link.status === "respondido" || link.status === "importado") {
     return (
       <>
-        {link.type === "acompanhamento" || link.type === "anamnese" || link.type === "consentimento" ? <ClientNotices token={token} active /> : null}
+        {link.type === "acompanhamento" || link.type === "anamnese" || link.type === "consentimento" ? <ClientNotices token={token} active history={link.type === "acompanhamento"} /> : null}
         <main className="quiz-page">
           <section className="quiz-card">
             {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
@@ -1110,7 +1110,7 @@ export default function ClientPortal() {
 
   return (
     <>
-    {link.type === "acompanhamento" || link.type === "anamnese" ? <ClientNotices token={token} active /> : null}
+    {link.type === "acompanhamento" || link.type === "anamnese" ? <ClientNotices token={token} active history={link.type === "acompanhamento"} /> : null}
     <main className="quiz-page">
       <section className="quiz-card">
         {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
