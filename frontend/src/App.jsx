@@ -1901,48 +1901,21 @@ function linkSortTime(link) {
   return 0;
 }
 
-function describeShareLink(link) {
-  const momentLabel = link.moment === "antes"
-    ? "antes do atendimento"
-    : link.moment === "depois"
-      ? "depois do atendimento"
-      : "";
-  if (link.type === "evolucao") {
-    return "Link ativo";
-  }
-  if (link.status === "respondido" || link.status === "importado") {
-    return momentLabel ? `Respondido · ${momentLabel}` : "Respondido";
-  }
-  return momentLabel ? `Aguardando resposta · ${momentLabel}` : "Aguardando resposta";
-}
-
-function ShareLinkPanel({ title, description, links, actions, notice }) {
-  const latest = [...links].sort((first, second) => linkSortTime(second) - linkSortTime(first))[0];
+function RecordLinkRow({ label, link, busy, onCreate, onCopy }) {
   return (
-    <section className="share-link-box">
-      <h5>{title}</h5>
-      <p className="muted-text">{description}</p>
-      <div className="share-link-actions">
-        {actions.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            className={action.primary ? "primary-btn" : "secondary-btn"}
-            onClick={action.onClick}
-            disabled={action.disabled}
-          >
-            {action.label}
+    <div className="record-menu-row">
+      <span>{label}</span>
+      <span className="record-menu-row-actions">
+        {link ? (
+          <button type="button" className="record-menu-hint" disabled={busy} onClick={onCopy}>
+            Copiar
           </button>
-        ))}
-      </div>
-      {latest ? (
-        <>
-          <p className="share-link-status">{describeShareLink(latest)}</p>
-          <input readOnly value={shareUrl(latest.id)} onFocus={(event) => event.target.select()} aria-label="Link da cliente" />
-        </>
-      ) : null}
-      {notice ? <p className={notice.tone === "error" ? "error-text" : "success-text"}>{notice.text}</p> : null}
-    </section>
+        ) : null}
+        <button type="button" className="record-menu-hint" disabled={busy} onClick={onCreate}>
+          {busy ? "..." : link ? "Nova" : "Enviar"}
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -4396,141 +4369,109 @@ export default function App() {
                     </button>
                     {isRecordMenuOpen ? (
                       <div className="record-menu-dropdown" role="dialog" aria-label="Menu da cliente">
-                        <div className="record-menu-actions">
-                          <button type="button" className="secondary-btn" onClick={handleCloseClientView}>
-                            Fechar
-                          </button>
-                          {clientHasAnamnese && !isEditingAnamnese ? (
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => {
-                                setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
-                                handleStartEditAnamnese();
-                                setIsRecordMenuOpen(false);
-                              }}
-                            >
-                              Editar ficha
-                            </button>
-                          ) : null}
-                          {clientHasAnamnese && isEditingAnamnese ? (
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => {
-                                handleCancelEditAnamnese();
-                                setIsRecordMenuOpen(false);
-                              }}
-                            >
-                              Cancelar edição
-                            </button>
-                          ) : null}
+                        <button type="button" className="record-menu-item" onClick={handleCloseClientView}>
+                          Fechar
+                        </button>
+                        {clientHasAnamnese && !isEditingAnamnese ? (
                           <button
                             type="button"
-                            className="secondary-btn"
+                            className="record-menu-item"
                             onClick={() => {
-                              handleExportAnamnesePdf();
+                              setSelectedClientView(CLIENT_VIEWS.ANAMNESE);
+                              handleStartEditAnamnese();
                               setIsRecordMenuOpen(false);
                             }}
                           >
-                            Exportar PDF
+                            Editar ficha
                           </button>
-                        </div>
-                        <ShareLinkPanel
-                          title="Link para a cliente preencher"
-                          description="Quiz curto de múltipla escolha. Observações da clínica não entram nesse link."
-                          links={anamneseLinks}
-                          notice={shareNotice?.scope === "anamnese" ? shareNotice : null}
-                          actions={[
-                            {
-                              label: shareBusy === "anamnese" ? "Gerando..." : "Gerar link da anamnese",
-                              primary: true,
-                              disabled: Boolean(shareBusy),
-                              onClick: () => handleCreateClientLink("anamnese")
-                            },
-                            ...(anamneseLinks[0]
-                              ? [{
-                                label: "Copiar link",
-                                onClick: () => copyShareLink(anamneseLinks[0].id, "anamnese")
-                              }]
-                              : [])
-                          ]}
+                        ) : null}
+                        {clientHasAnamnese && isEditingAnamnese ? (
+                          <button
+                            type="button"
+                            className="record-menu-item"
+                            onClick={() => {
+                              handleCancelEditAnamnese();
+                              setIsRecordMenuOpen(false);
+                            }}
+                          >
+                            Cancelar edição
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="record-menu-item"
+                          onClick={() => {
+                            handleExportAnamnesePdf();
+                            setIsRecordMenuOpen(false);
+                          }}
+                        >
+                          Exportar PDF
+                        </button>
+                        <div className="record-menu-divider" />
+                        <RecordLinkRow
+                          label="Anamnese"
+                          link={anamneseLinks[0]}
+                          busy={shareBusy === "anamnese"}
+                          onCreate={() => handleCreateClientLink("anamnese")}
+                          onCopy={() => copyShareLink(anamneseLinks[0].id, "anamnese")}
                         />
-                        <ShareLinkPanel
-                          title="Quiz de acompanhamento"
-                          description="Envie antes ou depois do atendimento. As respostas entram nos gráficos."
-                          links={followupLinks}
-                          notice={shareNotice?.scope === "followup" ? shareNotice : null}
-                          actions={[
-                            {
-                              label: shareBusy === "followup-antes" ? "Gerando..." : "Antes do atendimento",
-                              primary: true,
-                              disabled: Boolean(shareBusy),
-                              onClick: () => handleCreateClientLink("acompanhamento", "antes")
-                            },
-                            {
-                              label: shareBusy === "followup-depois" ? "Gerando..." : "Depois do atendimento",
-                              disabled: Boolean(shareBusy),
-                              onClick: () => handleCreateClientLink("acompanhamento", "depois")
-                            },
-                            ...(followupLinks[0]
-                              ? [{
-                                label: "Copiar link",
-                                onClick: () => copyShareLink(followupLinks[0].id, "followup")
-                              }]
-                              : [])
-                          ]}
+                        <RecordLinkRow
+                          label="Antes do atendimento"
+                          link={followupLinks.find((link) => link.moment === "antes")}
+                          busy={shareBusy === "followup-antes"}
+                          onCreate={() => handleCreateClientLink("acompanhamento", "antes")}
+                          onCopy={() => copyShareLink(followupLinks.find((link) => link.moment === "antes").id, "followup")}
                         />
-                        <section className="share-link-box">
-                          <h5>Link da evolução</h5>
-                          <p className="muted-text">
-                            A cliente confirma o telefone cadastrado para ver o recado e os gráficos.
-                          </p>
-                          <label>
-                            Recado para a cliente
-                            <textarea
-                              value={evolutionComment}
-                              onChange={(event) => setEvolutionComment(event.target.value)}
-                              placeholder="Comentário sobre a evolução"
-                            />
-                          </label>
-                          {!phoneKey(selectedClient.phone) ? (
-                            <p className="muted-text">Cadastre o telefone da cliente para liberar este link.</p>
-                          ) : null}
-                          <div className="share-link-actions">
+                        <RecordLinkRow
+                          label="Depois do atendimento"
+                          link={followupLinks.find((link) => link.moment === "depois")}
+                          busy={shareBusy === "followup-depois"}
+                          onCreate={() => handleCreateClientLink("acompanhamento", "depois")}
+                          onCopy={() => copyShareLink(followupLinks.find((link) => link.moment === "depois").id, "followup")}
+                        />
+                        <div className="record-menu-row">
+                          <span>Evolução</span>
+                          <span className="record-menu-row-actions">
+                            {evolutionLink ? (
+                              <button
+                                type="button"
+                                className="record-menu-hint"
+                                disabled={Boolean(shareBusy)}
+                                onClick={() => copyShareLink(evolutionLink.id, "charts")}
+                              >
+                                Copiar
+                              </button>
+                            ) : null}
                             <button
                               type="button"
-                              className="primary-btn"
-                              disabled={shareBusy === "charts"}
+                              className="record-menu-hint"
+                              disabled={Boolean(shareBusy) || !phoneKey(selectedClient.phone)}
                               onClick={handleUpdateEvolution}
                             >
                               {shareBusy === "charts"
-                                ? "Salvando..."
-                                : evolutionLink
-                                  ? "Atualizar link da evolução"
-                                  : "Gerar link da evolução"}
+                                ? "..."
+                                : !phoneKey(selectedClient.phone)
+                                  ? "Sem telefone"
+                                  : evolutionLink
+                                    ? "Atualizar"
+                                    : "Enviar"}
                             </button>
-                            {evolutionLink ? (
-                              <button type="button" className="secondary-btn" onClick={() => copyShareLink(evolutionLink.id, "charts")}>
-                                Copiar link
-                              </button>
-                            ) : null}
-                          </div>
-                          {evolutionLink ? (
-                            <>
-                              <p className="share-link-status">Link ativo</p>
-                              <input
-                                readOnly
-                                value={shareUrl(evolutionLink.id)}
-                                onFocus={(event) => event.target.select()}
-                                aria-label="Link da evolução"
-                              />
-                            </>
-                          ) : null}
-                          {shareNotice?.scope === "charts" ? (
-                            <p className={shareNotice.tone === "error" ? "error-text" : "success-text"}>{shareNotice.text}</p>
-                          ) : null}
-                        </section>
+                          </span>
+                        </div>
+                        {phoneKey(selectedClient.phone) ? (
+                          <input
+                            className="record-menu-note-input"
+                            value={evolutionComment}
+                            onChange={(event) => setEvolutionComment(event.target.value)}
+                            placeholder="Recado da evolução"
+                            aria-label="Recado da evolução"
+                          />
+                        ) : null}
+                        {shareNotice ? (
+                          <p className={shareNotice.tone === "error" ? "error-text record-menu-feedback" : "success-text record-menu-feedback"}>
+                            {shareNotice.text}
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
