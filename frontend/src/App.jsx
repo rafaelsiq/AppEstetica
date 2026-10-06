@@ -818,6 +818,38 @@ async function compressImageFile(file, maxDimension = 1280, quality = 0.82) {
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+async function compressLogoFile(file) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Não foi possível ler a logo."));
+    reader.readAsDataURL(file);
+  });
+  const image = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Não foi possível carregar a logo."));
+    img.src = dataUrl;
+  });
+  const scale = Math.min(1, 512 / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Não foi possível preparar a logo.");
+  }
+  context.clearRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  const png = canvas.toDataURL("image/png");
+  if (png.length <= 700000) {
+    return png;
+  }
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
 function socialHandle(value, host) {
   const escapedHost = host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return String(value || "")
@@ -839,7 +871,8 @@ function buildEmptyUserProfile() {
     instagram: "",
     tiktok: "",
     facebook: "",
-    website: ""
+    website: "",
+    logoDataUrl: ""
   };
 }
 
@@ -2616,7 +2649,8 @@ export default function App() {
       instagram: socialHandle(userProfile?.instagram, "instagram.com"),
       tiktok: socialHandle(userProfile?.tiktok, "tiktok.com"),
       facebook: String(userProfile?.facebook || "").trim().slice(0, 80),
-      website: String(userProfile?.website || "").trim().slice(0, 120)
+      website: String(userProfile?.website || "").trim().slice(0, 120),
+      logoDataUrl: String(userProfile?.logoDataUrl || "").startsWith("data:image/") ? userProfile.logoDataUrl : ""
     });
     setIsProfileModalOpen(true);
   };
@@ -2629,6 +2663,25 @@ export default function App() {
 
   const handleProfileFieldChange = (fieldName, value) => {
     setProfileForm((previous) => ({ ...previous, [fieldName]: value }));
+  };
+
+  const handleProfileLogo = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setProfileError("Escolha uma imagem para a logo.");
+      return;
+    }
+    try {
+      const logoDataUrl = await compressLogoFile(file);
+      setProfileError("");
+      handleProfileFieldChange("logoDataUrl", logoDataUrl);
+    } catch (logoError) {
+      setProfileError("Não foi possível usar essa imagem.");
+    }
   };
 
   const handleSaveProfile = async (event) => {
@@ -2652,6 +2705,7 @@ export default function App() {
       tiktok: socialHandle(profileForm.tiktok, "tiktok.com"),
       facebook: profileForm.facebook.trim().slice(0, 80),
       website: profileForm.website.trim().replace(/\s+/g, "").slice(0, 120),
+      logoDataUrl: String(profileForm.logoDataUrl || "").startsWith("data:image/") ? profileForm.logoDataUrl : "",
       email: user.email || "",
       updatedAt: serverTimestamp()
     };
@@ -3792,8 +3846,15 @@ export default function App() {
 
         {isHeaderMenuOpen ? (
           <div className="topbar-popover topbar-popover-left">
-            <p className="topbar-popover-title">{currentClinicName}</p>
-            {userProfile?.professionalRole ? <p>{userProfile.professionalRole}</p> : null}
+            <div className="topbar-profile">
+              {String(userProfile?.logoDataUrl || "").startsWith("data:image/") ? (
+                <img className="topbar-logo" src={userProfile.logoDataUrl} alt="" />
+              ) : null}
+              <div>
+                <p className="topbar-popover-title">{currentClinicName}</p>
+                {userProfile?.professionalRole ? <p>{userProfile.professionalRole}</p> : null}
+              </div>
+            </div>
             {userProfile?.instagram ? <p>Instagram @{userProfile.instagram}</p> : null}
             {userProfile?.tiktok ? <p>TikTok @{userProfile.tiktok}</p> : null}
             {userProfile?.facebook ? <p>Facebook {userProfile.facebook}</p> : null}
@@ -5529,6 +5590,33 @@ export default function App() {
             </header>
 
             <form className="form grid-form" onSubmit={handleSaveProfile}>
+              <div className="full-row logo-picker">
+                {profileForm.logoDataUrl ? (
+                  <img className="logo-picker-preview" src={profileForm.logoDataUrl} alt="Logo da clínica" />
+                ) : (
+                  <div className="logo-picker-empty">Sem logo</div>
+                )}
+                <div className="logo-picker-actions">
+                  <strong>Logo da clínica</strong>
+                  <div className="logo-picker-buttons">
+                    <label className="secondary-btn logo-file-btn">
+                      {profileForm.logoDataUrl ? "Trocar logo" : "Escolher logo"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        aria-label="Escolher logo"
+                        onChange={handleProfileLogo}
+                      />
+                    </label>
+                    {profileForm.logoDataUrl ? (
+                      <button type="button" className="danger-btn" onClick={() => handleProfileFieldChange("logoDataUrl", "")}>
+                        Remover
+                      </button>
+                    ) : null}
+                  </div>
+                  <span className="field-hint">PNG com fundo transparente fica melhor.</span>
+                </div>
+              </div>
               <label>
                 Nome completo
                 <input

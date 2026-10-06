@@ -283,6 +283,83 @@ select:focus {
   font-weight: 700;
 }
 
+.topbar-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar-profile > div {
+  min-width: 0;
+}
+
+.topbar-logo,
+.logo-picker-preview,
+.logo-picker-empty {
+  width: 84px;
+  height: 84px;
+  flex: 0 0 auto;
+  border-radius: 18px;
+  background: #f7faf8;
+  border: 1px solid #e6eef1;
+}
+
+.topbar-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.logo-picker {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-picker-preview {
+  object-fit: contain;
+}
+
+.logo-picker-empty {
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  color: #6a7a84;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logo-picker-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.logo-picker-actions strong {
+  color: #1d3550;
+}
+
+.logo-picker-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+label.logo-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+label.logo-file-btn input {
+  display: none;
+}
+
 .topbar-popover button {
   border: none;
   background: #f4f7f8;
