@@ -48,14 +48,52 @@ export function appointmentAgendaDate(appointment) {
 }
 
 export function formatPhoneBr(value) {
-  const digits = phoneKey(value);
-  if (digits.length === 11) {
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.length > 11 && digits.startsWith("55")) {
+    digits = digits.slice(-11);
   }
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  digits = digits.slice(0, 11);
+  if (!digits) {
+    return "";
   }
-  return digits;
+  const ddd = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (!rest) {
+    return digits.length === 2 ? `(${ddd})` : `(${digits}`;
+  }
+  const splitAt = rest.startsWith("9") ? 5 : 4;
+  const left = rest.slice(0, splitAt);
+  const right = rest.slice(splitAt, splitAt + 4);
+  return right ? `(${ddd}) ${left}-${right}` : `(${ddd}) ${left}`;
+}
+
+export function readMaskedPhone(event) {
+  const input = event.currentTarget;
+  const caret = input.selectionStart ?? input.value.length;
+  const digitsBefore = input.value.slice(0, caret).replace(/\D/g, "").length;
+  const value = formatPhoneBr(input.value);
+  requestAnimationFrame(() => {
+    if (document.activeElement !== input) {
+      return;
+    }
+    let seen = 0;
+    let position = value.length;
+    if (digitsBefore === 0) {
+      position = 0;
+    } else {
+      for (let index = 0; index < value.length; index += 1) {
+        if (/\d/.test(value[index])) {
+          seen += 1;
+        }
+        if (seen === digitsBefore) {
+          position = index + 1;
+          break;
+        }
+      }
+    }
+    input.setSelectionRange(position, position);
+  });
+  return value;
 }
 
 function personName(value) {

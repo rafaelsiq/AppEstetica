@@ -26,6 +26,7 @@ import {
   approvalMessage,
   bookingStatusLabel,
   formatPhoneBr,
+  readMaskedPhone,
   periodLabel,
   refusalMessage,
   rescheduleMessage,
@@ -2752,7 +2753,7 @@ export default function App() {
     setProfileForm({
       fullName: userProfile?.fullName || formattedUserName || "",
       clinicName: userProfile?.clinicName || "Clínica Estética",
-      phone: userProfile?.phone || "",
+      phone: formatPhoneBr(userProfile?.phone || ""),
       professionalRole: userProfile?.professionalRole || "",
       instagram: socialHandle(userProfile?.instagram, "instagram.com"),
       tiktok: socialHandle(userProfile?.tiktok, "tiktok.com"),
@@ -2907,7 +2908,7 @@ export default function App() {
 
   const handleEditClient = (client) => {
     setClientName(client.name || "");
-    setClientPhone(client.phone || "");
+    setClientPhone(formatPhoneBr(client.phone || ""));
     setClientEmail(client.email || "");
     setClientBirthDate(client.birthDate || "");
     setClientSex(client.sex || "");
@@ -3263,7 +3264,7 @@ export default function App() {
         title: "Dados da cliente",
         rows: [
           ["Nome", formatTextOrFallback(selectedClient.name)],
-          ["Telefone", formatTextOrFallback(selectedClient.phone)],
+          ["Telefone", selectedClient.phone ? formatPhoneBr(selectedClient.phone) : "Não informado"],
           ["E-mail", formatTextOrFallback(selectedClient.email)],
           [
             "Data de nascimento",
@@ -4885,7 +4886,7 @@ export default function App() {
 
                         <div className="client-contact-row">
                           <span className="client-pill">
-                            Telefone: {client.phone || "Não informado"}
+                            Telefone: {client.phone ? formatPhoneBr(client.phone) : "Não informado"}
                           </span>
                           <span className="client-pill">
                             Último atendimento:{" "}
@@ -6088,9 +6089,11 @@ export default function App() {
               <label>
                 Telefone
                 <input
-                  value={profileForm.phone}
-                  onChange={(event) => handleProfileFieldChange("phone", event.target.value)}
+                  value={formatPhoneBr(profileForm.phone)}
+                  onChange={(event) => handleProfileFieldChange("phone", readMaskedPhone(event))}
                   placeholder="(00) 00000-0000"
+                  inputMode="tel"
+                  autoComplete="tel"
                 />
               </label>
               <label>
@@ -6290,9 +6293,11 @@ export default function App() {
               <label>
                 Telefone
                 <input
-                  value={clientPhone}
-                  onChange={(event) => setClientPhone(event.target.value)}
+                  value={formatPhoneBr(clientPhone)}
+                  onChange={(event) => setClientPhone(readMaskedPhone(event))}
                   placeholder="(00) 00000-0000"
+                  inputMode="tel"
+                  autoComplete="tel"
                 />
               </label>
               <label>

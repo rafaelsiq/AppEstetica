@@ -16,6 +16,7 @@ import {
   FIRST_CONTACT_REASONS,
   isAllowedPeriod,
   normalizeReasons,
+  readMaskedPhone,
   whatsAppUrl
 } from "./firstContact";
 import { IMAGE_CONSENT_TEXT } from "./imageConsent";
@@ -509,7 +510,7 @@ function FirstContactRequest({ link, token }) {
               Telefone com DDD
               <input
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
+                onChange={(event) => setPhone(readMaskedPhone(event))}
                 inputMode="tel"
                 autoComplete="tel"
                 placeholder="(00) 00000-0000"
@@ -794,8 +795,9 @@ export default function ClientPortal() {
               Telefone com DDD
               <input
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
+                onChange={(event) => setPhone(readMaskedPhone(event))}
                 inputMode="tel"
+                autoComplete="tel"
                 placeholder="(00) 00000-0000"
                 required
               />
