@@ -1,0 +1,31 @@
+{
+  "id": "/abrir-acompanhamento",
+  "name": "Acompanhamento",
+  "short_name": "Acompanhamento",
+  "description": "Acompanhamento da cliente com a clínica.",
+  "start_url": "/abrir-acompanhamento",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eef3f4",
+  "theme_color": "#24695c",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#24695c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Acompanhamento" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <title>Clínica Estética - Gestão</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      (function () {
+        var path = location.pathname;
+        var clientPage = path.indexOf("/c/") === 0 || path === "/abrir-acompanhamento";
+        if (!clientPage) {
+          return;
+        }
+        var links = document.querySelectorAll("link[rel='manifest']");
+        for (var index = 1; index < links.length; index += 1) {
+          links[index].remove();
+        }
+        var link = links[0];
+        if (!link) {
+          link = document.createElement("link");
+          link.rel = "manifest";
+          document.head.appendChild(link);
+        }
+        link.href = "/manifest-cliente.webmanifest";
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("/sw.js").catch(function () {});
+        }
+        var mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+          || (window.matchMedia("(max-width: 900px)").matches && window.matchMedia("(pointer: coarse)").matches);
+        window.addEventListener("beforeinstallprompt", function (event) {
+          if (!mobile || path.indexOf("/c/") !== 0) {
+            return;
+          }
+          event.preventDefault();
+          window.__clinicaInstallPrompt = event;
+          window.dispatchEvent(new Event("clinica-install-ready"));
+        });
+      })();
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
