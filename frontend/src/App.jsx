@@ -2443,7 +2443,7 @@ export default function App() {
       await navigator.clipboard.writeText(url);
       publishShareNotice(scope, "Link copiado.");
     } catch (copyError) {
-      publishShareNotice(scope, url);
+      publishShareNotice(scope, "Não foi possível copiar.", "error");
     }
   };
 
@@ -2469,7 +2469,7 @@ export default function App() {
         await navigator.clipboard.writeText(shareUrl(token));
         publishShareNotice(scope, "Link gerado e copiado.");
       } catch (copyError) {
-        publishShareNotice(scope, `Link gerado: ${shareUrl(token)}`);
+        publishShareNotice(scope, "Link gerado. Toque em Copiar.");
       }
     } catch (createError) {
       publishShareNotice(scope, createError.message || "Não foi possível gerar o link.", "error");
