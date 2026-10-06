@@ -141,6 +141,16 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
     }
     setBusy(true);
     setError("");
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      try {
+        const result = await Notification.requestPermission();
+        if (result === "granted") {
+          window.dispatchEvent(new Event("clinica-notifications-granted"));
+        }
+      } catch {
+        // O navegador não abriu o pedido de permissão.
+      }
+    }
     try {
       const ref = form.id
         ? doc(db, "users", uid, "notificationLists", form.id)
@@ -212,7 +222,7 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
         <div>
           <h3>Listas de notificação</h3>
           <p className="muted-text">
-            Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso chega na área de notificações do celular. A cliente precisa permitir as notificações. No iPhone, o acompanhamento precisa estar na tela inicial.
+            Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso chega na área de notificações do celular que estiver com o aplicativo aberto. Permita as notificações neste aparelho ao salvar.
           </p>
         </div>
         <button type="button" className="primary-btn" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>
