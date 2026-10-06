@@ -144,6 +144,17 @@ export function whatsAppUrl(phone, message) {
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 
+export function shareWhatsAppMessage(template, url) {
+  const text = String(template || "").trim();
+  if (!text) {
+    return `Olá! Segue o seu link: ${url}`;
+  }
+  if (text.includes("{link}")) {
+    return text.replaceAll("{link}", url);
+  }
+  return `${text}\n${url}`;
+}
+
 export function isAllowedPeriod(value) {
   return PERIOD_VALUES.includes(value);
 }

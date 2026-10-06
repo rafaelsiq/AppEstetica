@@ -1286,6 +1286,49 @@ label.logo-file-btn input {
   cursor: not-allowed;
 }
 
+.link-action {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #24695c;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.link-action:hover {
+  background: #e7f2ef;
+}
+
+.link-action:disabled {
+  color: #b7c3cb;
+  cursor: not-allowed;
+}
+
+.link-action svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.link-action svg rect,
+.link-action svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.link-action svg path:only-child {
+  fill: currentColor;
+  stroke: none;
+}
+
 .record-menu-divider {
   height: 1px;
   margin: 4px 8px;

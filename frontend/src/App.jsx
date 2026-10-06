@@ -32,6 +32,7 @@ import {
   periodLabel,
   refusalMessage,
   rescheduleMessage,
+  shareWhatsAppMessage,
   whatsAppUrl
 } from "./firstContact";
 import { consentDecisionLabel } from "./imageConsent";
@@ -923,7 +924,8 @@ function buildEmptyUserProfile() {
     tiktok: "",
     facebook: "",
     website: "",
-    logoDataUrl: ""
+    logoDataUrl: "",
+    whatsappMessage: ""
   };
 }
 
@@ -2146,18 +2148,53 @@ function linkSortTime(link) {
   return 0;
 }
 
-function RecordLinkRow({ label, link, busy, onCreate, onCopy }) {
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3.2a8.3 8.3 0 0 0-7.2 12.4L3.8 20.7l5.2-1A8.3 8.3 0 1 0 12 3.2Zm4.7 11.7c-.2.6-1.1 1-1.6 1.1-.4 0-.9.2-3.1-.7-2.6-1.1-4.2-3.7-4.3-3.9-.1-.2-1-1.3-1-2.5s.6-1.8.9-2c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5.2.6.7 1.8.8 1.9.1.2 0 .4-.2.6l-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.5-.6c.2-.2.3-.2.6-.1.2.1 1.5.7 1.8.8.2.1.4.2.4.4.1.3 0 .8-.2 1.1Z" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="8" y="8" width="11" height="11" rx="2" />
+      <path d="M6 16.2H5.4A1.4 1.4 0 0 1 4 14.8v-9A1.4 1.4 0 0 1 5.4 4.4h9A1.4 1.4 0 0 1 15.8 5.8V6" />
+    </svg>
+  );
+}
+
+function RenewIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M19.2 12a7.2 7.2 0 1 1-2.1-5" />
+      <path d="M19.2 4.2V8h-3.8" />
+    </svg>
+  );
+}
+
+function RecordLinkRow({ label, link, busy, phone, messageTemplate, onCreate, onCopy }) {
+  const url = link?.id ? shareUrl(link.id) : "";
+  const whatsApp = url ? whatsAppUrl(phone, shareWhatsAppMessage(messageTemplate, url)) : "";
   return (
     <div className="record-menu-row">
       <span>{label}</span>
       <span className="record-menu-row-actions">
-        {link ? (
-          <button type="button" className="record-menu-hint" disabled={busy} onClick={onCopy}>
-            Copiar
+        {whatsApp ? (
+          <a className="link-action" href={whatsApp} target="_blank" rel="noreferrer" aria-label={`Enviar ${label} no WhatsApp`}>
+            <WhatsAppIcon />
+          </a>
+        ) : (
+          <button type="button" className="link-action" disabled aria-label={`Enviar ${label} no WhatsApp`}>
+            <WhatsAppIcon />
           </button>
-        ) : null}
-        <button type="button" className="record-menu-hint" disabled={busy} onClick={onCreate}>
-          {busy ? "..." : link ? "Nova" : "Enviar"}
+        )}
+        <button type="button" className="link-action" disabled={!url || busy} aria-label={`Copiar link de ${label}`} onClick={onCopy}>
+          <CopyIcon />
+        </button>
+        <button type="button" className="link-action" disabled={busy} aria-label={`Gerar link novo de ${label}`} onClick={onCreate}>
+          <RenewIcon />
         </button>
       </span>
     </div>
@@ -2888,12 +2925,7 @@ export default function App() {
         pendingEvolutionTokenRef.current = token;
         setComposerLinkReady(true);
       }
-      try {
-        await navigator.clipboard.writeText(shareUrl(token));
-        publishShareNotice(scope, "Link gerado e copiado.");
-      } catch (copyError) {
-        publishShareNotice(scope, "Link gerado. Toque em Copiar.");
-      }
+      publishShareNotice(scope, "Link novo gerado.");
     } catch (createError) {
       publishShareNotice(scope, createError.message || "Não foi possível gerar o link.", "error");
     } finally {
@@ -3000,7 +3032,8 @@ export default function App() {
       tiktok: socialHandle(userProfile?.tiktok, "tiktok.com"),
       facebook: String(userProfile?.facebook || "").trim().slice(0, 80),
       website: String(userProfile?.website || "").trim().slice(0, 120),
-      logoDataUrl: String(userProfile?.logoDataUrl || "").startsWith("data:image/") ? userProfile.logoDataUrl : ""
+      logoDataUrl: String(userProfile?.logoDataUrl || "").startsWith("data:image/") ? userProfile.logoDataUrl : "",
+      whatsappMessage: String(userProfile?.whatsappMessage || "").slice(0, 500)
     });
     setIsProfileModalOpen(true);
   };
@@ -3056,6 +3089,7 @@ export default function App() {
       facebook: profileForm.facebook.trim().slice(0, 80),
       website: profileForm.website.trim().replace(/\s+/g, "").slice(0, 120),
       logoDataUrl: String(profileForm.logoDataUrl || "").startsWith("data:image/") ? profileForm.logoDataUrl : "",
+      whatsappMessage: String(profileForm.whatsappMessage || "").trim().slice(0, 500),
       email: user.email || "",
       updatedAt: serverTimestamp()
     };
@@ -5539,6 +5573,8 @@ export default function App() {
                           label="Anamnese"
                           link={anamneseLinks[0]}
                           busy={shareBusy === "anamnese"}
+                          phone={selectedClient.phone}
+                          messageTemplate={userProfile?.whatsappMessage}
                           onCreate={() => handleCreateClientLink("anamnese")}
                           onCopy={() => copyShareLink(anamneseLinks[0].id, "anamnese")}
                         />
@@ -5546,6 +5582,8 @@ export default function App() {
                           label="Coleta de feedback"
                           link={followupLinks.find((link) => link.moment === "feedback")}
                           busy={shareBusy === "followup-feedback"}
+                          phone={selectedClient.phone}
+                          messageTemplate={userProfile?.whatsappMessage}
                           onCreate={() => handleCreateClientLink("acompanhamento", "feedback")}
                           onCopy={() => copyShareLink(followupLinks.find((link) => link.moment === "feedback").id, "followup")}
                         />
@@ -5553,6 +5591,8 @@ export default function App() {
                           label="Uso de imagem"
                           link={consentLinks[0]}
                           busy={shareBusy === "consent"}
+                          phone={selectedClient.phone}
+                          messageTemplate={userProfile?.whatsappMessage}
                           onCreate={() => handleCreateClientLink("consentimento")}
                           onCopy={() => copyShareLink(consentLinks[0].id, "consent")}
                         />
@@ -6716,6 +6756,17 @@ export default function App() {
                   placeholder="www.suaclinica.com"
                   onChange={(event) => handleProfileFieldChange("website", event.target.value)}
                 />
+              </label>
+              <label className="full-row">
+                Mensagem do WhatsApp
+                <textarea
+                  value={profileForm.whatsappMessage}
+                  maxLength={500}
+                  rows={3}
+                  placeholder="Olá! Segue o seu link: {link}"
+                  onChange={(event) => handleProfileFieldChange("whatsappMessage", event.target.value)}
+                />
+                <span className="field-hint">Escreva {"{link}"} onde o endereço deve entrar. Se não escrever, o link vai no final.</span>
               </label>
               <label className="full-row">
                 E-mail da conta
