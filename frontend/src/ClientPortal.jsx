@@ -53,6 +53,7 @@ import {
   formatMetric,
   metricTrend,
   renderEvolutionCanvas,
+  loadLogoImage,
   sanitizeEvolutionStory,
   zipStoredFiles
 } from "./evolutionStory";
@@ -136,6 +137,14 @@ function SimpleLineChart({ title, values, labels, max, wide = false }) {
   );
 }
 
+function ClinicLogo({ src }) {
+  const logo = String(src || "");
+  if (!logo.startsWith("data:image/")) {
+    return null;
+  }
+  return <img className="client-logo" src={logo} alt="Logo da clínica" />;
+}
+
 function EvolutionStat({ label, value, trend }) {
   return (
     <article className="evolution-stat">
@@ -146,7 +155,7 @@ function EvolutionStat({ label, value, trend }) {
   );
 }
 
-function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicName, clientName, checkpoints }) {
+function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicName, clientName, checkpoints, logoUrl }) {
   const [index, setIndex] = useState(0);
   const [images, setImages] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -165,6 +174,7 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
     setBusy(true);
     (async () => {
       try {
+        const logoImage = await loadLogoImage(logoUrl);
         const built = [];
         for (const slide of slides) {
           const canvas = renderEvolutionCanvas({
@@ -175,7 +185,8 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
             homeCare: story.homeCare,
             checkpoints,
             include: slide.include,
-            instagram: evolution?.instagram || ""
+            instagram: evolution?.instagram || "",
+            logoImage
           });
           const blob = await canvasToBlob(canvas);
           if (cancelled) {
@@ -202,7 +213,7 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
       cancelled = true;
       urls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [open, slides, story, evolution, clinicName, clientName, checkpoints]);
+  }, [open, slides, story, evolution, clinicName, clientName, checkpoints, logoUrl]);
 
   useEffect(() => {
     if (!open) {
@@ -316,7 +327,7 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
   );
 }
 
-function EvolutionView({ evolution, fallbackName, clinicName }) {
+function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
   const story = sanitizeEvolutionStory(evolution || {});
   const series = evolutionSeries(evolution?.checkpoints || []);
   const name = evolution?.clientFirstName || fallbackName;
@@ -338,6 +349,7 @@ function EvolutionView({ evolution, fallbackName, clinicName }) {
     <main className="evolution-page">
       <section className="evolution-shell">
         <header className="evolution-hero">
+          <ClinicLogo src={logoUrl} />
           <p className="quiz-kicker">{evolution?.clinicName || clinicName}</p>
           <h1>Sua evolução, {name}</h1>
           {story.highlight ? <p className="evolution-highlight">{story.highlight}</p> : null}
@@ -399,6 +411,7 @@ function EvolutionView({ evolution, fallbackName, clinicName }) {
         clinicName={clinicName}
         clientName={name}
         checkpoints={series.points}
+        logoUrl={logoUrl}
       />
     </main>
   );
@@ -827,6 +840,7 @@ export default function ClientPortal() {
     return (
       <main className="quiz-page">
         <section className="quiz-card">
+          {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
           <p className="quiz-kicker">{link.clinicName}</p>
           <h1>Obrigado, {link.clientFirstName}!</h1>
           <p>
@@ -851,12 +865,14 @@ export default function ClientPortal() {
           evolution={evolution}
           fallbackName={link.clientFirstName}
           clinicName={link.clinicName}
+          logoUrl={link.logoDataUrl}
         />
       );
     }
     return (
       <main className="evolution-page">
         <section className="quiz-card evolution-lock">
+          <ClinicLogo src={link.logoDataUrl} />
           <p className="quiz-kicker">{link.clinicName}</p>
           <h1>Olá, {link.clientFirstName}</h1>
           <p>Para ver sua evolução, confirme o telefone cadastrado na clínica.</p>
@@ -930,6 +946,7 @@ export default function ClientPortal() {
   return (
     <main className="quiz-page">
       <section className="quiz-card">
+        {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
         <p className="quiz-kicker">{link.clinicName}</p>
         <h1>{link.type === "acompanhamento" ? "Como você está?" : `Olá, ${link.clientFirstName}`}</h1>
         <p className="muted-text">

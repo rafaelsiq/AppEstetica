@@ -244,6 +244,35 @@ export function clinicHandle(value) {
     .slice(0, 30);
 }
 
+export function loadLogoImage(dataUrl) {
+  const logo = String(dataUrl || "");
+  if (!logo.startsWith("data:image/")) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = logo;
+  });
+}
+
+function drawLogo(ctx, image, cx, cy, size) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2 + 6, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+  ctx.clip();
+  const scale = Math.max(size / image.width, size / image.height);
+  const width = image.width * scale;
+  const height = image.height * scale;
+  ctx.drawImage(image, cx - width / 2, cy - height / 2, width, height);
+  ctx.restore();
+}
+
 export function renderEvolutionCanvas({
   clinicName,
   clientFirstName,
@@ -252,7 +281,8 @@ export function renderEvolutionCanvas({
   homeCare,
   checkpoints,
   include,
-  instagram
+  instagram,
+  logoImage = null
 }) {
   const canvas = document.createElement("canvas");
   canvas.width = IMAGE_SIZE;
@@ -276,7 +306,8 @@ export function renderEvolutionCanvas({
   ctx.shadowOffsetY = 0;
 
   const textX = 88;
-  const textW = IMAGE_SIZE - 176;
+  const logoSize = logoImage ? 96 : 0;
+  const textW = IMAGE_SIZE - 176 - (logoSize ? logoSize + 24 : 0);
   ctx.font = "700 54px sans-serif";
   const title = `Sua evolução, ${clientFirstName || "cliente"}`.replace(/,\s*$/, "");
   const titleLines = wrapLines(ctx, title, textW, 2);
@@ -294,6 +325,9 @@ export function renderEvolutionCanvas({
   titleLines.forEach((line, index) => {
     ctx.fillText(line, textX, cardY + 128 + index * 64);
   });
+  if (logoImage) {
+    drawLogo(ctx, logoImage, cardX + cardW - 56 - logoSize / 2, cardY + headerH / 2, logoSize);
+  }
 
   let cursor = cardY + headerH + 36;
   const story = sanitizeEvolutionStory({ highlight, comments, homeCare });

@@ -1767,6 +1767,15 @@ h5 {
   font-weight: 700;
 }
 
+.client-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #ffffff;
+  border: 1px solid #e6eef1;
+}
+
 .quiz-progress {
   height: 8px;
   border-radius: 999px;
