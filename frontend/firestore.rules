@@ -76,6 +76,47 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
+    function bookingDateOk() {
+      let parts = request.resource.data.date.split('-');
+      return parts.size() == 3
+        && timestamp.date(int(parts[0]), int(parts[1]), int(parts[2])) >= request.time - duration.value(36, 'h')
+        && timestamp.date(int(parts[0]), int(parts[1]), int(parts[2])) <= request.time + duration.value(181, 'd');
+    }
+
+    function availabilityExists(token) {
+      return exists(/databases/$(database)/documents/clientLinks/$(token)/availability/off);
+    }
+
+    function availabilityData(token) {
+      return get(/databases/$(database)/documents/clientLinks/$(token)/availability/off).data;
+    }
+
+    function bookingSlotOpen(token) {
+      let date = request.resource.data.date;
+      let period = request.resource.data.period;
+      let slots = availabilityData(token).blockedSlots;
+      return !availabilityData(token).blockedDates.hasAny([date])
+        && (
+          period == "qualquer"
+            ? !(
+              slots.hasAny([date + "|manha"])
+              && slots.hasAny([date + "|tarde"])
+              && slots.hasAny([date + "|noite"])
+            )
+            : !slots.hasAny([date + "|" + period])
+        );
+    }
+
+    function availabilityOk(data) {
+      return data.keys().hasOnly(["closures", "blockedDates", "blockedSlots"])
+        && data.closures is list
+        && data.closures.size() <= 120
+        && data.blockedDates is list
+        && data.blockedDates.size() <= 200
+        && data.blockedSlots is list
+        && data.blockedSlots.size() <= 800;
+    }
+
     function noticeOk(notice) {
       return notice.keys().hasOnly([
           "listName",
@@ -173,6 +214,15 @@ service cloud.firestore {
         allow delete: if isLinkOwner(token);
       }
 
+      match /availability/{docId} {
+        allow get: if docId == "off";
+        allow list: if false;
+        allow create, update: if isLinkOwner(token)
+          && docId == "off"
+          && availabilityOk(request.resource.data);
+        allow delete: if isLinkOwner(token) && docId == "off";
+      }
+
       match /views/{phoneKey} {
         allow get: if phoneKey == linkSecret(token).phoneKey || isLinkOwner(token);
         allow list: if false;
@@ -183,7 +233,9 @@ service cloud.firestore {
         allow get, list: if isLinkOwner(token);
         allow create: if linkSecret(token).type == "primeiro"
           && linkPublic(token).status == "ativo"
-          && bookingRequestOk();
+          && bookingRequestOk()
+          && bookingDateOk()
+          && (!availabilityExists(token) || bookingSlotOpen(token));
         allow update: if isLinkOwner(token)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hidden"])
           && request.resource.data.hidden == true

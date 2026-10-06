@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { applyClinicIcon } from "./pageIcon";
-import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import ClientNotices from "./ClientNotices";
 import InstallAppPrompt from "./InstallAppPrompt";
@@ -23,6 +23,7 @@ import {
   whatsAppUrl
 } from "./firstContact";
 import { IMAGE_CONSENT_TEXT } from "./imageConsent";
+import { addDays, BOOKING_HORIZON_DAYS, isBookingOpen, isDayClosed } from "./agendaOff";
 
 function accessStorageKey(token) {
   return `clinica-acesso:${token}`;
@@ -492,9 +493,26 @@ function FirstContactRequest({ link, token }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(null);
+  const [closures, setClosures] = useState([]);
   const today = localToday();
+  const latestDate = addDays(today, BOOKING_HORIZON_DAYS);
   const steps = ["nome", "telefone", "dia", "periodo", "motivo"];
   const safeIndex = Math.min(stepIndex, steps.length - 1);
+  const openPeriods = FIRST_CONTACT_PERIODS.filter((item) => !date || isBookingOpen(closures, date, item.value));
+
+  useEffect(() => {
+    const availabilityRef = doc(db, "clientLinks", token, "availability", "off");
+    return onSnapshot(availabilityRef, (snapshot) => {
+      const next = snapshot.exists() && Array.isArray(snapshot.data()?.closures) ? snapshot.data().closures : [];
+      setClosures(next);
+    }, () => setClosures([]));
+  }, [token]);
+
+  useEffect(() => {
+    if (period && date && !isBookingOpen(closures, date, period)) {
+      setPeriod("");
+    }
+  }, [closures, date, period]);
 
   const toggleReason = (reason) => {
     setReasons((current) => (
@@ -514,12 +532,16 @@ function FirstContactRequest({ link, token }) {
       setError("Informe o telefone com DDD.");
       return;
     }
-    if (steps[safeIndex] === "dia" && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today)) {
-      setError("Escolha um dia a partir de hoje.");
+    if (steps[safeIndex] === "dia" && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || date > latestDate)) {
+      setError("Escolha um dia a partir de hoje, dentro dos próximos 6 meses.");
       return;
     }
-    if (steps[safeIndex] === "periodo" && !isAllowedPeriod(period)) {
-      setError("Escolha o período.");
+    if (steps[safeIndex] === "dia" && isDayClosed(closures, date)) {
+      setError("A clínica não atende nesse dia.");
+      return;
+    }
+    if (steps[safeIndex] === "periodo" && (!isAllowedPeriod(period) || !isBookingOpen(closures, date, period))) {
+      setError("Escolha um período disponível.");
       return;
     }
     setError("");
@@ -532,6 +554,10 @@ function FirstContactRequest({ link, token }) {
     const picked = normalizeReasons(reasons);
     if (picked.length < 1) {
       setError("Escolha pelo menos um motivo.");
+      return;
+    }
+    if (date < today || date > latestDate || isDayClosed(closures, date) || !isBookingOpen(closures, date, period)) {
+      setError("A clínica não atende nesse dia ou período.");
       return;
     }
     if (submitting) {
@@ -551,7 +577,10 @@ function FirstContactRequest({ link, token }) {
       });
       setSent({ clientName: trimmed, date, period, reasons: picked });
     } catch (submitError) {
-      setError("Não foi possível enviar o pedido. Tente novamente.");
+      const denied = String(submitError?.code || "").includes("permission");
+      setError(denied
+        ? "A clínica não atende nesse dia ou período."
+        : "Não foi possível enviar o pedido. Tente novamente.");
     } finally {
       setSubmitting(false);
     }
@@ -623,7 +652,21 @@ function FirstContactRequest({ link, token }) {
             <h2>Qual dia você prefere?</h2>
             <label>
               Dia
-              <input type="date" value={date} min={today} onChange={(event) => setDate(event.target.value)} />
+              <input
+                type="date"
+                value={date}
+                min={today}
+                max={latestDate}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setDate(next);
+                  if (next && isDayClosed(closures, next)) {
+                    setError("A clínica não atende nesse dia.");
+                    return;
+                  }
+                  setError("");
+                }}
+              />
             </label>
           </div>
         ) : null}
@@ -631,18 +674,28 @@ function FirstContactRequest({ link, token }) {
         {steps[safeIndex] === "periodo" ? (
           <div className="quiz-step">
             <h2>Qual período fica melhor?</h2>
-            <div className="quiz-options">
-              {FIRST_CONTACT_PERIODS.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  className={period === item.value ? "quiz-option active" : "quiz-option"}
-                  onClick={() => setPeriod(item.value)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+            {openPeriods.length === 0 ? (
+              <p>A clínica não atende nesse dia.</p>
+            ) : (
+              <div className="quiz-options">
+                {openPeriods.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={period === item.value ? "quiz-option active" : "quiz-option"}
+                    onClick={() => {
+                      setPeriod(item.value);
+                      setError("");
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {date && openPeriods.length > 0 && openPeriods.length < FIRST_CONTACT_PERIODS.length ? (
+              <p>Alguns períodos estão indisponíveis neste dia.</p>
+            ) : null}
           </div>
         ) : null}
 

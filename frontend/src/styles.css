@@ -801,11 +801,38 @@ label.logo-file-btn input {
   box-shadow: none;
 }
 
+.month-day.is-off {
+  color: #8b98a5;
+  text-decoration: line-through;
+}
+
+.month-day.is-selected.is-off {
+  color: #ffffff;
+}
+
+.month-day-marks {
+  display: flex;
+  gap: 3px;
+  min-height: 5px;
+  align-items: center;
+}
+
 .month-day-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: transparent;
+}
+
+.month-day-off {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #8a5a12;
+}
+
+.month-day.is-selected .month-day-off {
+  background: #ffffff;
 }
 
 .month-day.has-appointments .month-day-dot {
@@ -886,6 +913,75 @@ label.logo-file-btn input {
 .day-heading {
   margin: 0 0 4px;
   font-size: 16px;
+}
+
+.agenda-off {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e4eaee;
+}
+
+.agenda-off h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.agenda-off p {
+  margin: 0;
+  color: #54656f;
+  font-size: 13px;
+}
+
+.agenda-off-choices {
+  display: grid;
+  gap: 8px;
+}
+
+.agenda-off-choices label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.agenda-off-choices input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.agenda-off-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.agenda-off-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-off-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agenda-off .secondary-btn,
+.agenda-off .danger-btn {
+  width: fit-content;
+}
+
+.agenda-off .danger-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .appointment-modal {

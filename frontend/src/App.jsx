@@ -35,6 +35,18 @@ import {
   whatsAppUrl
 } from "./firstContact";
 import { consentDecisionLabel } from "./imageConsent";
+import {
+  buildAvailability,
+  closureApplies,
+  closureLabel,
+  closedPeriods,
+  isDayClosed,
+  localTodayIso,
+  MAX_CLOSURES,
+  minutesOf,
+  normalizeClosure
+} from "./agendaOff";
+import { publishAgendaAvailability } from "./agendaAvailability";
 
 const TABS = {
   INICIO: "inicio",
@@ -2061,6 +2073,13 @@ export default function App() {
   const [bookingBusy, setBookingBusy] = useState("");
   const [bookingWhatsAppUrl, setBookingWhatsAppUrl] = useState("");
   const [agendaMode, setAgendaMode] = useState("month");
+  const [agendaClosures, setAgendaClosures] = useState([]);
+  const [offStart, setOffStart] = useState("");
+  const [offEnd, setOffEnd] = useState("");
+  const [offRepeat, setOffRepeat] = useState(false);
+  const [offBusy, setOffBusy] = useState(false);
+  const [offError, setOffError] = useState("");
+  const publishedAvailabilityRef = useRef("");
   const [agendaSelectedDate, setAgendaSelectedDate] = useState("");
   const [agendaVisibleMonth, setAgendaVisibleMonth] = useState(() => {
     const today = new Date();
@@ -2166,6 +2185,9 @@ export default function App() {
       setBookingReview(null);
       setBookingNotice("");
       setBookingWhatsAppUrl("");
+      setAgendaClosures([]);
+      setOffError("");
+      publishedAvailabilityRef.current = "";
       importingLinksRef.current.clear();
       importingRequestsRef.current.clear();
       return undefined;
@@ -2197,13 +2219,51 @@ export default function App() {
       setShareLinks(links);
     });
 
+    const closuresCollection = collection(db, "users", user.uid, "agendaClosures");
+    const unsubscribeClosures = onSnapshot(closuresCollection, (snapshot) => {
+      setAgendaClosures(snapshot.docs.map((item) => {
+        const closure = normalizeClosure(item.data());
+        return closure ? { ...closure, id: item.id } : null;
+      }).filter(Boolean));
+    });
+
     return () => {
       unsubscribeClients();
       unsubscribeServices();
       unsubscribeAppointments();
       unsubscribeShareLinks();
+      unsubscribeClosures();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      return undefined;
+    }
+    const tokens = shareLinks
+      .filter((link) => link.type === "primeiro" && link.id)
+      .map((link) => link.id)
+      .sort();
+    if (!tokens.length) {
+      return undefined;
+    }
+    const availability = buildAvailability(agendaClosures, localTodayIso());
+    const key = JSON.stringify({ tokens, availability });
+    if (publishedAvailabilityRef.current === key) {
+      return undefined;
+    }
+    let cancelled = false;
+    publishAgendaAvailability(tokens, availability)
+      .then(() => {
+        if (!cancelled) {
+          publishedAvailabilityRef.current = key;
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user, shareLinks, agendaClosures]);
 
   useEffect(() => {
     if (!selectedClientId) {
@@ -3821,6 +3881,10 @@ export default function App() {
       pendingDates.add(date);
     }
   });
+  const selectedWeekday = parseIsoDate(selectedAgendaDate).getDay();
+  const selectedDayClosures = agendaClosures.filter((closure) => closureApplies(closure, selectedAgendaDate));
+  const selectedDayAllDay = selectedDayClosures.find((closure) => closure.allDay && !closure.recurring);
+  const selectedWeekAllDay = selectedDayClosures.find((closure) => closure.allDay && closure.recurring);
   const monthDays = buildMonthDays(agendaVisibleMonth);
   const visibleMonthLabel = MONTH_LABELS[agendaVisibleMonth.getMonth()];
   const monthTitle = `${visibleMonthLabel.charAt(0).toUpperCase()}${visibleMonthLabel.slice(1)} ${agendaVisibleMonth.getFullYear()}`;
@@ -3856,6 +3920,94 @@ export default function App() {
     setBookingNotice("");
     setBookingWhatsAppUrl("");
     setBookingBusy("");
+  };
+
+  const saveAgendaClosure = async (closure) => {
+    if (!user || offBusy) {
+      return;
+    }
+    if (agendaClosures.length >= MAX_CLOSURES) {
+      setOffError("Limite de bloqueios atingido.");
+      return;
+    }
+    setOffBusy(true);
+    setOffError("");
+    try {
+      await addDoc(collection(db, "users", user.uid, "agendaClosures"), closure);
+      return true;
+    } catch (error) {
+      setOffError("Não foi possível salvar o bloqueio.");
+      return false;
+    } finally {
+      setOffBusy(false);
+    }
+  };
+
+  const removeAgendaClosure = async (closureId) => {
+    if (!user || offBusy) {
+      return;
+    }
+    setOffBusy(true);
+    setOffError("");
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "agendaClosures", closureId));
+    } catch (error) {
+      setOffError("Não foi possível remover o bloqueio.");
+    } finally {
+      setOffBusy(false);
+    }
+  };
+
+  const toggleAgendaAllDay = async (recurring) => {
+    const existing = recurring ? selectedWeekAllDay : selectedDayAllDay;
+    if (existing) {
+      await removeAgendaClosure(existing.id);
+      return;
+    }
+    await saveAgendaClosure({
+      allDay: true,
+      recurring,
+      date: recurring ? "" : selectedAgendaDate,
+      weekday: selectedWeekday,
+      start: "",
+      end: ""
+    });
+  };
+
+  const handleAddAgendaOff = async () => {
+    const start = minutesOf(offStart);
+    const end = minutesOf(offEnd);
+    if (start == null || end == null) {
+      setOffError("Informe o início e o fim do horário.");
+      return;
+    }
+    if (start >= end) {
+      setOffError("O fim precisa ser depois do início.");
+      return;
+    }
+    const duplicate = selectedDayClosures.some((closure) => (
+      !closure.allDay
+      && closure.recurring === offRepeat
+      && closure.start === offStart
+      && closure.end === offEnd
+    ));
+    if (duplicate) {
+      setOffError("Esse horário já está bloqueado.");
+      return;
+    }
+    const saved = await saveAgendaClosure({
+      allDay: false,
+      recurring: offRepeat,
+      date: offRepeat ? "" : selectedAgendaDate,
+      weekday: selectedWeekday,
+      start: offStart,
+      end: offEnd
+    });
+    if (saved) {
+      setOffStart("");
+      setOffEnd("");
+      setOffRepeat(false);
+    }
   };
 
   const handleFirstContactLink = async () => {
@@ -4511,18 +4663,25 @@ export default function App() {
                       {weekday}
                     </span>
                   ))}
-                  {monthDays.map((isoDate, index) =>
-                    isoDate ? (
+                  {monthDays.map((isoDate, index) => {
+                    if (!isoDate) {
+                      return <span key={`empty-day-${index}`} className="month-day is-empty" />;
+                    }
+                    const dayIsOff = isDayClosed(agendaClosures, isoDate);
+                    const dayPartialOff = !dayIsOff && closedPeriods(agendaClosures, isoDate).length > 0;
+                    return (
                       <button
                         key={isoDate}
                         type="button"
                         className={`month-day ${isoDate === selectedAgendaDate ? "is-selected" : ""} ${
                           isoDate === todayIsoDate ? "is-today" : ""
-                        } ${appointmentCountByDate.get(isoDate) ? "has-appointments" : ""} ${
-                          pendingDates.has(isoDate) ? "has-pending" : ""
-                        }`}
+                        } ${dayIsOff ? "is-off" : ""} ${
+                          appointmentCountByDate.get(isoDate) ? "has-appointments" : ""
+                        } ${pendingDates.has(isoDate) ? "has-pending" : ""}`}
                         aria-pressed={isoDate === selectedAgendaDate}
                         aria-label={`${formatAgendaDayLabel(isoDate)}${
+                          dayIsOff ? ", fora da agenda" : ""
+                        }${dayPartialOff ? ", horário off" : ""}${
                           appointmentCountByDate.get(isoDate)
                             ? `, ${appointmentCountByDate.get(isoDate)} atendimento${
                                 appointmentCountByDate.get(isoDate) > 1 ? "s" : ""
@@ -4532,18 +4691,85 @@ export default function App() {
                         onClick={() => setAgendaSelectedDate(isoDate)}
                       >
                         <span>{parseIsoDate(isoDate).getDate()}</span>
-                        <span className="month-day-dot" />
+                        <span className="month-day-marks">
+                          <span className="month-day-dot" />
+                          {dayPartialOff ? <span className="month-day-off" /> : null}
+                        </span>
                       </button>
-                    ) : (
-                      <span key={`empty-day-${index}`} className="month-day is-empty" />
-                    )
-                  )}
+                    );
+                  })}
                 </div>
               ) : null}
             </article>
 
             <article className="card">
               {agendaMode === "month" ? <h3 className="day-heading">{selectedDayLabel}</h3> : null}
+              <section className="agenda-off" aria-label="Dias e horários off">
+                <h4>Fora da agenda</h4>
+                <p>A cliente não consegue pedir o primeiro atendimento nestes dias ou horários. Manhã vai de 8h às 12h, tarde de 12h às 18h e noite de 18h às 21h.</p>
+                <div className="agenda-off-choices">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selectedDayAllDay)}
+                      disabled={offBusy}
+                      onChange={() => toggleAgendaAllDay(false)}
+                    />
+                    Este dia inteiro
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selectedWeekAllDay)}
+                      disabled={offBusy}
+                      onChange={() => toggleAgendaAllDay(true)}
+                    />
+                    Toda {WEEKDAY_LABELS[selectedWeekday]} inteira
+                  </label>
+                </div>
+                <div className="agenda-off-times">
+                  <label>
+                    Início
+                    <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
+                  </label>
+                  <label>
+                    Fim
+                    <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
+                  </label>
+                </div>
+                <div className="agenda-off-choices">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={offRepeat}
+                      onChange={(event) => setOffRepeat(event.target.checked)}
+                    />
+                    Repetir toda semana
+                  </label>
+                </div>
+                <button className="secondary-btn" type="button" onClick={handleAddAgendaOff} disabled={offBusy}>
+                  Bloquear horário
+                </button>
+                {offError ? <p className="error-text">{offError}</p> : null}
+                {selectedDayClosures.length > 0 ? (
+                  <ul className="agenda-off-list">
+                    {selectedDayClosures.map((closure) => (
+                      <li key={closure.id}>
+                        <span>{closureLabel(closure)}</span>
+                        <button
+                          type="button"
+                          className="danger-btn"
+                          disabled={offBusy}
+                          aria-label={`Remover ${closureLabel(closure)}`}
+                          onClick={() => removeAgendaClosure(closure.id)}
+                        >
+                          Remover
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
               <ul className="list">
                 {selectedDayAppointments.length === 0 ? (
                   <li className="empty">Nenhum atendimento neste dia.</li>
@@ -4615,6 +4841,11 @@ export default function App() {
               <div>
                 <h4>Inserir atendimento</h4>
                 <p>{formatAgendaDayLabel(appointmentDate || selectedAgendaDate)}</p>
+                {isDayClosed(agendaClosures, appointmentDate || selectedAgendaDate) ? (
+                  <p className="muted-text">Este dia está off para a cliente. Você ainda pode inserir o atendimento.</p>
+                ) : closedPeriods(agendaClosures, appointmentDate || selectedAgendaDate).length > 0 ? (
+                  <p className="muted-text">Alguns horários deste dia estão off para a cliente. Você ainda pode inserir o atendimento.</p>
+                ) : null}
               </div>
               <ModalClose onClick={closeAppointmentModal} />
             </header>
