@@ -492,12 +492,6 @@ export function buildEvolutionSlides({ highlight, comments, homeCare, hasChart }
   keys.forEach((key) => {
     all[key] = true;
   });
-  slides.push({ title: "Todas as opções", file: "evolucao-todas.png", include: all });
-  const withoutNote = emptyShareInclude();
-  keys.filter((key) => key !== "comments").forEach((key) => {
-    withoutNote[key] = true;
-  });
-  slides.push({ title: "Todas as opções, sem o recado", file: "evolucao-sem-recado.png", include: withoutNote });
   if (available.stress && available.sleep) {
     slides.push({
       title: "Estresse e sono",
@@ -505,17 +499,12 @@ export function buildEvolutionSlides({ highlight, comments, homeCare, hasChart }
       include: { ...emptyShareInclude(), stress: true, sleep: true }
     });
   }
-  const soloOptions = SHARE_OPTIONS.filter(([key]) => key !== "highlight" && key !== "comments" && key !== "homeCare");
-  soloOptions.forEach(([key, label, file]) => {
-    if (!available[key]) {
-      return;
-    }
-    slides.push({
-      title: label,
-      file: `evolucao-${file}.png`,
-      include: { ...emptyShareInclude(), [key]: true }
-    });
+  slides.push({ title: "Todas as opções", file: "evolucao-todas.png", include: all });
+  const withoutNote = emptyShareInclude();
+  keys.filter((key) => key !== "comments").forEach((key) => {
+    withoutNote[key] = true;
   });
+  slides.push({ title: "Todas as opções, sem o recado", file: "evolucao-sem-recado.png", include: withoutNote });
   return slides;
 }
 
@@ -577,8 +566,8 @@ export function zipStoredFiles(files) {
   return new Blob([...locals, ...centrals, end], { type: "application/zip" });
 }
 
-export async function shareEvolutionImage(blob, text) {
-  const file = new File([blob], "minha-evolucao.png", { type: "image/png" });
+export async function shareEvolutionImage(blob, text, filename = "minha-evolucao.png") {
+  const file = new File([blob], filename, { type: "image/png" });
   if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
     await navigator.share({
       files: [file],
@@ -587,6 +576,6 @@ export async function shareEvolutionImage(blob, text) {
     });
     return "shared";
   }
-  await downloadEvolutionImage(blob);
+  await downloadEvolutionImage(blob, filename);
   return "downloaded";
 }

@@ -2007,10 +2007,68 @@ h5 {
   color: #54656f;
 }
 
-.evolution-share-jump {
-  text-decoration: none;
-  text-align: center;
-  width: 100%;
+.evolution-hero-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.evolution-hero-foot .evolution-meta {
+  margin-right: auto;
+}
+
+.evolution-share-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border: none;
+  border-radius: 50%;
+  background: #24695c;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.evolution-share-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.evolution-share-btn:hover,
+.evolution-share-btn:focus-visible {
+  background: #1c564b;
+}
+
+.evolution-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.evolution-chart-head h5 {
+  margin: 0;
+}
+
+.evolution-chart .evolution-share-btn {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  background: #e7f1ee;
+  color: #24695c;
+}
+
+.evolution-chart .evolution-share-btn:hover,
+.evolution-chart .evolution-share-btn:focus-visible {
+  background: #d5ebe4;
 }
 
 .evolution-stats {
@@ -2162,7 +2220,8 @@ h5 {
   align-items: center;
 }
 
-.evolution-carousel-nav p {
+.evolution-carousel-nav p,
+.evolution-carousel-single {
   margin: 0;
   text-align: center;
   font-weight: 700;
@@ -2187,19 +2246,14 @@ h5 {
   grid-column: auto;
 }
 
-.evolution-charts .chart-card h5 {
-  margin: 0 0 4px;
+.evolution-charts .chart-card h5,
+.evolution-charts .evolution-chart-head h5 {
+  margin: 0;
   font-size: 16px;
   color: #1d3550;
 }
 
 @media (min-width: 720px) {
-  .evolution-share-jump {
-    width: auto;
-    min-width: 220px;
-    justify-self: start;
-  }
-
   .evolution-charts {
     grid-template-columns: 1fr 1fr;
   }

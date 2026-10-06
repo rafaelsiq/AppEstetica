@@ -57,6 +57,7 @@ import {
   renderEvolutionCanvas,
   loadLogoImage,
   sanitizeEvolutionStory,
+  shareEvolutionImage,
   zipStoredFiles
 } from "./evolutionStory";
 
@@ -95,7 +96,17 @@ function QuizScale({ label, hint, value, onChange }) {
   );
 }
 
-function SimpleLineChart({ title, values, labels, max, wide = false }) {
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 16V4" />
+      <path d="M8 7.5 12 3.5l4 4" />
+      <path d="M6 12.5v6A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5v-6" />
+    </svg>
+  );
+}
+
+function SimpleLineChart({ title, values, labels, max, wide = false, onShare }) {
   const seriesValues = values || [];
   const seriesLabels = labels || [];
   const width = 360;
@@ -116,8 +127,15 @@ function SimpleLineChart({ title, values, labels, max, wide = false }) {
     : [0, seriesValues.length - 1];
 
   return (
-    <article className={wide ? "chart-card chart-card-span-2" : "chart-card"}>
-      <h5>{title}</h5>
+    <article className={wide ? "chart-card chart-card-span-2 evolution-chart" : "chart-card evolution-chart"}>
+      <div className="evolution-chart-head">
+        <h5>{title}</h5>
+        {onShare ? (
+          <button type="button" className="evolution-share-btn" aria-label={`Compartilhar ${title}`} onClick={onShare}>
+            <ShareIcon />
+          </button>
+        ) : null}
+      </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label={title}>
         <path d={path} className="chart-line chart-line-primary" />
         {seriesValues.map((value, index) => (
@@ -243,6 +261,20 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
   const current = images[index];
   const total = images.length || slides.length;
 
+  const shareCurrent = async () => {
+    if (!current?.blob) {
+      return;
+    }
+    try {
+      const result = await shareEvolutionImage(current.blob, current.title, current.file);
+      setMessage(result === "shared" ? "Escolha onde publicar a imagem." : "Imagem baixada. Publique a partir da galeria.");
+    } catch (shareError) {
+      if (shareError?.name !== "AbortError") {
+        setMessage("Não foi possível compartilhar.");
+      }
+    }
+  };
+
   const downloadCurrent = () => {
     if (!current?.blob) {
       return;
@@ -276,12 +308,12 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
         className="evolution-carousel"
         role="dialog"
         aria-modal="true"
-        aria-label="Imagens para as redes"
+        aria-label="Compartilhar evolução"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="profile-modal-header">
           <div>
-            <h4>Imagem para as redes</h4>
+            <h4>Compartilhar</h4>
             <p>{total ? `${Math.min(index + 1, total)} de ${total}` : "Preparando"}{current ? ` · ${current.title}` : ""}</p>
           </div>
           <ModalClose onClick={onClose} />
@@ -307,22 +339,29 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
             <img src={current.url} alt={current.title} />
           </div>
         ) : null}
-        <div className="evolution-carousel-nav">
-          <button type="button" className="secondary-btn" onClick={() => setIndex((value) => Math.max(0, value - 1))} disabled={index === 0 || !images.length}>
-            Anterior
-          </button>
-          <p>{current?.title || ""}</p>
-          <button type="button" className="secondary-btn" onClick={() => setIndex((value) => Math.min(images.length - 1, value + 1))} disabled={!images.length || index >= images.length - 1}>
-            Próxima
-          </button>
-        </div>
+        {total > 1 ? (
+          <div className="evolution-carousel-nav">
+            <button type="button" className="secondary-btn" onClick={() => setIndex((value) => Math.max(0, value - 1))} disabled={index === 0 || !images.length}>
+              Anterior
+            </button>
+            <p>{current?.title || ""}</p>
+            <button type="button" className="secondary-btn" onClick={() => setIndex((value) => Math.min(images.length - 1, value + 1))} disabled={!images.length || index >= images.length - 1}>
+              Próxima
+            </button>
+          </div>
+        ) : current ? <p className="evolution-carousel-single">{current.title}</p> : null}
         <div className="evolution-carousel-actions">
-          <button type="button" className="primary-btn" onClick={downloadCurrent} disabled={!current}>
+          <button type="button" className="primary-btn" onClick={shareCurrent} disabled={!current}>
+            Compartilhar
+          </button>
+          <button type="button" className="secondary-btn" onClick={downloadCurrent} disabled={!current}>
             Baixar esta
           </button>
-          <button type="button" className="secondary-btn" onClick={downloadAll} disabled={images.length < 2}>
-            Baixar todas
-          </button>
+          {total > 1 ? (
+            <button type="button" className="secondary-btn" onClick={downloadAll} disabled={images.length < 2}>
+              Baixar todas
+            </button>
+          ) : null}
         </div>
       </section>
     </div>
@@ -336,7 +375,7 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
   const hasChart = series.points.length >= 2;
   const hasStory = Boolean(story.comments || story.homeCare);
   const careLines = story.homeCare.split("\n").map((line) => line.trim()).filter(Boolean);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareSlides, setShareSlides] = useState(null);
   const range = series.labels.length > 1 ? `${series.labels[0]} a ${series.labels[series.labels.length - 1]}` : series.labels[0] || "";
   const slides = useMemo(() => buildEvolutionSlides({
     highlight: story.highlight,
@@ -344,6 +383,21 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
     homeCare: story.homeCare,
     hasChart
   }), [story.highlight, story.comments, story.homeCare, hasChart]);
+  const openChartShare = (key, title, file) => {
+    setShareSlides([{
+      title,
+      file,
+      include: {
+        highlight: false,
+        comments: false,
+        homeCare: false,
+        wellness: key === "wellness",
+        pain: key === "pain",
+        stress: key === "stress",
+        sleep: key === "sleep"
+      }
+    }]);
+  };
 
   const showTrend = series.points.length >= 2;
 
@@ -355,10 +409,14 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
           <p className="quiz-kicker">{evolution?.clinicName || clinicName}</p>
           <h1>Sua evolução, {name}</h1>
           {story.highlight ? <p className="evolution-highlight">{story.highlight}</p> : null}
-          {range ? <p className="evolution-meta">{series.points.length} registros · {range}</p> : null}
-          <button type="button" className="primary-btn evolution-share-jump" onClick={() => setShareOpen(true)}>
-            Imagem para as redes
-          </button>
+          <div className="evolution-hero-foot">
+            {range ? <p className="evolution-meta">{series.points.length} registros · {range}</p> : <span />}
+            {slides.length ? (
+              <button type="button" className="evolution-share-btn" aria-label="Compartilhar evolução" onClick={() => setShareSlides(slides)}>
+                <ShareIcon />
+              </button>
+            ) : null}
+          </div>
         </header>
 
         {series.points.length ? (
@@ -392,10 +450,10 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
           <div className="evolution-charts">
             {hasChart ? (
               <>
-                <SimpleLineChart wide title="Bem-estar" values={series.wellness} labels={series.labels} max={100} />
-                <SimpleLineChart title="Dor" values={series.pain} labels={series.labels} max={10} />
-                <SimpleLineChart title="Estresse" values={series.stress} labels={series.labels} max={10} />
-                <SimpleLineChart title="Sono (horas)" values={series.sleep} labels={series.labels} max={12} />
+                <SimpleLineChart wide title="Bem-estar" values={series.wellness} labels={series.labels} max={100} onShare={() => openChartShare("wellness", "Bem-estar", "evolucao-bem-estar.png")} />
+                <SimpleLineChart title="Dor" values={series.pain} labels={series.labels} max={10} onShare={() => openChartShare("pain", "Dor", "evolucao-dor.png")} />
+                <SimpleLineChart title="Estresse" values={series.stress} labels={series.labels} max={10} onShare={() => openChartShare("stress", "Estresse", "evolucao-estresse.png")} />
+                <SimpleLineChart title="Sono (horas)" values={series.sleep} labels={series.labels} max={12} onShare={() => openChartShare("sleep", "Sono", "evolucao-sono.png")} />
               </>
             ) : (
               <p className="muted-text">A clínica ainda está reunindo dados suficientes para os gráficos.</p>
@@ -405,9 +463,9 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl }) {
 
       </section>
       <EvolutionShareModal
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        slides={slides}
+        open={Boolean(shareSlides)}
+        onClose={() => setShareSlides(null)}
+        slides={shareSlides || []}
         story={story}
         evolution={evolution}
         clinicName={clinicName}
