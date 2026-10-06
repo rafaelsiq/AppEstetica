@@ -2080,6 +2080,7 @@ export default function App() {
   const [offBusy, setOffBusy] = useState(false);
   const [offError, setOffError] = useState("");
   const publishedAvailabilityRef = useRef("");
+  const availabilityQueueRef = useRef(Promise.resolve());
   const [agendaSelectedDate, setAgendaSelectedDate] = useState("");
   const [agendaVisibleMonth, setAgendaVisibleMonth] = useState(() => {
     const today = new Date();
@@ -2188,6 +2189,7 @@ export default function App() {
       setAgendaClosures([]);
       setOffError("");
       publishedAvailabilityRef.current = "";
+      availabilityQueueRef.current = Promise.resolve();
       importingLinksRef.current.clear();
       importingRequestsRef.current.clear();
       return undefined;
@@ -2252,17 +2254,16 @@ export default function App() {
     if (publishedAvailabilityRef.current === key) {
       return undefined;
     }
-    let cancelled = false;
-    publishAgendaAvailability(tokens, availability)
-      .then(() => {
-        if (!cancelled) {
-          publishedAvailabilityRef.current = key;
+    availabilityQueueRef.current = availabilityQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        if (publishedAvailabilityRef.current === key) {
+          return;
         }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
+        await publishAgendaAvailability(tokens, availability);
+        publishedAvailabilityRef.current = key;
+      });
+    return undefined;
   }, [user, shareLinks, agendaClosures]);
 
   useEffect(() => {

@@ -514,6 +514,12 @@ function FirstContactRequest({ link, token }) {
     }
   }, [closures, date, period]);
 
+  useEffect(() => {
+    if (date && isDayClosed(closures, date)) {
+      setError("A clínica não atende nesse dia.");
+    }
+  }, [closures, date]);
+
   const toggleReason = (reason) => {
     setReasons((current) => (
       current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason]
