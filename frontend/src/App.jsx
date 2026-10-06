@@ -17,6 +17,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import ModalClose from "./ModalClose";
 import { phoneKey } from "./clientQuiz";
 import { applyClinicIcon } from "./pageIcon";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
@@ -4591,9 +4592,7 @@ export default function App() {
                 <h4>Inserir atendimento</h4>
                 <p>{formatAgendaDayLabel(appointmentDate || selectedAgendaDate)}</p>
               </div>
-              <button type="button" className="secondary-btn" onClick={closeAppointmentModal}>
-                Fechar
-              </button>
+              <ModalClose onClick={closeAppointmentModal} />
             </header>
             <form className="form grid-form" onSubmit={handleAddAppointment}>
             <label>
@@ -4761,9 +4760,7 @@ export default function App() {
                 <h4>{bookingReview.client}</h4>
                 <p>Primeiro atendimento</p>
               </div>
-              <button type="button" className="secondary-btn" onClick={closeBookingReview}>
-                Fechar
-              </button>
+              <ModalClose onClick={closeBookingReview} />
             </header>
             <BookingBadge status={bookingReview.status} />
             <dl className="booking-details">
@@ -5016,6 +5013,7 @@ export default function App() {
                         )}
                       </svg>
                     </button>
+                    <ModalClose onClick={handleCloseClientView} />
                     {isRecordMenuOpen ? (
                       <div className="record-menu-dropdown" role="dialog" aria-label="Menu da cliente">
                         <button type="button" className="record-menu-item" onClick={handleCloseClientView}>
@@ -5814,9 +5812,7 @@ export default function App() {
                         <h4>Adicionar foto</h4>
                         <p>A foto fica vinculada a esta sessão e é salva junto com ela.</p>
                       </div>
-                      <button type="button" className="secondary-btn" onClick={() => setIsPhotoComposerOpen(false)}>
-                        Fechar
-                      </button>
+                      <ModalClose onClick={() => setIsPhotoComposerOpen(false)} />
                     </header>
                     <form className="form" onSubmit={handleAddPhotoAnalysis}>
                       <div className="grid-form photo-position-fields">
@@ -6089,9 +6085,7 @@ export default function App() {
                 <h4>Meu cadastro</h4>
                 <p>Gerencie os dados do seu perfil profissional.</p>
               </div>
-              <button type="button" className="secondary-btn" onClick={handleCloseProfileModal}>
-                Fechar
-              </button>
+              <ModalClose onClick={handleCloseProfileModal} />
             </header>
 
             <form className="form grid-form" onSubmit={handleSaveProfile}>
@@ -6250,9 +6244,7 @@ export default function App() {
                 <h4>Evolução de {selectedClient.name.split(" ")[0]}</h4>
                 <p>A cliente vê o que você escrever aqui, junto com os gráficos de bem-estar, dor, estresse e sono.</p>
               </div>
-              <button type="button" className="secondary-btn" onClick={() => setIsEvolutionComposerOpen(false)}>
-                Fechar
-              </button>
+              <ModalClose onClick={() => setIsEvolutionComposerOpen(false)} />
             </header>
             <form className="form" onSubmit={handleUpdateEvolution}>
               <label>
@@ -6329,9 +6321,7 @@ export default function App() {
                 <h4>{editingClientId ? "Editar cadastro da cliente" : "Adicionar nova cliente"}</h4>
                 <p>Os dados ficam no cadastro da cliente.</p>
               </div>
-              <button type="button" className="secondary-btn" onClick={resetClientForm}>
-                Fechar
-              </button>
+              <ModalClose onClick={resetClientForm} />
             </header>
             <form className="form grid-form" onSubmit={handleSaveClient}>
               <label>

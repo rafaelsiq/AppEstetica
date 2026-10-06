@@ -153,6 +153,36 @@ a.primary-btn {
   color: #24343d;
 }
 
+.modal-close {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  align-self: flex-start;
+  margin-left: auto;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #24695c;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.modal-close svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.modal-close:hover,
+.modal-close:focus-visible {
+  background: #e7f1ee;
+}
+
 .danger-btn {
   background: #fce8e8;
   color: #9e2525;
@@ -1284,6 +1314,12 @@ label.logo-file-btn input {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+}
+
+.profile-modal-header > div:first-child,
+.client-modal-header > div:first-child {
+  min-width: 0;
+  flex: 1;
 }
 
 .profile-modal-header h4 {
@@ -2744,8 +2780,8 @@ h5 {
   }
 
   .client-modal-header {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: flex-start;
   }
 
   .client-modal-header-actions {
@@ -2759,8 +2795,8 @@ h5 {
   }
 
   .profile-modal-header {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: flex-start;
   }
 
   .photo-analysis-item {

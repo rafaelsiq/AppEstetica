@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { applyClinicIcon } from "./pageIcon";
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import ModalClose from "./ModalClose";
 import {
   buildAnamneseSteps,
   buildFollowupSteps,
@@ -282,7 +283,7 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
             <h4>Imagem para as redes</h4>
             <p>{total ? `${Math.min(index + 1, total)} de ${total}` : "Preparando"}{current ? ` · ${current.title}` : ""}</p>
           </div>
-          <button type="button" className="secondary-btn" onClick={onClose}>Fechar</button>
+          <ModalClose onClick={onClose} />
         </header>
         {busy ? <p>Preparando as imagens...</p> : null}
         {message ? <p className="evolution-share-message">{message}</p> : null}
