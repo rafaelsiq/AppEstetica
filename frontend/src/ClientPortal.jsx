@@ -4,7 +4,7 @@ import { applyClinicIcon } from "./pageIcon";
 import { addDoc, collection, doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import ClientNotices from "./ClientNotices";
-import InstallAppPrompt from "./InstallAppPrompt";
+import ClientAccessPrompts from "./InstallAppPrompt";
 import ModalClose from "./ModalClose";
 import {
   buildAnamneseSteps,
@@ -974,7 +974,7 @@ export default function ClientPortal() {
             </p>
           </section>
         </main>
-        {link.type === "acompanhamento" ? <InstallAppPrompt clinicName={link.clinicName} /> : null}
+        {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} /> : null}
       </>
     );
   }
@@ -993,7 +993,7 @@ export default function ClientPortal() {
             clinicName={link.clinicName}
             logoUrl={link.logoDataUrl}
           />
-          <InstallAppPrompt clinicName={link.clinicName} />
+          <ClientAccessPrompts clinicName={link.clinicName} unlocked />
         </>
       );
     }
@@ -1022,7 +1022,7 @@ export default function ClientPortal() {
           </form>
         </section>
       </main>
-      <InstallAppPrompt clinicName={link.clinicName} />
+      <ClientAccessPrompts clinicName={link.clinicName} />
       </>
     );
   }
@@ -1142,7 +1142,7 @@ export default function ClientPortal() {
         </div>
       </section>
     </main>
-    {link.type === "acompanhamento" ? <InstallAppPrompt clinicName={link.clinicName} /> : null}
+    {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} /> : null}
     </>
   );
 }

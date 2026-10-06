@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import ModalClose from "./ModalClose";
 
-const DISMISS_KEY = "clinica-app-convite";
-const SEEN_KEY = "clinica-app-visto";
+const INSTALL_DISMISS_KEY = "clinica-app-convite";
+const NOTIFY_DISMISS_KEY = "clinica-notificacao-convite";
+const INSTALL_SEEN_KEY = "clinica-app-visto";
+const NOTIFY_SEEN_KEY = "clinica-notificacao-visto";
 const DESTINATION_KEY = "clinica-app-destino";
 
 function isIos() {
@@ -32,11 +34,51 @@ function notificationPermission() {
   return Notification.permission;
 }
 
-export default function InstallAppPrompt({ clinicName }) {
+function wasDismissed(key) {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberDismiss(key) {
+  try {
+    localStorage.setItem(key, "1");
+  } catch {
+    // Sem armazenamento, o convite só some nesta tela.
+  }
+}
+
+function sessionSeen(key) {
+  try {
+    return sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markSessionSeen(key) {
+  try {
+    sessionStorage.setItem(key, "1");
+  } catch {
+    // Segue sem lembrar desta visita.
+  }
+}
+
+function installNeeded() {
+  return isMobile() && !isInstalled() && !wasDismissed(INSTALL_DISMISS_KEY);
+}
+
+function notifyNeeded() {
+  return notificationPermission() === "default" && !wasDismissed(NOTIFY_DISMISS_KEY);
+}
+
+export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
   const [installEvent, setInstallEvent] = useState(() => window.__clinicaInstallPrompt || null);
-  const [installed, setInstalled] = useState(() => isInstalled());
-  const [permission, setPermission] = useState(() => notificationPermission());
-  const [open, setOpen] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
+  const [installSettled, setInstallSettled] = useState(() => !installNeeded());
+  const [notifyOpen, setNotifyOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -54,50 +96,39 @@ export default function InstallAppPrompt({ clinicName }) {
   }, []);
 
   useEffect(() => {
-    const mobile = isMobile();
-    const standalone = isInstalled();
-    setInstalled(standalone);
-    const currentPermission = notificationPermission();
-    setPermission(currentPermission);
-    let dismissed = false;
-    try {
-      dismissed = localStorage.getItem(DISMISS_KEY) === "1";
-    } catch {
-      dismissed = false;
-    }
-    const needsInstall = mobile && !standalone;
-    const needsNotification = currentPermission === "default" && (needsInstall || standalone);
-    if (dismissed || (!needsInstall && !needsNotification)) {
+    if (installSettled) {
       return undefined;
     }
-    let alreadySeen = false;
-    try {
-      alreadySeen = sessionStorage.getItem(SEEN_KEY) === "1";
-    } catch {
-      alreadySeen = false;
-    }
-    if (alreadySeen) {
-      setOpen(true);
-      return undefined;
-    }
+    const delay = sessionSeen(INSTALL_SEEN_KEY) ? 0 : 700;
     const timer = window.setTimeout(() => {
-      try {
-        sessionStorage.setItem(SEEN_KEY, "1");
-      } catch {
-        // Segue sem lembrar desta visita.
-      }
-      setOpen(true);
-    }, 700);
+      markSessionSeen(INSTALL_SEEN_KEY);
+      setInstallOpen(true);
+    }, delay);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [installSettled]);
 
-  if (!open) {
-    return null;
+  useEffect(() => {
+    if (!unlocked || !installSettled || installOpen || notifyOpen || !notifyNeeded()) {
+      return undefined;
+    }
+    const delay = sessionSeen(NOTIFY_SEEN_KEY) ? 0 : 400;
+    const timer = window.setTimeout(() => {
+      markSessionSeen(NOTIFY_SEEN_KEY);
+      setNotifyOpen(true);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [unlocked, installSettled, installOpen, notifyOpen]);
+
+  function dismissInstall() {
+    rememberDismiss(INSTALL_DISMISS_KEY);
+    setInstallOpen(false);
+    setInstallSettled(true);
   }
 
-  const ios = isIos();
-  const canInstall = Boolean(installEvent) && !installed;
-  const canAskNotification = permission === "default";
+  function dismissNotify() {
+    rememberDismiss(NOTIFY_DISMISS_KEY);
+    setNotifyOpen(false);
+  }
 
   async function install() {
     const event = installEvent;
@@ -110,10 +141,7 @@ export default function InstallAppPrompt({ clinicName }) {
       event.prompt();
       const choice = await event.userChoice;
       if (choice?.outcome === "accepted") {
-        setInstalled(true);
-        if (notificationPermission() !== "default") {
-          dismiss();
-        }
+        dismissInstall();
       }
     } catch {
       // O navegador fechou o pedido de instalação.
@@ -122,68 +150,74 @@ export default function InstallAppPrompt({ clinicName }) {
 
   async function allowNotifications() {
     if (!("Notification" in window) || Notification.permission !== "default") {
+      dismissNotify();
       return;
     }
     try {
       const result = await Notification.requestPermission();
-      setPermission(result);
       if (result === "granted") {
         window.dispatchEvent(new Event("clinica-notifications-granted"));
       }
-      if (result !== "default" && (installed || isInstalled())) {
-        dismiss();
+      if (result !== "default") {
+        setNotifyOpen(false);
       }
     } catch {
       // Este navegador não abriu o pedido de permissão.
     }
   }
 
-  function dismiss() {
-    try {
-      localStorage.setItem(DISMISS_KEY, "1");
-    } catch {
-      // Sem armazenamento, o convite só some nesta tela.
-    }
-    setOpen(false);
-  }
-
-  const title = installed ? "Ativar notificações" : "Instalar o aplicativo";
   const clinic = clinicName ? ` de ${clinicName}` : "";
+  const ios = isIos();
+  const canInstall = Boolean(installEvent);
 
-  return (
-    <div className="client-modal-backdrop install-app-backdrop" role="presentation">
-      <section className="quiz-card install-app-modal" role="dialog" aria-modal="true" aria-labelledby="install-app-title">
-        <div className="install-app-header">
-          <h2 id="install-app-title">{title}</h2>
-          <ModalClose onClick={dismiss} />
-        </div>
-        {installed ? (
-          <p>Permita as notificações para a clínica poder avisar você neste celular.</p>
-        ) : (
+  if (installOpen) {
+    return (
+      <div className="client-modal-backdrop install-app-backdrop" role="presentation">
+        <section className="quiz-card install-app-modal" role="dialog" aria-modal="true" aria-labelledby="install-app-title">
+          <div className="install-app-header">
+            <h2 id="install-app-title">Instalar o aplicativo</h2>
+            <ModalClose onClick={dismissInstall} />
+          </div>
           <p>
             Adicione o acompanhamento{clinic} à tela inicial do celular.
             A instalação segue o padrão de aplicativo e abre direto neste acompanhamento.
-            Permita também as notificações para receber avisos da clínica.
           </p>
-        )}
-        {!installed && ios ? (
-          <ol className="install-app-steps">
-            <li>Toque em Compartilhar na barra do navegador.</li>
-            <li>Escolha Adicionar à Tela de Início.</li>
-            <li>Confirme em Adicionar.</li>
-          </ol>
-        ) : null}
-        {!installed && !ios && !canInstall ? (
-          <p>No menu do navegador, toque em Instalar aplicativo ou Adicionar à tela inicial.</p>
-        ) : null}
+          {ios ? (
+            <ol className="install-app-steps">
+              <li>Toque em Compartilhar na barra do navegador.</li>
+              <li>Escolha Adicionar à Tela de Início.</li>
+              <li>Confirme em Adicionar.</li>
+            </ol>
+          ) : null}
+          {!ios && !canInstall ? (
+            <p>No menu do navegador, toque em Instalar aplicativo ou Adicionar à tela inicial.</p>
+          ) : null}
+          <div className="install-app-actions">
+            {canInstall ? (
+              <button type="button" className="primary-btn" onClick={install}>Instalar</button>
+            ) : null}
+            <button type="button" className="secondary-btn" onClick={dismissInstall}>Agora não</button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (!notifyOpen) {
+    return null;
+  }
+
+  return (
+    <div className="client-modal-backdrop install-app-backdrop" role="presentation">
+      <section className="quiz-card install-app-modal" role="dialog" aria-modal="true" aria-labelledby="notify-app-title">
+        <div className="install-app-header">
+          <h2 id="notify-app-title">Ativar notificações</h2>
+          <ModalClose onClick={dismissNotify} />
+        </div>
+        <p>Permita as notificações para {clinicName || "a clínica"} avisar você neste celular.</p>
         <div className="install-app-actions">
-          {canInstall ? (
-            <button type="button" className="primary-btn" onClick={install}>Instalar</button>
-          ) : null}
-          {canAskNotification ? (
-            <button type="button" className="primary-btn" onClick={allowNotifications}>Permitir notificações</button>
-          ) : null}
-          <button type="button" className="secondary-btn" onClick={dismiss}>Agora não</button>
+          <button type="button" className="primary-btn" onClick={allowNotifications}>Permitir notificações</button>
+          <button type="button" className="secondary-btn" onClick={dismissNotify}>Agora não</button>
         </div>
       </section>
     </div>
