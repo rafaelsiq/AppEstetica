@@ -857,7 +857,6 @@ select:focus {
   right: 0;
   z-index: 5;
   width: min(320px, calc(100vw - 48px));
-  max-width: 100%;
   max-height: min(68vh, 540px);
   overflow-x: hidden;
   overflow-y: auto;
