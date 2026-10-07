@@ -919,8 +919,14 @@ label.logo-file-btn input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   margin-bottom: 4px;
+}
+
+.agenda-day-header .day-heading {
+  flex: 1 0 auto;
+  white-space: nowrap;
 }
 
 .agenda-day-header .secondary-btn {
