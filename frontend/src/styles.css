@@ -2182,6 +2182,128 @@ h5 {
   flex: none;
 }
 
+.notification-lists .notification-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding: 14px 10px 14px 16px;
+  border: 1px solid #e4ebef;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.notification-lists .notification-card.is-paused {
+  background: #f7f8f9;
+}
+
+.notification-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.notification-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notification-card-copy strong {
+  color: #1d3550;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.notification-card-copy p {
+  margin: 0;
+  color: #6a7a84;
+  font-size: 14px;
+}
+
+.notification-status {
+  border-radius: 999px;
+  background: #e8eef1;
+  color: #54656f;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.notification-card-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.notification-menu-trigger {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #6a7a84;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.notification-menu-trigger:hover,
+.notification-menu-trigger[aria-expanded="true"] {
+  background: #f2f5f7;
+  color: #24343d;
+}
+
+.notification-menu-trigger svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.notification-menu {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  z-index: 6;
+  min-width: 168px;
+  padding: 6px;
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(10, 29, 46, 0.16);
+  display: grid;
+}
+
+.notification-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  color: #24343d;
+  border-radius: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.notification-menu button:hover,
+.notification-menu button:focus-visible {
+  background: #f3f7f6;
+}
+
+.notification-menu button.is-danger {
+  color: #9e2525;
+}
+
+.notification-menu button.is-danger:hover,
+.notification-menu button.is-danger:focus-visible {
+  background: #fdf3f3;
+}
+
 @media (max-width: 640px) {
   .notification-heading {
     flex-direction: column;

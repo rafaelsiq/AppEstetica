@@ -93,7 +93,9 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
   const [repeatError, setRepeatError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState("");
   const syncing = useRef(false);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     if (!uid) {
@@ -161,6 +163,28 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [repeatDraft]);
+
+  useEffect(() => {
+    if (!openMenuId) {
+      return undefined;
+    }
+    const onPointer = (event) => {
+      if (!menuRef.current?.contains(event.target)) {
+        setOpenMenuId("");
+      }
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        setOpenMenuId("");
+      }
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openMenuId]);
 
   const update = (patch) => setForm((current) => ({ ...current, ...patch }));
 
@@ -335,23 +359,51 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
       <ul className="list">
         {lists.length === 0 ? <li className="empty">Nenhuma lista criada.</li> : null}
         {lists.map((list) => (
-          <li key={list.id}>
-            <div>
-              <strong>{list.name}</strong>
+          <li key={list.id} className={list.active === false ? "notification-card is-paused" : "notification-card"}>
+            <div className="notification-card-copy">
+              <div className="notification-card-title">
+                <strong>{list.name}</strong>
+                {list.active === false ? <span className="notification-status">Pausada</span> : null}
+              </div>
               <p>{frequencyLabel(list)}</p>
               <p>{audienceLabel(list, clients)}</p>
-              {list.active === false ? <p>Pausada</p> : null}
             </div>
-            <div className="inline-actions">
-              <button type="button" className="secondary-btn" disabled={busy} onClick={() => { setError(""); setForm({ ...emptyNotificationList(todayIso()), ...list, clientIds: list.clientIds || [], weekdays: list.weekdays || [] }); }}>
-                Editar
+            <div className="notification-card-menu" ref={openMenuId === list.id ? menuRef : null}>
+              <button
+                type="button"
+                className="notification-menu-trigger"
+                aria-label={`Ações de ${list.name}`}
+                aria-expanded={openMenuId === list.id}
+                disabled={busy}
+                onClick={() => setOpenMenuId((current) => (current === list.id ? "" : list.id))}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="5" r="1.7" />
+                  <circle cx="12" cy="12" r="1.7" />
+                  <circle cx="12" cy="19" r="1.7" />
+                </svg>
               </button>
-              <button type="button" className="secondary-btn" disabled={busy} onClick={() => toggleActive(list)}>
-                {list.active === false ? "Ativar" : "Pausar"}
-              </button>
-              <button type="button" className="danger-btn" disabled={busy} onClick={() => remove(list)}>
-                Excluir
-              </button>
+              {openMenuId === list.id ? (
+                <div className="notification-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpenMenuId("");
+                      setError("");
+                      setForm({ ...emptyNotificationList(todayIso()), ...list, clientIds: list.clientIds || [], weekdays: list.weekdays || [] });
+                    }}
+                  >
+                    Editar
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => { setOpenMenuId(""); toggleActive(list); }}>
+                    {list.active === false ? "Ativar" : "Pausar"}
+                  </button>
+                  <button type="button" role="menuitem" className="is-danger" onClick={() => { setOpenMenuId(""); remove(list); }}>
+                    Excluir
+                  </button>
+                </div>
+              ) : null}
             </div>
           </li>
         ))}
