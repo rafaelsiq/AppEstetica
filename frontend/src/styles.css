@@ -1543,6 +1543,15 @@ label.logo-file-btn input {
   gap: 12px;
 }
 
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
 .panel-header h4 {
   margin: 0;
 }
@@ -2479,11 +2488,7 @@ h5 {
 
 .tracking-parameters {
   display: grid;
-  gap: 10px;
-  background: #ffffff;
-  border: 1px solid #e6eef1;
-  border-radius: 16px;
-  padding: 14px;
+  gap: 12px;
 }
 
 .tracking-parameters h5 {
@@ -2536,6 +2541,10 @@ h5 {
     grid-template-columns: minmax(0, 1.4fr) minmax(90px, 0.5fr) minmax(160px, 1fr) auto;
     align-items: end;
   }
+}
+
+.profile-modal .tracking-parameter-form {
+  grid-template-columns: 1fr;
 }
 
 .evolution-stat strong {
@@ -3263,6 +3272,13 @@ h5 {
 
   .panel-header {
     flex-direction: column;
+  }
+
+  .panel-header-actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    width: 100%;
   }
 
   .inline-actions {

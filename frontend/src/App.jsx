@@ -1482,15 +1482,19 @@ function PhotoMeasurementEditor({
   );
 }
 
-function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAdd, onRemove }) {
+function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAdd, onRemove, onClose }) {
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        onClose?.();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <section className="tracking-parameters">
-      <div>
-        <h5>Parâmetros</h5>
-        <p className="muted-text">
-          Crie uma medida desta cliente e a unidade. Ex.: alcance do ombro direito, em cm.
-        </p>
-      </div>
+    <div className="tracking-parameters">
       {parameters.length ? (
         <ul className="tracking-parameter-list">
           {parameters.map((parameter) => (
@@ -1538,12 +1542,12 @@ function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAd
             <option value="down">O valor diminui</option>
           </select>
         </label>
-        <button className="secondary-btn" type="submit" disabled={busy}>
-          Adicionar parâmetro
+        <button className="primary-btn" type="submit" disabled={busy}>
+          {busy ? "Salvando..." : "Adicionar parâmetro"}
         </button>
       </form>
       {error ? <p className="error-text">{error}</p> : null}
-    </section>
+    </div>
   );
 }
 
@@ -2288,6 +2292,7 @@ export default function App() {
   const [parameterForm, setParameterForm] = useState(() => emptyParameterForm());
   const [parameterError, setParameterError] = useState("");
   const [parameterBusy, setParameterBusy] = useState(false);
+  const [isParameterEditorOpen, setIsParameterEditorOpen] = useState(false);
   const [checkpointError, setCheckpointError] = useState("");
   const [photoAnalyses, setPhotoAnalyses] = useState([]);
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
@@ -2751,6 +2756,7 @@ export default function App() {
       setTrackingParameters([]);
       setParameterForm(emptyParameterForm());
       setParameterError("");
+      setIsParameterEditorOpen(false);
       setPhotoAnalyses([]);
       setPhotoForm(buildEmptyPhotoAnalysis());
       setDraftPhotos([]);
@@ -3220,6 +3226,7 @@ export default function App() {
     setIsPhotoComposerOpen(false);
     setIsRecordMenuOpen(false);
     setIsEvolutionComposerOpen(false);
+    setIsParameterEditorOpen(false);
   };
 
   const handleStartEditAnamnese = () => {
@@ -3808,6 +3815,20 @@ export default function App() {
     setCheckpointForm((previous) => ({ ...previous, [fieldName]: value }));
   };
 
+  const openParameterEditor = () => {
+    setParameterError("");
+    setParameterForm(emptyParameterForm());
+    setIsParameterEditorOpen(true);
+  };
+
+  const closeParameterEditor = () => {
+    if (parameterBusy) {
+      return;
+    }
+    setParameterError("");
+    setIsParameterEditorOpen(false);
+  };
+
   const handleParameterFieldChange = (patch) => {
     setParameterError("");
     setParameterForm((previous) => ({ ...previous, ...patch }));
@@ -3831,6 +3852,7 @@ export default function App() {
         createdAt: serverTimestamp()
       });
       setParameterForm(emptyParameterForm());
+      setIsParameterEditorOpen(false);
     } catch (parameterSaveError) {
       setParameterError("Não foi possível salvar o parâmetro. Tente novamente.");
     } finally {
@@ -6116,33 +6138,29 @@ export default function App() {
                           <h4>Acompanhamento</h4>
                           <p>Sessões da clínica e feedbacks enviados pela cliente.</p>
                         </div>
-                        <button
-                          type="button"
-                          className="primary-btn"
-                          onClick={() => {
-                            setCheckpointForm({
-                              ...buildEmptyCheckpoint(),
-                              sessionNumber: String(getNextSessionNumber(checkpoints))
-                            });
-                            setDraftPhotos([]);
-                            setPhotoForm(buildEmptyPhotoAnalysis());
-                            setPhotoMessage("");
-                            setIsPhotoComposerOpen(false);
-                            setFollowupScreen("create");
-                          }}
-                        >
-                          Nova sessão
-                        </button>
+                        <div className="panel-header-actions">
+                          <button type="button" className="secondary-btn" onClick={openParameterEditor}>
+                            Adicionar parâmetro
+                          </button>
+                          <button
+                            type="button"
+                            className="primary-btn"
+                            onClick={() => {
+                              setCheckpointForm({
+                                ...buildEmptyCheckpoint(),
+                                sessionNumber: String(getNextSessionNumber(checkpoints))
+                              });
+                              setDraftPhotos([]);
+                              setPhotoForm(buildEmptyPhotoAnalysis());
+                              setPhotoMessage("");
+                              setIsPhotoComposerOpen(false);
+                              setFollowupScreen("create");
+                            }}
+                          >
+                            Nova sessão
+                          </button>
+                        </div>
                       </div>
-                      <TrackingParameterEditor
-                        parameters={trackingParameters}
-                        form={parameterForm}
-                        error={parameterError}
-                        busy={parameterBusy}
-                        onChange={handleParameterFieldChange}
-                        onAdd={handleAddParameter}
-                        onRemove={handleRemoveParameter}
-                      />
                       <ul className="list">
                         {checkpoints.length === 0 ? (
                           <li className="empty">Nenhum registro ainda.</li>
@@ -6226,27 +6244,23 @@ export default function App() {
                       <h4>Nova sessão</h4>
                       <p>Sessão {checkpointForm.sessionNumber || getNextSessionNumber(checkpoints)}</p>
                     </div>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => {
-                        setIsPhotoComposerOpen(false);
-                        setFollowupScreen("list");
-                      }}
-                    >
-                      Voltar
-                    </button>
+                    <div className="panel-header-actions">
+                      <button type="button" className="secondary-btn" onClick={openParameterEditor}>
+                        Adicionar parâmetro
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => {
+                          setIsPhotoComposerOpen(false);
+                          setFollowupScreen("list");
+                        }}
+                      >
+                        Voltar
+                      </button>
+                    </div>
                   </div>
 
-                  <TrackingParameterEditor
-                    parameters={trackingParameters}
-                    form={parameterForm}
-                    error={parameterError}
-                    busy={parameterBusy}
-                    onChange={handleParameterFieldChange}
-                    onAdd={handleAddParameter}
-                    onRemove={handleRemoveParameter}
-                  />
                   <form
                     id="followup-checkpoint-form"
                     className="form grid-form"
@@ -6962,6 +6976,41 @@ export default function App() {
                 Cancelar
               </button>
             </form>
+          </section>
+        </div>
+      ) : null}
+
+      {isParameterEditorOpen && selectedClient ? (
+        <div
+          className="client-modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) closeParameterEditor();
+          }}
+        >
+          <section
+            className="profile-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Adicionar parâmetro"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>Parâmetros de {selectedClient.name}</h4>
+                <p>Crie uma medida desta cliente e a unidade. Ex.: alcance do ombro direito, em cm.</p>
+              </div>
+              <ModalClose onClick={closeParameterEditor} />
+            </header>
+            <TrackingParameterEditor
+              parameters={trackingParameters}
+              form={parameterForm}
+              error={parameterError}
+              busy={parameterBusy}
+              onChange={handleParameterFieldChange}
+              onAdd={handleAddParameter}
+              onRemove={handleRemoveParameter}
+              onClose={closeParameterEditor}
+            />
           </section>
         </div>
       ) : null}
