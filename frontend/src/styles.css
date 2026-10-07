@@ -2222,6 +2222,26 @@ h5 {
   flex: 0 0 auto;
 }
 
+.notification-repeat-backdrop {
+  z-index: 140;
+}
+
+.notification-repeat-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid #d7dde3;
+  border-radius: 12px;
+  background: #f7fafc;
+}
+
+.notification-repeat-summary p {
+  margin: 0;
+}
+
 .weekday-picker {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
