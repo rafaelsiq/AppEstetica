@@ -359,7 +359,14 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
       <ul className="list">
         {lists.length === 0 ? <li className="empty">Nenhuma lista criada.</li> : null}
         {lists.map((list) => (
-          <li key={list.id} className={list.active === false ? "notification-card is-paused" : "notification-card"}>
+          <li
+            key={list.id}
+            className={[
+              "notification-card",
+              list.active === false ? "is-paused" : "",
+              openMenuId === list.id ? "is-open" : ""
+            ].filter(Boolean).join(" ")}
+          >
             <div className="notification-card-copy">
               <div className="notification-card-title">
                 <strong>{list.name}</strong>
@@ -399,6 +406,7 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
                   <button type="button" role="menuitem" onClick={() => { setOpenMenuId(""); toggleActive(list); }}>
                     {list.active === false ? "Ativar" : "Pausar"}
                   </button>
+                  <div className="notification-menu-divider" />
                   <button type="button" role="menuitem" className="is-danger" onClick={() => { setOpenMenuId(""); remove(list); }}>
                     Excluir
                   </button>

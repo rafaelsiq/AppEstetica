@@ -2182,17 +2182,27 @@ h5 {
   flex: none;
 }
 
+.notification-lists,
+.notification-lists .list {
+  overflow: visible;
+}
+
 .notification-lists .notification-card {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: nowrap;
-  gap: 12px;
-  padding: 14px 10px 14px 16px;
+  gap: 8px;
+  padding: 14px 8px 14px 16px;
   border: 1px solid #e4ebef;
-  border-radius: 16px;
+  border-radius: 18px;
   background: #ffffff;
+  box-shadow: 0 1px 0 rgba(16, 29, 44, 0.02);
+}
+
+.notification-lists .notification-card.is-open {
+  z-index: 5;
 }
 
 .notification-lists .notification-card.is-paused {
@@ -2222,6 +2232,7 @@ h5 {
   margin: 0;
   color: #6a7a84;
   font-size: 14px;
+  line-height: 1.35;
 }
 
 .notification-status {
@@ -2240,12 +2251,12 @@ h5 {
 }
 
 .notification-menu-trigger {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   background: transparent;
-  color: #6a7a84;
+  color: #54656f;
   display: grid;
   place-items: center;
   padding: 0;
@@ -2266,16 +2277,17 @@ h5 {
 
 .notification-menu {
   position: absolute;
-  top: 40px;
+  top: calc(100% + 4px);
   right: 0;
   z-index: 6;
-  min-width: 168px;
+  min-width: 180px;
   padding: 6px;
   border: 1px solid #d7dde3;
-  border-radius: 12px;
+  border-radius: 16px;
   background: #ffffff;
-  box-shadow: 0 12px 28px rgba(10, 29, 46, 0.16);
+  box-shadow: 0 16px 36px rgba(10, 29, 46, 0.18);
   display: grid;
+  gap: 2px;
 }
 
 .notification-menu button {
@@ -2285,9 +2297,16 @@ h5 {
   font: inherit;
   font-weight: 600;
   color: #24343d;
-  border-radius: 8px;
-  padding: 9px 10px;
+  border-radius: 10px;
+  min-height: 42px;
+  padding: 8px 10px;
   cursor: pointer;
+}
+
+.notification-menu-divider {
+  height: 1px;
+  margin: 2px 6px;
+  background: #e6eef1;
 }
 
 .notification-menu button:hover,
