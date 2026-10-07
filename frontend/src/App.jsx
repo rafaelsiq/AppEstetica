@@ -2265,6 +2265,7 @@ export default function App() {
   const [offRepeat, setOffRepeat] = useState(false);
   const [offBusy, setOffBusy] = useState(false);
   const [offError, setOffError] = useState("");
+  const [isAgendaOffOpen, setIsAgendaOffOpen] = useState(false);
   const publishedAvailabilityRef = useRef("");
   const availabilityQueueRef = useRef(Promise.resolve());
   const [agendaSelectedDate, setAgendaSelectedDate] = useState("");
@@ -2380,6 +2381,7 @@ export default function App() {
       setBookingWhatsAppUrl("");
       setAgendaClosures([]);
       setOffError("");
+      setIsAgendaOffOpen(false);
       publishedAvailabilityRef.current = "";
       availabilityQueueRef.current = Promise.resolve();
       importingLinksRef.current.clear();
@@ -2457,6 +2459,25 @@ export default function App() {
       });
     return undefined;
   }, [user, shareLinks, agendaClosures]);
+
+  useEffect(() => {
+    if (activeTab !== TABS.AGENDA && isAgendaOffOpen) {
+      setIsAgendaOffOpen(false);
+    }
+  }, [activeTab, isAgendaOffOpen]);
+
+  useEffect(() => {
+    if (!isAgendaOffOpen) {
+      return undefined;
+    }
+    const onKey = (event) => {
+      if (event.key === "Escape" && !offBusy) {
+        setIsAgendaOffOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isAgendaOffOpen, offBusy]);
 
   useEffect(() => {
     if (!selectedClientId) {
@@ -4173,6 +4194,18 @@ export default function App() {
   const selectedDayLabel = formatAgendaDayLabel(selectedAgendaDate);
   const agendaNavTitle = agendaMode === "month" ? monthTitle : selectedDayLabel;
 
+  const openAgendaOff = () => {
+    setOffError("");
+    setIsAgendaOffOpen(true);
+  };
+
+  const closeAgendaOff = () => {
+    if (offBusy) {
+      return;
+    }
+    setIsAgendaOffOpen(false);
+  };
+
   const openAppointmentModal = () => {
     setAppointmentDate(selectedAgendaDate);
     setAppointmentClientNotice("");
@@ -4991,73 +5024,12 @@ export default function App() {
             </article>
 
             <article className="card">
-              {agendaMode === "month" ? <h3 className="day-heading">{selectedDayLabel}</h3> : null}
-              <section className="agenda-off" aria-label="Dias e horários off">
-                <h4>Fora da agenda</h4>
-                <p>A cliente não consegue pedir o primeiro atendimento nestes dias ou horários. Manhã vai de 8h às 12h, tarde de 12h às 18h e noite de 18h às 21h.</p>
-                <div className="agenda-off-choices">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedDayAllDay)}
-                      disabled={offBusy}
-                      onChange={() => toggleAgendaAllDay(false)}
-                    />
-                    Este dia inteiro
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedWeekAllDay)}
-                      disabled={offBusy}
-                      onChange={() => toggleAgendaAllDay(true)}
-                    />
-                    Toda {WEEKDAY_LABELS[selectedWeekday]} inteira
-                  </label>
-                </div>
-                <div className="agenda-off-times">
-                  <label>
-                    Início
-                    <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
-                  </label>
-                  <label>
-                    Fim
-                    <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
-                  </label>
-                </div>
-                <div className="agenda-off-choices">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={offRepeat}
-                      onChange={(event) => setOffRepeat(event.target.checked)}
-                    />
-                    Repetir toda semana
-                  </label>
-                </div>
-                <button className="secondary-btn" type="button" onClick={handleAddAgendaOff} disabled={offBusy}>
-                  Bloquear horário
+              <div className="agenda-day-header">
+                {agendaMode === "month" ? <h3 className="day-heading">{selectedDayLabel}</h3> : null}
+                <button type="button" className="secondary-btn" onClick={openAgendaOff}>
+                  Fora da agenda
                 </button>
-                {offError ? <p className="error-text">{offError}</p> : null}
-                {selectedDayClosures.length > 0 ? (
-                  <ul className="agenda-off-list">
-                    {selectedDayClosures.map((closure) => (
-                      <li key={closure.id}>
-                        <span>{closureLabel(closure)}</span>
-                        <button
-                          type="button"
-                          className="danger-btn"
-                          disabled={offBusy}
-                          aria-label={`Remover ${closureLabel(closure)}`}
-                          onClick={() => removeAgendaClosure(closure.id)}
-                        >
-                          Remover
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </section>
+              </div>
               <ul className="list">
                 {selectedDayAppointments.length === 0 ? (
                   <li className="empty">Nenhum atendimento neste dia.</li>
@@ -5109,6 +5081,97 @@ export default function App() {
             </article>
           </div>
         </section>
+      ) : null}
+
+      {isAgendaOffOpen ? (
+        <div
+          className="client-modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) closeAgendaOff();
+          }}
+        >
+          <section
+            className="profile-modal agenda-off-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Fora da agenda"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>Fora da agenda</h4>
+                <p>
+                  {selectedDayLabel}. A cliente não consegue pedir o primeiro atendimento nestes dias ou horários. Manhã vai de 8h às 12h, tarde de 12h às 18h e noite de 18h às 21h.
+                </p>
+              </div>
+              <ModalClose onClick={closeAgendaOff} />
+            </header>
+            <div className="agenda-off">
+              <div className="agenda-off-choices">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedDayAllDay)}
+                    disabled={offBusy}
+                    onChange={() => toggleAgendaAllDay(false)}
+                  />
+                  Este dia inteiro
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedWeekAllDay)}
+                    disabled={offBusy}
+                    onChange={() => toggleAgendaAllDay(true)}
+                  />
+                  Toda {WEEKDAY_LABELS[selectedWeekday]} inteira
+                </label>
+              </div>
+              <div className="agenda-off-times">
+                <label>
+                  Início
+                  <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
+                </label>
+                <label>
+                  Fim
+                  <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
+                </label>
+              </div>
+              <div className="agenda-off-choices">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={offRepeat}
+                    onChange={(event) => setOffRepeat(event.target.checked)}
+                  />
+                  Repetir toda semana
+                </label>
+              </div>
+              <button className="secondary-btn" type="button" onClick={handleAddAgendaOff} disabled={offBusy}>
+                Bloquear horário
+              </button>
+              {offError ? <p className="error-text">{offError}</p> : null}
+              {selectedDayClosures.length > 0 ? (
+                <ul className="agenda-off-list">
+                  {selectedDayClosures.map((closure) => (
+                    <li key={closure.id}>
+                      <span>{closureLabel(closure)}</span>
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        disabled={offBusy}
+                        aria-label={`Remover ${closureLabel(closure)}`}
+                        onClick={() => removeAgendaClosure(closure.id)}
+                      >
+                        Remover
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {isAppointmentModalOpen ? (

@@ -911,16 +911,30 @@ label.logo-file-btn input {
 }
 
 .day-heading {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 16px;
+}
+
+.agenda-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.agenda-day-header .secondary-btn {
+  margin-left: auto;
+  flex: none;
 }
 
 .agenda-off {
   display: grid;
-  gap: 10px;
-  margin: 8px 0 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #e4eaee;
+  gap: 12px;
+}
+
+.agenda-off-modal {
+  width: min(520px, 100%);
 }
 
 .agenda-off h4 {
