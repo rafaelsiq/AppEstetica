@@ -1641,7 +1641,7 @@ function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
                 ? ` · Sessão ${checkpoint.sessionNumber}`
                 : ""}
           </h4>
-          <p>{checkpoint.sessionType || "Tipo não informado"}</p>
+          {checkpoint.sessionType ? <p>{checkpoint.sessionType}</p> : feedback ? null : <p>Tipo não informado</p>}
         </div>
         <button type="button" className="secondary-btn" onClick={onBack}>
           Voltar
@@ -6255,7 +6255,12 @@ export default function App() {
                                         : ""}
                                   </strong>
                                   <p>
-                                    {checkpoint.sessionType || "Tipo não informado"} · Dor {checkpoint.painLevel ?? 0} ·
+                                    {checkpoint.sessionType
+                                      ? `${checkpoint.sessionType} · `
+                                      : isClientFeedback(checkpoint)
+                                        ? ""
+                                        : "Tipo não informado · "}
+                                    Dor {checkpoint.painLevel ?? 0} ·
                                     Estresse {checkpoint.stressLevel ?? 0} · Sono {checkpoint.sleepHours ?? 0}h
                                     {checkpointParameterSummary(checkpoint) ? ` · ${checkpointParameterSummary(checkpoint)}` : ""}
                                   </p>

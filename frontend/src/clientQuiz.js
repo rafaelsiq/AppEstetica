@@ -103,7 +103,7 @@ export const ANAMNESE_ANSWER_KEYS = [
   "lactating"
 ];
 
-export const FOLLOWUP_ANSWER_KEYS = ["painLevel", "stressLevel", "sleepHours", "sessionType"];
+export const FOLLOWUP_ANSWER_KEYS = ["painLevel", "stressLevel", "sleepHours"];
 
 const SINGLE = {
   painRadiatesOption: QUIZ_PAIN_RADIATION.map((item) => item.value),
@@ -211,7 +211,6 @@ export function buildFollowupSteps() {
   return [
     { key: "painLevel", kind: "scale", title: "Como está a dor agora?", hint: "0 é nenhuma dor e 10 é o máximo." },
     { key: "stressLevel", kind: "scale", title: "Como está o estresse ou a tensão?", hint: "0 é tranquilo e 10 é muito tenso." },
-    { key: "sleepHours", kind: "single", title: "Como foi o seu sono?", options: QUIZ_SLEEP_OPTIONS },
-    { key: "sessionType", kind: "single", title: "Qual atendimento você fez?", options: QUIZ_SESSION_TYPES.map((item) => ({ value: item, label: item })) }
+    { key: "sleepHours", kind: "single", title: "Como foi o seu sono?", options: QUIZ_SLEEP_OPTIONS }
   ];
 }
