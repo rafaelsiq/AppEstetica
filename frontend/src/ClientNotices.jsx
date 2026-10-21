@@ -4,6 +4,7 @@ import { db } from "./firebase";
 import { noticeHistory } from "./notificationSchedule";
 import { useDeliverNotices } from "./noticeDelivery";
 import { ensurePushSubscription } from "./pushSubscribe";
+import { InstallGuideCard } from "./InstallAppPrompt";
 
 function BellIcon() {
   return (
@@ -23,7 +24,16 @@ function formatReceivedAt(date) {
   return `${day}/${month}/${date.getFullYear()} às ${hours}:${minutes}`;
 }
 
-export default function ClientNotices({ token, active, history = false, embedded = false }) {
+function noticeWhen(date, now) {
+  if (date.toDateString() === now.toDateString()) {
+    return "Hoje";
+  }
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
+}
+
+export default function ClientNotices({ token, active, history = false, embedded = false, layout = "menu" }) {
   const [stored, setStored] = useState([]);
   const [now, setNow] = useState(() => new Date());
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -91,7 +101,31 @@ export default function ClientNotices({ token, active, history = false, embedded
         >
           <BellIcon />
         </button>
-        {historyOpen ? (
+        {historyOpen && layout === "page" ? (
+          <section className="notice-screen" role="dialog" aria-modal="true" aria-label="Avisos da clínica">
+            <header className="notice-screen-top">
+              <button type="button" onClick={() => setHistoryOpen(false)} aria-label="Voltar">‹</button>
+              <h2>Avisos da clínica</h2>
+            </header>
+            <div className="notice-screen-list">
+              {received.length === 0 ? <p className="muted-text">Nenhum aviso recebido ainda.</p> : received.map((item) => (
+                <article key={`${item.id}:${item.occurrence}`} className="notice-screen-card">
+                  <header>
+                    <strong>
+                      {noticeWhen(item.at, now) === "Hoje" ? <i className="notice-screen-dot" aria-hidden="true" /> : null}
+                      {item.title}
+                    </strong>
+                    <time dateTime={item.at.toISOString()}>{noticeWhen(item.at, now)}</time>
+                  </header>
+                  {item.body ? <p>{item.body}</p> : null}
+                  {item.imageDataUrl.startsWith("data:image/") ? <img src={item.imageDataUrl} alt="" /> : null}
+                </article>
+              ))}
+            </div>
+            <InstallGuideCard />
+          </section>
+        ) : null}
+        {historyOpen && layout !== "page" ? (
           <section className="client-notice-panel" aria-label="Notificações recebidas">
             <header>
               <strong>Notificações</strong>

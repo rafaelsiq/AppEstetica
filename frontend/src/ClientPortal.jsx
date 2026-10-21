@@ -4,7 +4,7 @@ import { applyClinicIcon } from "./pageIcon";
 import { addDoc, collection, doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import ClientNotices from "./ClientNotices";
-import ClientAccessPrompts from "./InstallAppPrompt";
+import ClientAccessPrompts, { ClinicNotifyCard } from "./InstallAppPrompt";
 import ModalClose from "./ModalClose";
 import {
   buildAnamneseSteps,
@@ -19,11 +19,12 @@ import {
   FIRST_CONTACT_REASONS,
   isAllowedPeriod,
   normalizeReasons,
+  periodLabel,
   readMaskedPhone,
   whatsAppUrl
 } from "./firstContact";
 import { IMAGE_CONSENT_TEXT } from "./imageConsent";
-import { addDays, BOOKING_HORIZON_DAYS, isBookingOpen, isDayClosed } from "./agendaOff";
+import { addDays, BOOKING_HORIZON_DAYS, isBookingOpen, isDayClosed, PERIOD_WINDOWS } from "./agendaOff";
 
 function accessStorageKey(token) {
   return `clinica-acesso:${token}`;
@@ -56,47 +57,73 @@ import {
   evolutionSeries,
   formatDatePt,
   formatMetric,
-  metricTrend,
   renderEvolutionCanvas,
   loadLogoImage,
   sanitizeEvolutionStory,
-  shareEvolutionImage,
-  zipStoredFiles
+  shareEvolutionImage
 } from "./evolutionStory";
 import { chartCeiling, parameterSeries } from "./trackingParameters";
 
-function toneColor(value) {
-  const safe = Math.min(10, Math.max(0, Number(value) || 0));
-  if (safe <= 5) {
-    return `rgb(${Math.round(47 + (240 - 47) * (safe / 5))}, ${Math.round(111 + (138 - 111) * (safe / 5))}, ${Math.round(237 + (36 - 237) * (safe / 5))})`;
-  }
-  const amount = (safe - 5) / 5;
-  return `rgb(${Math.round(240 + (217 - 240) * amount)}, ${Math.round(138 + (45 - 138) * amount)}, ${Math.round(36 + (32 - 36) * amount)})`;
-}
-
-function QuizScale({ label, hint, value, onChange }) {
+function QuizScale({ label, hint, value, onChange, caption, lowLabel, highLabel }) {
   const numeric = Math.min(10, Math.max(0, Number(value || 0)));
-  const color = toneColor(numeric);
   return (
     <div className="quiz-step">
       <h2>{label}</h2>
       {hint ? <p>{hint}</p> : null}
-      <label className="scale-slider">
-        <span className="scale-slider-header">
-          <span>Intensidade</span>
-          <strong style={{ color }}>{numeric}</strong>
-        </span>
-        <input
-          type="range"
-          min="0"
-          max="10"
-          step="1"
-          value={numeric}
-          style={{ "--scale-color": color }}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </label>
+      <div className="quiz-scale-card">
+        <strong>{numeric}</strong>
+        <span>{caption}</span>
+      </div>
+      <div className="quiz-scale-row" role="radiogroup" aria-label={label}>
+        {Array.from({ length: 11 }, (_, score) => (
+          <button
+            key={score}
+            type="button"
+            role="radio"
+            aria-checked={score === numeric}
+            className={score === numeric ? "is-selected" : ""}
+            onClick={() => onChange(String(score))}
+          >
+            {score}
+          </button>
+        ))}
+      </div>
+      <div className="quiz-scale-legend">
+        <span>{lowLabel}</span>
+        <span>{highLabel}</span>
+      </div>
     </div>
+  );
+}
+
+function scaleCopy(key, value) {
+  const score = Math.min(10, Math.max(0, Number(value) || 0));
+  if (key === "stressLevel") {
+    const caption = score === 0 ? "Tranquilo" : score <= 3 ? "Tensão leve" : score <= 6 ? "Tensão moderada" : score <= 8 ? "Tensão alta" : "Muito tenso";
+    return { caption, low: "Tranquilo", high: "Muito tenso" };
+  }
+  const caption = score === 0 ? "Nenhuma dor" : score <= 3 ? "Dor leve" : score <= 6 ? "Dor moderada" : score <= 8 ? "Dor forte" : "Dor máxima";
+  return {
+    caption,
+    low: key === "painScale" ? "Nenhum" : "Nenhuma dor",
+    high: key === "painScale" ? "Máximo" : "Máxima"
+  };
+}
+
+function CheckMark() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 12.5 10 17l9-10" />
+    </svg>
+  );
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.5 18.5 5 21l2.6-1.3A8.5 8.5 0 1 0 6.5 18.5Z" />
+      <path d="M9.2 9.6c.2-.4.3-.4.6-.4h.5c.2 0 .4 0 .5.4.2.5.6 1.6.6 1.7.1.2 0 .4-.2.6l-.3.4c-.1.1-.2.3-.1.5.2.4.8 1.3 1.7 1.8.7.3 1 .3 1.2.2l.5-.3c.2-.1.4-.1.6 0 .2.1 1.3.6 1.5.7.2.1.3.2.4.4.1.2.1.8-.2 1.4-.2.6-1.3 1.1-1.8 1.1-.5 0-1.1.1-3.3-.8-2.5-1.1-4.1-3.6-4.2-3.8-.2-.2-1.3-1.7-1.3-3.3 0-1.5.8-2.3 1.1-2.6Z" />
+    </svg>
   );
 }
 
@@ -110,41 +137,53 @@ function ShareIcon() {
   );
 }
 
-function SimpleLineChart({ title, values, labels, max, wide = false, onShare }) {
+function SimpleLineChart({ title, values, labels, max, wide = false, secondary = null, primaryLabel = "", endLabel = "" }) {
   const seriesValues = values || [];
   const seriesLabels = labels || [];
+  const extra = secondary?.values || [];
   const width = 360;
   const height = 188;
   const padX = 16;
-  const padTop = 16;
+  const padTop = endLabel ? 28 : 16;
   const padBottom = 28;
   const maxValue = max || 10;
+  const count = Math.max(seriesValues.length, 1);
   const getX = (index) => (
-    seriesValues.length === 1
+    count === 1
       ? width / 2
-      : padX + (index * (width - padX * 2)) / (seriesValues.length - 1)
+      : padX + (index * (width - padX * 2)) / (count - 1)
   );
   const getY = (value) => padTop + (1 - Math.min(Math.max(value, 0), maxValue) / maxValue) * (height - padTop - padBottom);
-  const path = seriesValues.map((value, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(value)}`).join(" ");
+  const line = (points) => points.map((value, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(value)}`).join(" ");
+  const path = line(seriesValues);
+  const extraPath = extra.length ? line(extra) : "";
   const labelIndexes = seriesValues.length <= 3
     ? seriesValues.map((_, index) => index)
     : [0, seriesValues.length - 1];
+  const lastIndex = seriesValues.length - 1;
 
   return (
     <article className={wide ? "chart-card chart-card-span-2 evolution-chart" : "chart-card evolution-chart"}>
       <div className="evolution-chart-head">
         <h5>{title}</h5>
-        {onShare ? (
-          <button type="button" className="evolution-share-btn" aria-label={`Compartilhar ${title}`} onClick={onShare}>
-            <ShareIcon />
-          </button>
+        {secondary ? (
+          <div className="evolution-legend">
+            <span><i className="is-solid" /> {primaryLabel || "Dor"}</span>
+            <span><i className="is-dashed" /> {secondary.label || "Estresse"}</span>
+          </div>
         ) : null}
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label={title}>
+        {extraPath ? <path d={extraPath} className="chart-line chart-line-dashed" /> : null}
         <path d={path} className="chart-line chart-line-primary" />
         {seriesValues.map((value, index) => (
           <circle key={`${seriesLabels[index]}-${index}`} cx={getX(index)} cy={getY(value)} r="4" className="chart-point-primary" />
         ))}
+        {endLabel && lastIndex >= 0 ? (
+          <text x={getX(lastIndex)} y={Math.max(14, getY(seriesValues[lastIndex]) - 10)} textAnchor={lastIndex === 0 ? "middle" : "end"} className="chart-end-label">
+            {endLabel}
+          </text>
+        ) : null}
         {labelIndexes.map((index) => (
           <text
             key={`label-${index}`}
@@ -161,21 +200,45 @@ function SimpleLineChart({ title, values, labels, max, wide = false, onShare }) 
   );
 }
 
-function ClinicLogo({ src }) {
-  const logo = String(src || "");
-  if (!logo.startsWith("data:image/")) {
-    return null;
-  }
-  return <img className="client-logo" src={logo} alt="Logo da clínica" />;
+function metricText(value) {
+  return formatMetric(value).replace(".", ",");
 }
 
-function EvolutionStat({ label, value, trend, suffix = "" }) {
+function shortDay(label) {
+  const match = /^(\d{1,2})\/(\d{1,2})/.exec(String(label || ""));
+  if (!match) {
+    return label;
+  }
+  return `${match[1].padStart(2, "0")}/${match[2].padStart(2, "0")}`;
+}
+
+function EvolutionStat({ label, value, hint = "", hintTone = "" }) {
   return (
     <article className="evolution-stat">
       <span>{label}</span>
-      <strong>{formatMetric(value)}{suffix ? ` ${suffix}` : ""}</strong>
-      {trend ? <small className={`evolution-trend is-${trend.tone}`}>{trend.label}</small> : null}
+      <strong>{value}</strong>
+      {hint ? <small className={hintTone ? `evolution-trend is-${hintTone}` : "evolution-trend"}>{hint}</small> : null}
     </article>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+function BrokenLinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9.5 14.5 7 17a3.2 3.2 0 0 1-4.5-4.5l2.5-2.5" />
+      <path d="M14.5 9.5 17 7a3.2 3.2 0 0 1 4.5 4.5l-2.5 2.5" />
+      <path d="M8 16 16 8" />
+      <path d="m5 5 14 14" />
+    </svg>
   );
 }
 
@@ -287,18 +350,6 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
     setMessage("Imagem baixada. Publique a partir da galeria.");
   };
 
-  const downloadAll = async () => {
-    if (!images.length) {
-      return;
-    }
-    const files = await Promise.all(images.map(async (item) => ({
-      name: item.file,
-      data: new Uint8Array(await item.blob.arrayBuffer())
-    })));
-    downloadEvolutionImage(zipStoredFiles(files), "evolucao-redes.zip");
-    setMessage("Todas as imagens foram baixadas em um arquivo só.");
-  };
-
   return (
     <div
       className="client-modal-backdrop evolution-carousel-backdrop"
@@ -318,54 +369,65 @@ function EvolutionShareModal({ open, onClose, slides, story, evolution, clinicNa
         <header className="profile-modal-header">
           <div>
             <h4>Compartilhar</h4>
-            <p>{total ? `${Math.min(index + 1, total)} de ${total}` : "Preparando"}{current ? ` · ${current.title}` : ""}</p>
+            <p>Imagens prontas para os stories</p>
           </div>
           <ModalClose onClick={onClose} />
         </header>
         {busy ? <p>Preparando as imagens...</p> : null}
         {message ? <p className="evolution-share-message">{message}</p> : null}
         {!busy && !images.length ? <p>Ainda não há informações suficientes para montar as imagens.</p> : null}
-        {current ? (
-          <div
-            className="evolution-carousel-stage"
-            onPointerDown={(event) => {
-              dragStart.current = event.clientX;
-            }}
-            onPointerUp={(event) => {
-              const delta = event.clientX - dragStart.current;
-              if (delta > 48) {
-                setIndex((value) => Math.max(0, value - 1));
-              } else if (delta < -48) {
-                setIndex((value) => Math.min(images.length - 1, value + 1));
-              }
-            }}
+        <div className="evolution-carousel-frame">
+          <button
+            type="button"
+            className="evolution-carousel-arrow"
+            aria-label="Anterior"
+            onClick={() => setIndex((value) => Math.max(0, value - 1))}
+            disabled={index === 0 || !images.length}
           >
-            <img src={current.url} alt={current.title} />
+            ‹
+          </button>
+          {current ? (
+            <div
+              className="evolution-carousel-stage"
+              onPointerDown={(event) => {
+                dragStart.current = event.clientX;
+              }}
+              onPointerUp={(event) => {
+                const delta = event.clientX - dragStart.current;
+                if (delta > 48) {
+                  setIndex((value) => Math.max(0, value - 1));
+                } else if (delta < -48) {
+                  setIndex((value) => Math.min(images.length - 1, value + 1));
+                }
+              }}
+            >
+              <img src={current.url} alt={current.title} />
+            </div>
+          ) : <div className="evolution-carousel-stage" />}
+          <button
+            type="button"
+            className="evolution-carousel-arrow"
+            aria-label="Próxima"
+            onClick={() => setIndex((value) => Math.min(images.length - 1, value + 1))}
+            disabled={!images.length || index >= images.length - 1}
+          >
+            ›
+          </button>
+        </div>
+        {total > 1 ? (
+          <div className="evolution-carousel-dots" aria-hidden="true">
+            {Array.from({ length: total }, (_, dot) => (
+              <span key={dot} className={dot === index ? "is-active" : ""} />
+            ))}
           </div>
         ) : null}
-        {total > 1 ? (
-          <div className="evolution-carousel-nav">
-            <button type="button" className="secondary-btn" onClick={() => setIndex((value) => Math.max(0, value - 1))} disabled={index === 0 || !images.length}>
-              Anterior
-            </button>
-            <p>{current?.title || ""}</p>
-            <button type="button" className="secondary-btn" onClick={() => setIndex((value) => Math.min(images.length - 1, value + 1))} disabled={!images.length || index >= images.length - 1}>
-              Próxima
-            </button>
-          </div>
-        ) : current ? <p className="evolution-carousel-single">{current.title}</p> : null}
         <div className="evolution-carousel-actions">
           <button type="button" className="primary-btn" onClick={shareCurrent} disabled={!current}>
-            Compartilhar
+            Compartilhar imagem
           </button>
           <button type="button" className="secondary-btn" onClick={downloadCurrent} disabled={!current}>
-            Baixar esta
+            Salvar no celular
           </button>
-          {total > 1 ? (
-            <button type="button" className="secondary-btn" onClick={downloadAll} disabled={images.length < 2}>
-              Baixar todas
-            </button>
-          ) : null}
         </div>
       </section>
     </div>
@@ -378,105 +440,76 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl, token }) 
   const customSeries = parameterSeries(evolution?.checkpoints || []).filter((item) => item.points.length > 0);
   const name = evolution?.clientFirstName || fallbackName;
   const hasChart = series.points.length >= 2;
-  const hasStory = Boolean(story.comments || story.homeCare);
   const careLines = story.homeCare.split("\n").map((line) => line.trim()).filter(Boolean);
   const [shareSlides, setShareSlides] = useState(null);
-  const range = series.labels.length > 1 ? `${series.labels[0]} a ${series.labels[series.labels.length - 1]}` : series.labels[0] || "";
+  const shortLabels = series.labels.map(shortDay);
+  const range = shortLabels.length > 1 ? `${shortLabels[0]} a ${shortLabels[shortLabels.length - 1]}` : shortLabels[0] || "";
+  const compared = series.points.length >= 2;
+  const last = series.points.length - 1;
+  const wellnessDelta = compared ? Math.round(series.wellness[last] - series.wellness[0]) : 0;
+  const era = (value, unit = "") => {
+    const text = metricText(value);
+    return unit ? `era ${text} ${unit}` : `era ${text}`;
+  };
   const slides = useMemo(() => buildEvolutionSlides({
     highlight: story.highlight,
     comments: story.comments,
     homeCare: story.homeCare,
     hasChart
   }), [story.highlight, story.comments, story.homeCare, hasChart]);
-  const openChartShare = (key, title, file) => {
-    setShareSlides([{
-      title,
-      file,
-      include: {
-        highlight: false,
-        comments: false,
-        homeCare: false,
-        wellness: key === "wellness",
-        pain: key === "pain",
-        stress: key === "stress",
-        sleep: key === "sleep"
-      }
-    }]);
-  };
-
-  const showTrend = series.points.length >= 2;
 
   return (
     <main className="evolution-page">
       <section className="evolution-shell">
         <header className="evolution-hero">
           <div className="evolution-hero-top">
-            <div className="evolution-hero-intro">
-              <ClinicLogo src={logoUrl} />
-              <p className="quiz-kicker">{evolution?.clinicName || clinicName}</p>
+            <p className="quiz-kicker">{evolution?.clinicName || clinicName}</p>
+            <ClientNotices token={token} active history embedded layout="page" />
+          </div>
+          <p className="evolution-kicker">Sua evolução</p>
+          <h1>{story.highlight || `Sua evolução, ${name}`}</h1>
+          {range ? <p className="evolution-meta">{name} · {series.points.length} {series.points.length === 1 ? "registro" : "registros"} {shortLabels.length > 1 ? "de" : "em"} {range}</p> : null}
+          {series.points.length ? (
+            <div className="evolution-stats">
+              <EvolutionStat
+                label="Bem-estar"
+                value={metricText(series.wellness[last])}
+                hint={wellnessDelta ? `${wellnessDelta > 0 ? "+" : ""}${wellnessDelta} desde o início` : ""}
+                hintTone={wellnessDelta > 0 ? "gain" : wellnessDelta < 0 ? "down" : ""}
+              />
+              <EvolutionStat label="Dor" value={metricText(series.pain[last])} hint={compared ? era(series.pain[0]) : ""} />
+              <EvolutionStat label="Estresse" value={metricText(series.stress[last])} hint={compared ? era(series.stress[0]) : ""} />
+              <EvolutionStat label="Sono" value={`${metricText(series.sleep[last])} h`} hint={compared ? era(series.sleep[0], "h") : ""} />
+              {customSeries.map((item) => {
+                const latest = item.points[item.points.length - 1].value;
+                const first = item.points[0].value;
+                return (
+                  <EvolutionStat
+                    key={item.id}
+                    label={item.name}
+                    value={`${metricText(latest)}${item.unit ? ` ${item.unit}` : ""}`}
+                    hint={item.points.length >= 2 ? era(first, item.unit) : ""}
+                  />
+                );
+              })}
             </div>
-            <ClientNotices token={token} active history embedded />
-          </div>
-          <h1>Sua evolução, {name}</h1>
-          {story.highlight ? <p className="evolution-highlight">{story.highlight}</p> : null}
-          <div className="evolution-hero-foot">
-            {range ? <p className="evolution-meta">{series.points.length} registros · {range}</p> : <span />}
-            {slides.length ? (
-              <button type="button" className="evolution-share-btn" aria-label="Compartilhar evolução" onClick={() => setShareSlides(slides)}>
-                <ShareIcon />
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </header>
 
-        {series.points.length ? (
-          <div className="evolution-stats">
-            <EvolutionStat label="Bem-estar" value={series.wellness[series.wellness.length - 1]} trend={showTrend ? metricTrend(series.wellness[0], series.wellness[series.wellness.length - 1]) : null} />
-            <EvolutionStat label="Dor" value={series.pain[series.pain.length - 1]} trend={showTrend ? metricTrend(series.pain[0], series.pain[series.pain.length - 1], true) : null} />
-            <EvolutionStat label="Estresse" value={series.stress[series.stress.length - 1]} trend={showTrend ? metricTrend(series.stress[0], series.stress[series.stress.length - 1], true) : null} />
-            <EvolutionStat label="Sono (h)" value={series.sleep[series.sleep.length - 1]} trend={showTrend ? metricTrend(series.sleep[0], series.sleep[series.sleep.length - 1]) : null} />
-            {customSeries.map((item) => {
-              const latest = item.points[item.points.length - 1].value;
-              const first = item.points[0].value;
-              return (
-                <EvolutionStat
-                  key={item.id}
-                  label={item.name}
-                  value={latest}
-                  suffix={item.unit}
-                  trend={item.points.length >= 2 ? metricTrend(first, latest, item.improveWhen === "down") : null}
-                />
-              );
-            })}
-          </div>
-        ) : null}
-
-        <div className={hasStory ? "evolution-layout" : "evolution-layout is-charts-only"}>
-          {hasStory ? (
-            <aside className="evolution-story">
-              {story.comments ? (
-                <article className="quiz-note">
-                  <h2>Recado da clínica</h2>
-                  <p className="evolution-copy">{story.comments}</p>
-                </article>
-              ) : null}
-              {careLines.length ? (
-                <article className="quiz-note">
-                  <h2>Cuidados em casa</h2>
-                  <ul className="evolution-care">
-                    {careLines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}
-                  </ul>
-                </article>
-              ) : null}
-            </aside>
-          ) : null}
+        <div className="evolution-body">
           <div className="evolution-charts">
             {hasChart ? (
               <>
-                <SimpleLineChart wide title="Bem-estar" values={series.wellness} labels={series.labels} max={100} onShare={() => openChartShare("wellness", "Bem-estar", "evolucao-bem-estar.png")} />
-                <SimpleLineChart title="Dor" values={series.pain} labels={series.labels} max={10} onShare={() => openChartShare("pain", "Dor", "evolucao-dor.png")} />
-                <SimpleLineChart title="Estresse" values={series.stress} labels={series.labels} max={10} onShare={() => openChartShare("stress", "Estresse", "evolucao-estresse.png")} />
-                <SimpleLineChart title="Sono (horas)" values={series.sleep} labels={series.labels} max={12} onShare={() => openChartShare("sleep", "Sono", "evolucao-sono.png")} />
+                <SimpleLineChart wide title="Seu bem-estar" values={series.wellness} labels={shortLabels} max={100} endLabel={metricText(series.wellness[last])} />
+                <SimpleLineChart
+                  wide
+                  title="Dor e estresse"
+                  values={series.pain}
+                  labels={shortLabels}
+                  max={10}
+                  primaryLabel="Dor"
+                  secondary={{ values: series.stress, label: "Estresse" }}
+                />
               </>
             ) : customSeries.some((item) => item.points.length >= 2) ? null : (
               <p className="muted-text">A clínica ainda está reunindo dados suficientes para os gráficos.</p>
@@ -484,13 +517,34 @@ function EvolutionView({ evolution, fallbackName, clinicName, logoUrl, token }) 
             {customSeries.filter((item) => item.points.length >= 2).map((item) => (
               <SimpleLineChart
                 key={item.id}
-                title={`${item.name} (${item.unit})`}
+                wide
+                title={`${item.name}${item.unit ? ` (${item.unit})` : ""}`}
                 values={item.points.map((point) => point.value)}
-                labels={item.points.map((point) => formatDatePt(point.date))}
+                labels={item.points.map((point) => shortDay(formatDatePt(point.date)))}
                 max={chartCeiling(item.points.map((point) => point.value))}
               />
             ))}
           </div>
+          {story.comments ? (
+            <article className="evolution-note">
+              <h2>Recado da clínica</h2>
+              <p className="evolution-copy">{story.comments}</p>
+            </article>
+          ) : null}
+          {careLines.length ? (
+            <article className="evolution-note">
+              <h2>Cuidados em casa</h2>
+              <ul className="evolution-care-list">
+                {careLines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}
+              </ul>
+            </article>
+          ) : null}
+          {slides.length ? (
+            <button type="button" className="primary-btn evolution-share-main" onClick={() => setShareSlides(slides)}>
+              <ShareIcon />
+              Compartilhar minha evolução
+            </button>
+          ) : null}
         </div>
 
       </section>
@@ -513,8 +567,43 @@ function localToday() {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
+const WEEKDAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const WEEKDAY_LONG = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const MONTHS_LONG = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const BOOKING_DAY_COUNT = 60;
+
+function parseIsoDate(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  if (!match) {
+    return null;
+  }
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function longDayLabel(iso) {
+  const date = parseIsoDate(iso);
+  if (!date) {
+    return iso;
+  }
+  return `${WEEKDAY_LONG[date.getDay()]}, ${date.getDate()} de ${MONTHS_LONG[date.getMonth()]}`;
+}
+
+function periodHours(value) {
+  const window = PERIOD_WINDOWS[value];
+  if (!window) {
+    return "";
+  }
+  const compact = (time) => `${Number(String(time).slice(0, 2))}h`;
+  return `${compact(window.start)} às ${compact(window.end)}`;
+}
+
+function periodSummary(value) {
+  const hours = periodHours(value);
+  const label = periodLabel(value);
+  return hours ? `${label} · ${hours}` : label;
+}
+
 function FirstContactRequest({ link, token }) {
-  const [stepIndex, setStepIndex] = useState(0);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [date, setDate] = useState("");
@@ -526,9 +615,14 @@ function FirstContactRequest({ link, token }) {
   const [closures, setClosures] = useState([]);
   const today = localToday();
   const latestDate = addDays(today, BOOKING_HORIZON_DAYS);
-  const steps = ["nome", "telefone", "dia", "periodo", "motivo"];
-  const safeIndex = Math.min(stepIndex, steps.length - 1);
-  const openPeriods = FIRST_CONTACT_PERIODS.filter((item) => !date || isBookingOpen(closures, date, item.value));
+  const dayChoices = [];
+  for (let offset = 0; offset < BOOKING_DAY_COUNT; offset += 1) {
+    const iso = addDays(today, offset);
+    if (!iso || iso > latestDate) {
+      break;
+    }
+    dayChoices.push(iso);
+  }
 
   useEffect(() => {
     const availabilityRef = doc(db, "clientLinks", token, "availability", "off");
@@ -557,43 +651,28 @@ function FirstContactRequest({ link, token }) {
     setError("");
   };
 
-  const goNext = () => {
-    const trimmed = name.trim();
-    const key = phoneKey(phone);
-    if (steps[safeIndex] === "nome" && (trimmed.length < 2 || trimmed.length > 80)) {
-      setError("Informe seu nome.");
-      return;
-    }
-    if (steps[safeIndex] === "telefone" && !/^\d{10,13}$/.test(key)) {
-      setError("Informe o telefone com DDD.");
-      return;
-    }
-    if (steps[safeIndex] === "dia" && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || date > latestDate)) {
-      setError("Escolha um dia a partir de hoje, dentro dos próximos 6 meses.");
-      return;
-    }
-    if (steps[safeIndex] === "dia" && isDayClosed(closures, date)) {
-      setError("A clínica não atende nesse dia.");
-      return;
-    }
-    if (steps[safeIndex] === "periodo" && (!isAllowedPeriod(period) || !isBookingOpen(closures, date, period))) {
-      setError("Escolha um período disponível.");
-      return;
-    }
-    setError("");
-    setStepIndex(safeIndex + 1);
-  };
-
   const submitRequest = async () => {
     const trimmed = name.trim();
     const key = phoneKey(phone);
     const picked = normalizeReasons(reasons);
-    if (picked.length < 1) {
-      setError("Escolha pelo menos um motivo.");
+    if (trimmed.length < 2 || trimmed.length > 80) {
+      setError("Informe seu nome.");
       return;
     }
-    if (date < today || date > latestDate || isDayClosed(closures, date) || !isBookingOpen(closures, date, period)) {
-      setError("A clínica não atende nesse dia ou período.");
+    if (!/^\d{10,13}$/.test(key)) {
+      setError("Informe o WhatsApp com DDD.");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || date > latestDate || isDayClosed(closures, date)) {
+      setError("Escolha um dia em que a clínica atende.");
+      return;
+    }
+    if (!isAllowedPeriod(period) || !isBookingOpen(closures, date, period)) {
+      setError("Escolha um período disponível.");
+      return;
+    }
+    if (picked.length < 1) {
+      setError("Escolha pelo menos um motivo.");
       return;
     }
     if (submitting) {
@@ -633,148 +712,130 @@ function FirstContactRequest({ link, token }) {
     const whatsApp = link.clinicPhone ? whatsAppUrl(link.clinicPhone, message) : "";
     return (
       <main className="quiz-page">
-        <section className="quiz-card">
+        <section className="quiz-card quiz-sheet">
           <p className="quiz-kicker">{link.clinicName}</p>
+          <span className="quiz-check is-inline"><CheckMark /></span>
           <h1>Pedido enviado</h1>
-          <p>Seu primeiro atendimento já está na agenda da clínica, pendente de aprovação.</p>
-          <p>Se quiser, envie o mesmo pedido pelo WhatsApp. A clínica recebe o horário mesmo que você não envie.</p>
+          <p className="quiz-lead">Seu primeiro atendimento já está na agenda da clínica, aguardando aprovação.</p>
+          <dl className="quiz-summary">
+            <div>
+              <dt>Dia</dt>
+              <dd>{longDayLabel(sent.date)}</dd>
+            </div>
+            <div>
+              <dt>Período</dt>
+              <dd>{periodSummary(sent.period)}</dd>
+            </div>
+            <div>
+              <dt>Motivo</dt>
+              <dd>{sent.reasons.join(", ")}</dd>
+            </div>
+            <div>
+              <dt>Situação</dt>
+              <dd><span className="quiz-badge">Aguardando a clínica</span></dd>
+            </div>
+          </dl>
+          <p className="quiz-lead">Se quiser, envie o mesmo pedido pelo WhatsApp. A clínica recebe o horário mesmo que você não envie.</p>
           {whatsApp ? (
-            <a className="primary-btn" href={whatsApp} target="_blank" rel="noreferrer">Enviar no WhatsApp</a>
+            <a className="secondary-btn quiz-whatsapp" href={whatsApp} target="_blank" rel="noreferrer">
+              <WhatsAppIcon />
+              Enviar no WhatsApp
+            </a>
           ) : null}
         </section>
       </main>
     );
   }
 
-  const progress = Math.round(((safeIndex + 1) / steps.length) * 100);
-
   return (
     <main className="quiz-page">
-      <section className="quiz-card">
+      <section className="quiz-card quiz-sheet">
         <p className="quiz-kicker">{link.clinicName}</p>
         <h1>Primeiro atendimento</h1>
-        <p className="muted-text">Conte o dia e o motivo da visita. A clínica confirma o horário com você.</p>
-        <div className="quiz-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
-        <p className="quiz-count">Pergunta {safeIndex + 1} de {steps.length}</p>
-
-        {steps[safeIndex] === "nome" ? (
-          <div className="quiz-step">
-            <h2>Qual é o seu nome?</h2>
-            <label>
-              Nome
-              <input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoComplete="name" />
-            </label>
-          </div>
-        ) : null}
-
-        {steps[safeIndex] === "telefone" ? (
-          <div className="quiz-step">
-            <h2>Qual é o seu WhatsApp?</h2>
-            <label>
-              Telefone com DDD
-              <input
-                value={phone}
-                onChange={(event) => setPhone(readMaskedPhone(event))}
-                inputMode="tel"
-                autoComplete="tel"
-                placeholder="(00) 00000-0000"
-              />
-            </label>
-          </div>
-        ) : null}
-
-        {steps[safeIndex] === "dia" ? (
-          <div className="quiz-step">
-            <h2>Qual dia você prefere?</h2>
-            <label>
-              Dia
-              <input
-                type="date"
-                value={date}
-                min={today}
-                max={latestDate}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setDate(next);
-                  if (next && isDayClosed(closures, next)) {
-                    setError("A clínica não atende nesse dia.");
-                    return;
-                  }
-                  setError("");
-                }}
-              />
-            </label>
-          </div>
-        ) : null}
-
-        {steps[safeIndex] === "periodo" ? (
-          <div className="quiz-step">
-            <h2>Qual período fica melhor?</h2>
-            {openPeriods.length === 0 ? (
-              <p>A clínica não atende nesse dia.</p>
-            ) : (
-              <div className="quiz-options">
-                {openPeriods.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    className={period === item.value ? "quiz-option active" : "quiz-option"}
-                    onClick={() => {
-                      setPeriod(item.value);
-                      setError("");
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {date && openPeriods.length > 0 && openPeriods.length < FIRST_CONTACT_PERIODS.length ? (
-              <p>Alguns períodos estão indisponíveis neste dia.</p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {steps[safeIndex] === "motivo" ? (
-          <div className="quiz-step">
-            <h2>Qual o motivo do atendimento?</h2>
-            <p>Pode marcar mais de uma opção.</p>
-            <div className="quiz-options">
-              {FIRST_CONTACT_REASONS.map((reason) => (
-                <button
-                  key={reason}
-                  type="button"
-                  className={reasons.includes(reason) ? "quiz-option active" : "quiz-option"}
-                  onClick={() => toggleReason(reason)}
-                >
-                  {reason}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {error ? <p className="error-text">{error}</p> : null}
-        <div className="quiz-nav">
-          <button
-            type="button"
-            className="secondary-btn"
-            onClick={() => {
-              setError("");
-              setStepIndex(Math.max(0, safeIndex - 1));
-            }}
-            disabled={safeIndex === 0 || submitting}
-          >
-            Voltar
-          </button>
-          {safeIndex < steps.length - 1 ? (
-            <button type="button" className="primary-btn" onClick={goNext}>Continuar</button>
-          ) : (
-            <button type="button" className="primary-btn" onClick={submitRequest} disabled={submitting}>
-              {submitting ? "Enviando..." : "Enviar pedido"}
-            </button>
-          )}
+        <p className="quiz-lead">Conte o dia e o motivo da visita. A clínica confirma o horário com você.</p>
+        <div className="quiz-pair">
+          <label>
+            Seu nome
+            <input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoComplete="name" />
+          </label>
+          <label>
+            WhatsApp
+            <input
+              value={phone}
+              onChange={(event) => setPhone(readMaskedPhone(event))}
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="(00) 00000-0000"
+            />
+          </label>
         </div>
+        <div className="quiz-block">
+          <h2>Qual dia você prefere?</h2>
+          <div className="quiz-days">
+            {dayChoices.map((iso) => {
+              const parsed = parseIsoDate(iso);
+              const closed = isDayClosed(closures, iso);
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  className={date === iso ? "quiz-day is-selected" : "quiz-day"}
+                  disabled={closed}
+                  onClick={() => {
+                    setDate(iso);
+                    setError("");
+                  }}
+                >
+                  <span>{parsed ? WEEKDAY_SHORT[parsed.getDay()] : ""}</span>
+                  <strong>{parsed ? parsed.getDate() : ""}</strong>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="quiz-block">
+          <h2>Qual período fica melhor?</h2>
+          <div className="quiz-periods">
+            {FIRST_CONTACT_PERIODS.map((item) => {
+              const closed = Boolean(date) && !isBookingOpen(closures, date, item.value);
+              const hours = closed ? "Indisponível" : (periodHours(item.value) || "A combinar");
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={`quiz-period${period === item.value ? " is-selected" : ""}${item.value === "qualquer" ? " is-wide" : ""}`}
+                  disabled={!date || closed}
+                  onClick={() => {
+                    setPeriod(item.value);
+                    setError("");
+                  }}
+                >
+                  <strong>{item.label}</strong>
+                  <span>{hours}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="quiz-block">
+          <h2>Qual o motivo? <span>· pode marcar mais de um</span></h2>
+          <div className="quiz-chips">
+            {FIRST_CONTACT_REASONS.map((reason) => (
+              <button
+                key={reason}
+                type="button"
+                className={reasons.includes(reason) ? "quiz-chip is-selected" : "quiz-chip"}
+                onClick={() => toggleReason(reason)}
+              >
+                {reason}
+              </button>
+            ))}
+          </div>
+        </div>
+        {error ? <p className="error-text">{error}</p> : null}
+        <button type="button" className="primary-btn quiz-submit" onClick={submitRequest} disabled={submitting}>
+          {submitting ? "Enviando..." : "Enviar pedido"}
+        </button>
       </section>
     </main>
   );
@@ -979,7 +1040,23 @@ export default function ClientPortal() {
   }
 
   if (error && !link) {
-    return <main className="quiz-page"><section className="quiz-card"><h1>Link indisponível</h1><p>{error}</p></section></main>;
+    const inactive = error === "Este link não está mais disponível.";
+    return (
+      <main className="quiz-page">
+        <section className="quiz-card quiz-sheet quiz-thanks">
+          <p className="quiz-kicker" aria-hidden="true" />
+          <div className="quiz-thanks-body">
+            <span className="quiz-check is-muted"><BrokenLinkIcon /></span>
+            <h1>{inactive ? "Este link não está mais ativo" : "Não foi possível abrir o link"}</h1>
+            <p className="quiz-lead">
+              {inactive
+                ? "A clínica pode ter gerado um link novo. Peça o endereço atualizado pelo WhatsApp."
+                : error}
+            </p>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   if (link.type === "primeiro") {
@@ -989,22 +1066,25 @@ export default function ClientPortal() {
   if (link.status === "respondido" || link.status === "importado") {
     return (
       <>
-        {link.type === "acompanhamento" || link.type === "anamnese" || link.type === "consentimento" ? <ClientNotices token={token} active history={link.type === "acompanhamento"} /> : null}
+        {link.type === "acompanhamento" || link.type === "anamnese" || link.type === "consentimento" ? <ClientNotices token={token} active /> : null}
         <main className="quiz-page">
-          <section className="quiz-card">
-            {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
+          <section className="quiz-card quiz-sheet quiz-thanks">
             <p className="quiz-kicker">{link.clinicName}</p>
-            <h1>Obrigado, {link.clientFirstName}!</h1>
-            <p>
-              {link.type === "consentimento"
-                ? "Sua resposta sobre o uso de imagem chegou na clínica."
-                : link.type === "acompanhamento"
-                  ? "Seu feedback chegou na clínica."
-                  : "Suas respostas chegaram na clínica. As observações da profissional continuam só com ela."}
-            </p>
+            <div className="quiz-thanks-body">
+              <span className="quiz-check"><CheckMark /></span>
+              <h1>Obrigado, {link.clientFirstName}!</h1>
+              <p className="quiz-lead">
+                {link.type === "consentimento"
+                  ? "Sua resposta sobre o uso de imagem chegou na clínica."
+                  : link.type === "acompanhamento"
+                    ? "Seu feedback chegou na clínica."
+                    : "Suas respostas chegaram na clínica. As observações da profissional continuam só com ela."}
+              </p>
+            </div>
+            {link.type === "acompanhamento" ? <ClinicNotifyCard /> : null}
           </section>
         </main>
-        {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} unlocked /> : null}
+        {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} unlocked hideNotify /> : null}
       </>
     );
   }
@@ -1028,19 +1108,19 @@ export default function ClientPortal() {
             logoUrl={link.logoDataUrl}
             token={token}
           />
-          <ClientAccessPrompts clinicName={link.clinicName} unlocked />
+          <ClientAccessPrompts clinicName={link.clinicName} unlocked hideInstall />
         </>
       );
     }
     return (
-      <>
-      <ClientNotices token={token} active />
-      <main className="evolution-page">
-        <section className="quiz-card evolution-lock">
-          <ClinicLogo src={link.logoDataUrl} />
+      <main className="evolution-page evolution-gate">
+        <section className="evolution-gate-hero">
           <p className="quiz-kicker">{link.clinicName}</p>
           <h1>Olá, {link.clientFirstName}</h1>
-          <p>Para ver sua evolução, confirme o telefone cadastrado na clínica.</p>
+          <p>Sua evolução está pronta. Para proteger seus dados, confirme o telefone cadastrado na clínica.</p>
+        </section>
+        <section className="evolution-gate-card">
+          <span className="evolution-gate-lock" aria-hidden="true"><LockIcon /></span>
           <form className="form" onSubmit={unlockEvolution}>
             <label>
               Telefone com DDD
@@ -1049,60 +1129,73 @@ export default function ClientPortal() {
                 onChange={(event) => setPhone(readMaskedPhone(event))}
                 inputMode="tel"
                 autoComplete="tel"
-                placeholder="(00) 00000-0000"
+                placeholder="(11) 90000-0000"
                 required
               />
             </label>
             {phoneError ? <p className="error-text">{phoneError}</p> : null}
-            <button className="primary-btn" type="submit">Ver evolução</button>
+            <button className="primary-btn" type="submit">Ver minha evolução</button>
           </form>
+          <p className="quiz-quiet">Usamos o telefone só para confirmar que é você. Se ele mudou, fale com a clínica.</p>
         </section>
       </main>
-      <ClientAccessPrompts clinicName={link.clinicName} />
-      </>
     );
   }
 
   if (link.type === "consentimento") {
     const term = link.termText || IMAGE_CONSENT_TEXT;
+    const designed = term === IMAGE_CONSENT_TEXT;
+    const consentBullets = [
+      "As fotos podem ficar no prontuário, para acompanhar a sua evolução.",
+      "Também podem aparecer em portfólio e redes sociais da clínica.",
+      "Dados de saúde nunca entram na divulgação."
+    ];
     return (
       <>
       <ClientNotices token={token} active />
       <main className="quiz-page">
-        <section className="quiz-card">
+        <section className="quiz-card quiz-sheet">
           <p className="quiz-kicker">{link.clinicName}</p>
           <h1>Uso de imagem</h1>
-          {term.split("\n\n").map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
+          {designed ? (
+            <p className="quiz-lead">A clínica pede autorização para usar fotos feitas no seu atendimento.</p>
+          ) : term.split("\n\n").map((paragraph) => (
+            <p className="quiz-lead" key={paragraph}>{paragraph}</p>
           ))}
+          {designed ? (
+            <ul className="quiz-bullets">
+              {consentBullets.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          ) : null}
           <div className="quiz-options">
             <button
               type="button"
-              className={imageChoice === "autorizado" ? "quiz-option active" : "quiz-option"}
+              className={imageChoice === "autorizado" ? "quiz-option is-radio active" : "quiz-option is-radio"}
               onClick={() => setImageChoice("autorizado")}
             >
               Autorizo o uso da imagem
             </button>
             <button
               type="button"
-              className={imageChoice === "negado" ? "quiz-option active" : "quiz-option"}
+              className={imageChoice === "negado" ? "quiz-option is-radio active" : "quiz-option is-radio"}
               onClick={() => setImageChoice("negado")}
             >
               Não autorizo
             </button>
           </div>
           <label>
-            Nome completo
+            Seu nome completo, como assinatura
             <input
               value={signatureName}
               onChange={(event) => setSignatureName(event.target.value)}
-              placeholder="Confirme seu nome"
+              placeholder="Nome completo"
               maxLength={80}
             />
           </label>
+          {designed ? <p className="quiz-quiet">Você pode não autorizar. Isso não muda o seu atendimento.</p> : null}
           {error ? <p className="error-text">{error}</p> : null}
-          <button type="button" className="primary-btn" onClick={submitConsent} disabled={submitting}>
-            {submitting ? "Enviando..." : "Confirmar"}
+          <button type="button" className="primary-btn quiz-submit" onClick={submitConsent} disabled={submitting}>
+            {submitting ? "Enviando..." : "Confirmar resposta"}
           </button>
         </section>
       </main>
@@ -1112,28 +1205,39 @@ export default function ClientPortal() {
 
   const progress = steps.length === 0 ? 0 : Math.round(((safeIndex + 1) / steps.length) * 100);
   const selected = currentStep ? answers[currentStep.key] : undefined;
+  const followup = link.type === "acompanhamento";
+  const greeting = followup ? "Como você está?" : `Olá, ${link.clientFirstName}`;
+  const stepHint = !currentStep
+    ? ""
+    : currentStep.kind === "multi"
+      ? "Pode marcar mais de uma opção."
+      : followup
+        ? "Seu retorno chega na clínica como feedback."
+        : "";
+  const scale = currentStep?.kind === "scale" ? scaleCopy(currentStep.key, answers[currentStep.key] || "0") : null;
 
   return (
     <>
-    {link.type === "acompanhamento" || link.type === "anamnese" ? <ClientNotices token={token} active history={link.type === "acompanhamento"} /> : null}
     <main className="quiz-page">
-      <section className="quiz-card">
-        {link.type === "acompanhamento" ? <ClinicLogo src={link.logoDataUrl} /> : null}
-        <p className="quiz-kicker">{link.clinicName}</p>
-        <h1>{link.type === "acompanhamento" ? "Como você está?" : `Olá, ${link.clientFirstName}`}</h1>
-        <p className="muted-text">
-          {link.type === "acompanhamento"
-            ? "Conte como você está. Seu retorno chega na clínica como feedback."
-            : "Um questionário curto para a clínica te receber melhor."}
-        </p>
+      <section className="quiz-card quiz-sheet">
+        <header className="quiz-top">
+          <p className="quiz-kicker">{link.clinicName}</p>
+          {followup || link.type === "anamnese" ? <ClientNotices token={token} active history embedded /> : null}
+        </header>
+        <div className="quiz-meta">
+          <p>{greeting}</p>
+          <span>{Math.min(safeIndex + 1, steps.length)} de {steps.length}</span>
+        </div>
         <div className="quiz-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
-        <p className="quiz-count">Pergunta {Math.min(safeIndex + 1, steps.length)} de {steps.length}</p>
 
         {currentStep?.kind === "scale" ? (
           <QuizScale
             label={currentStep.title}
-            hint={currentStep.hint}
+            hint={stepHint}
             value={answers[currentStep.key] || "0"}
+            caption={scale.caption}
+            lowLabel={scale.low}
+            highLabel={scale.high}
             onChange={(value) => setAnswer(currentStep.key, value)}
           />
         ) : null}
@@ -1141,7 +1245,7 @@ export default function ClientPortal() {
         {currentStep && currentStep.kind !== "scale" ? (
           <div className="quiz-step">
             <h2>{currentStep.title}</h2>
-            {currentStep.kind === "multi" ? <p>Pode marcar mais de uma opção.</p> : null}
+            {stepHint ? <p>{stepHint}</p> : null}
             <div className="quiz-options">
               {currentStep.options.map((option) => {
                 const value = typeof option === "string" ? option : option.value;
@@ -1149,11 +1253,12 @@ export default function ClientPortal() {
                 const active = currentStep.kind === "multi"
                   ? Array.isArray(selected) && selected.includes(value)
                   : selected === value;
+                const radio = currentStep.kind === "single" ? " is-radio" : "";
                 return (
                   <button
                     key={value}
                     type="button"
-                    className={active ? "quiz-option active" : "quiz-option"}
+                    className={active ? `quiz-option${radio} active` : `quiz-option${radio}`}
                     onClick={() => (currentStep.kind === "multi" ? toggleMulti(currentStep.key, value) : setAnswer(currentStep.key, value))}
                   >
                     {label}
@@ -1181,7 +1286,7 @@ export default function ClientPortal() {
         </div>
       </section>
     </main>
-    {link.type === "acompanhamento" ? <ClientAccessPrompts clinicName={link.clinicName} unlocked /> : null}
+    {followup ? <ClientAccessPrompts clinicName={link.clinicName} /> : null}
     </>
   );
 }

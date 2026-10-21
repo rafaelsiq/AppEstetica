@@ -23,11 +23,10 @@ import { applyClinicIcon } from "./pageIcon";
 import NotificationLists from "./NotificationLists.jsx";
 import ClinicNoticeRunner from "./ClinicNoticeRunner";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
-import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
+import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory, wellnessScore } from "./evolutionStory";
 import {
   appointmentAgendaDate,
   approvalMessage,
-  bookingStatusLabel,
   formatPhoneBr,
   readMaskedPhone,
   periodLabel,
@@ -36,7 +35,7 @@ import {
   shareWhatsAppMessage,
   whatsAppUrl
 } from "./firstContact";
-import { consentDecisionLabel } from "./imageConsent";
+import { consentDecisionLabel, consentSummary } from "./imageConsent";
 import {
   buildAvailability,
   closureApplies,
@@ -50,7 +49,6 @@ import {
 } from "./agendaOff";
 import { publishAgendaAvailability } from "./agendaAvailability";
 import {
-  chartCeiling,
   checkpointParameterSummary,
   emptyParameterForm,
   formatParameterValue,
@@ -259,14 +257,6 @@ const PHOTO_POSITION_OPTIONS = ["Frente", "Costas", "Perfil esquerdo", "Perfil d
 const PHOTO_POSITION_OTHER = "Outra posição";
 const MEASUREMENT_COLORS = ["#24695c", "#c06b19", "#3a5ac7", "#9b3d6b", "#1f7a8c", "#6b4c9a"];
 
-function BookingBadge({ status }) {
-  const label = bookingStatusLabel(status);
-  if (!label) {
-    return null;
-  }
-  return <span className={`booking-badge is-${status}`}>{label}</span>;
-}
-
 const NAV_ITEMS = [
   { tab: TABS.INICIO, label: "Início" },
   { tab: TABS.AGENDA, label: "Agenda" },
@@ -341,9 +331,16 @@ function appointmentStatusInfo(appointment) {
   return { label: "Confirmado", tone: "confirmed" };
 }
 
-function AppointmentStatusTag({ appointment }) {
-  const { label, tone } = appointmentStatusInfo(appointment);
-  return <span className={`status-tag is-${tone}`}>{label}</span>;
+function AppointmentStatusTag({ appointment, compact = false }) {
+  const info = appointmentStatusInfo(appointment);
+  const label = !compact
+    ? info.label
+    : info.tone === "waiting"
+      ? "Aguardando"
+      : info.tone === "refused"
+        ? "Recusado"
+        : "Confirmado";
+  return <span className={`status-tag is-${info.tone}`}>{label}</span>;
 }
 
 function shortClientName(name) {
@@ -398,6 +395,71 @@ function formatLateralityLabel(laterality) {
 function formatLateralityShort(laterality) {
   const option = LATERALITY_OPTIONS.find((item) => item.value === laterality);
   return option ? option.short : "A";
+}
+
+function formatPainChip(selection) {
+  const laterality = selection.laterality === "left"
+    ? "esquerdo"
+    : selection.laterality === "right"
+      ? "direito"
+      : "centro";
+  return `${selection.label} · ${laterality}`;
+}
+
+function formatTimestampDate(value) {
+  const millis = getTimestampMillis(value);
+  if (!millis) {
+    return "";
+  }
+  return new Date(millis).toLocaleDateString("pt-BR");
+}
+
+function formatConsentStamp(value) {
+  const millis = getTimestampMillis(value);
+  if (!millis) {
+    return "";
+  }
+  const date = new Date(millis);
+  const day = date.toLocaleDateString("pt-BR");
+  const time = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${day} às ${time}`;
+}
+
+function formatDayMonthStamp(value) {
+  const millis = getTimestampMillis(value);
+  if (!millis) {
+    return "";
+  }
+  const date = new Date(millis);
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function OtherDetail({ value, onChange, label }) {
+  const [open, setOpen] = useState(Boolean(String(value || "").trim()));
+
+  useEffect(() => {
+    if (String(value || "").trim()) {
+      setOpen(true);
+    }
+  }, [value]);
+
+  if (!open) {
+    return (
+      <button type="button" className="choice-pill is-dashed" onClick={() => setOpen(true)}>
+        + {label}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      className="choice-other-input"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={label}
+      aria-label={label}
+    />
+  );
 }
 
 function formatPainSelectionLocation(selection, showCoordinates = false) {
@@ -636,45 +698,28 @@ function getNextSessionNumber(items) {
   return sessions.length + 1;
 }
 
-function hexToRgb(hex) {
-  const value = hex.replace("#", "");
-  return [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16));
-}
-
-function mixHex(startHex, endHex, amount) {
-  const start = hexToRgb(startHex);
-  const end = hexToRgb(endHex);
-  const mixed = start.map((channel, index) => Math.round(channel + (end[index] - channel) * amount));
-  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
-}
-
-function scaleToneColor(value) {
-  const safe = Math.min(10, Math.max(0, Number(value) || 0));
-  if (safe <= 5) {
-    return mixHex("#2f6fed", "#f08a24", safe / 5);
-  }
-  return mixHex("#f08a24", "#d92d20", (safe - 5) / 5);
-}
-
-function ScaleSlider({ label, value, onChange }) {
-  const numeric = Math.min(10, Math.max(0, Number(value) || 0));
-  const color = scaleToneColor(numeric);
+function ScaleChoice({ label, hint, value, onChange }) {
+  const selected = Math.min(10, Math.max(0, Number(value) || 0));
   return (
-    <label className="scale-slider">
-      <span className="scale-slider-header">
+    <div className="scale-choice">
+      <div className="scale-choice-label">
         <span>{label}</span>
-        <strong style={{ color }}>{numeric}</strong>
-      </span>
-      <input
-        type="range"
-        min="0"
-        max="10"
-        step="1"
-        value={numeric}
-        style={{ "--scale-color": color }}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
+        <span>{hint}</span>
+      </div>
+      <div className="scale-choice-row" role="radiogroup" aria-label={label}>
+        {Array.from({ length: 11 }, (_, level) => (
+          <button
+            key={level}
+            type="button"
+            className={selected === level ? "is-selected" : ""}
+            aria-pressed={selected === level}
+            onClick={() => onChange(String(level))}
+          >
+            {level}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -831,11 +876,47 @@ function resolvePhotoPositionLabel(positionLabel, positionCustom) {
   return positionLabel.trim();
 }
 
+function formatMeasureNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "—";
+  }
+  return numeric.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+}
+
 function formatMeasurementValue(measurement) {
   if (measurement.type === "angle") {
-    return `Ângulo ${measurement.angleDegrees ?? "--"}°`;
+    return `Ângulo ${formatMeasureNumber(measurement.angleDegrees)}°`;
   }
-  return `Linha ${measurement.lineDistancePercent ?? "--"}%`;
+  return `Linha ${formatMeasureNumber(measurement.lineDistancePercent)}%`;
+}
+
+function measurementKindLabel(measurement) {
+  return measurement?.type === "angle" ? "Ângulo A–B–C" : "Linha A–B";
+}
+
+function measurementBadgeText(measurement) {
+  if (measurement?.type === "angle") {
+    return `${formatMeasureNumber(measurement.angleDegrees)}°`;
+  }
+  return `${formatMeasureNumber(measurement.lineDistancePercent)}%`;
+}
+
+function measurementBadgePosition(measurement) {
+  const points = measurement?.points || [];
+  if (measurement?.type === "angle" && points[1]) {
+    return {
+      x: Number(points[1].x),
+      y: Math.max(8, Number(points[1].y) - 8)
+    };
+  }
+  if (points.length >= 2) {
+    return {
+      x: (Number(points[0].x) + Number(points[1].x)) / 2,
+      y: (Number(points[0].y) + Number(points[1].y)) / 2
+    };
+  }
+  return null;
 }
 
 function photoDraftHasProgress(form) {
@@ -1041,6 +1122,30 @@ function formatDatePt(dateValue) {
   return parsed.toLocaleDateString("pt-BR");
 }
 
+function formatBookingDay(isoDate) {
+  const parsed = parseIsoDate(isoDate);
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return "—";
+  }
+  const weekday = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][parsed.getDay()];
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  return `${weekday}, ${day}/${month}`;
+}
+
+function bookingReviewPill(status) {
+  if (status === "aprovado") {
+    return "Primeiro atendimento · aprovado";
+  }
+  if (status === "recusado") {
+    return "Primeiro atendimento · recusado";
+  }
+  if (status === "remarcacao") {
+    return "Primeiro atendimento · aguardando a cliente";
+  }
+  return "Primeiro atendimento · aguardando você";
+}
+
 const MONTH_LABELS = [
   "janeiro",
   "fevereiro",
@@ -1075,6 +1180,58 @@ function formatAgendaDayLabel(isoDate) {
   const weekday = WEEKDAY_LABELS[date.getDay()];
   const label = `${weekday}, ${date.getDate()} de ${MONTH_LABELS[date.getMonth()]}`;
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function formatAwayClosure(closure) {
+  const normalized = normalizeClosure(closure);
+  if (!normalized) {
+    return "Bloqueio";
+  }
+  const day = WEEKDAY_LABELS[normalized.weekday] || "";
+  if (normalized.allDay && normalized.recurring) {
+    return `Toda ${day}`;
+  }
+  if (normalized.allDay) {
+    return "Este dia inteiro";
+  }
+  const range = `${normalized.start} às ${normalized.end}`;
+  return normalized.recurring ? `Toda ${day} · ${range}` : range;
+}
+
+const AGENDA_DAY_START = 8 * 60;
+const AGENDA_DAY_END = 19 * 60;
+
+function agendaPlacement(startMinutes, durationMinutes) {
+  const start = Math.max(AGENDA_DAY_START, Math.min(startMinutes, AGENDA_DAY_END - 30));
+  const end = Math.min(AGENDA_DAY_END, Math.max(start + 45, startMinutes + durationMinutes));
+  return {
+    hoursFromStart: (start - AGENDA_DAY_START) / 60,
+    spanHours: (end - start) / 60
+  };
+}
+
+function agendaHourStyle(hoursFromStart, spanHours) {
+  return {
+    top: `calc(${hoursFromStart} * var(--agenda-hour))`,
+    height: spanHours == null ? undefined : `calc(${spanHours} * var(--agenda-hour))`
+  };
+}
+
+function appointmentStartMinutes(appointment) {
+  const timed = minutesOf(appointment?.time);
+  if (timed != null) {
+    return timed;
+  }
+  if (appointment?.period === "tarde") {
+    return 14 * 60;
+  }
+  if (appointment?.period === "noite") {
+    return 18 * 60;
+  }
+  if (appointment?.period === "manha") {
+    return 10 * 60;
+  }
+  return 9 * 60;
 }
 
 function buildMonthDays(visibleMonthDate) {
@@ -1127,6 +1284,8 @@ function normalizeClientNameKey(value) {
 
 function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEditable }) {
   const [pendingSelection, setPendingSelection] = useState(null);
+  const [mapSide, setMapSide] = useState("front");
+  const canvasRef = useRef(null);
 
   useEffect(() => {
     if (!isEditable) {
@@ -1238,127 +1397,106 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
     );
   };
 
-  const selectedFrontRegions = painSelections.filter(
-    (selection) => selection.side === "front"
-  );
-  const selectedBackRegions = painSelections.filter(
-    (selection) => selection.side === "back"
-  );
+  const activeRegions = mapSide === "front" ? FRONT_PAIN_REGIONS : BACK_PAIN_REGIONS;
+  const selectedOnSide = painSelections.filter((selection) => selection.side === mapSide);
+  const showMapSide = (side) => {
+    setMapSide(side);
+    setPendingSelection(null);
+  };
 
   return (
-    <div className="pain-map-section">
-      <p className="muted-text">
-        {isEditable
-          ? "Toque na região do corpo para marcar dor. A lateralidade aparecerá em um tooltip no ponto clicado. Toque na bolinha para desmarcar."
-          : "Mapa em modo visualização. Clique em Editar ficha para alterar os pontos de dor."}
-      </p>
-      <div className="pain-map-grid">
-        <figure
-          className={`pain-map-card ${
-            pendingSelection?.side === "front" ? "has-tooltip" : ""
-          }`}
-        >
-          <div
-            className="pain-map-canvas"
-            data-editable={isEditable ? "true" : "false"}
-            role={isEditable ? "button" : undefined}
-            tabIndex={isEditable ? 0 : -1}
-            onClick={(event) => handleMapClick(event, FRONT_PAIN_REGIONS, "front")}
+    <div className="pain-map-card anamnese-map-card">
+      <div className="pain-map-heading">
+        <h3>Mapa de dores</h3>
+        <div className="pain-map-switch" role="group" aria-label="Lado do corpo">
+          <button
+            type="button"
+            className={mapSide === "front" ? "active" : ""}
+            aria-pressed={mapSide === "front"}
+            onClick={() => showMapSide("front")}
           >
-            <img src="/pain-map-front.jpg" alt="Mapa corporal frontal para seleção de dor" />
-            {selectedFrontRegions.map((selection) => (
-              <button
-                key={`front-selected-${selection.label}`}
-                type="button"
-                className="pain-dot selected"
-                style={{ left: `${selection.x}%`, top: `${selection.y}%` }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (!isEditable) {
-                    return;
-                  }
-                  onRemoveRegion(selection.label);
-                }}
-                title={`${selection.label} (${formatLateralityLabel(
-                  selection.laterality
-                )} - ${formatPainSelectionLocation(selection)})`}
-                aria-label={`Desmarcar ${selection.label}`}
-              >
-                <span className="pain-dot-label">{formatLateralityShort(selection.laterality)}</span>
-              </button>
-            ))}
-            {renderLateralityTooltip("front")}
-          </div>
-          <figcaption>Frente</figcaption>
-        </figure>
-        <figure
-          className={`pain-map-card ${
-            pendingSelection?.side === "back" ? "has-tooltip" : ""
-          }`}
-        >
-          <div
-            className="pain-map-canvas"
-            data-editable={isEditable ? "true" : "false"}
-            role={isEditable ? "button" : undefined}
-            tabIndex={isEditable ? 0 : -1}
-            onClick={(event) => handleMapClick(event, BACK_PAIN_REGIONS, "back")}
+            Frente
+          </button>
+          <button
+            type="button"
+            className={mapSide === "back" ? "active" : ""}
+            aria-pressed={mapSide === "back"}
+            onClick={() => showMapSide("back")}
           >
-            <img src="/pain-map-back.jpg" alt="Mapa corporal traseiro para seleção de dor" />
-            {selectedBackRegions.map((selection) => (
-              <button
-                key={`back-selected-${selection.label}`}
-                type="button"
-                className="pain-dot selected"
-                style={{ left: `${selection.x}%`, top: `${selection.y}%` }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (!isEditable) {
-                    return;
-                  }
-                  onRemoveRegion(selection.label);
-                }}
-                title={`${selection.label} (${formatLateralityLabel(
-                  selection.laterality
-                )} - ${formatPainSelectionLocation(selection)})`}
-                aria-label={`Desmarcar ${selection.label}`}
-              >
-                <span className="pain-dot-label">{formatLateralityShort(selection.laterality)}</span>
-              </button>
-            ))}
-            {renderLateralityTooltip("back")}
-          </div>
-          <figcaption>Costas</figcaption>
-        </figure>
-      </div>
-
-      {painSelections.length > 0 ? (
-        <div className="selected-areas">
-          {painSelections.map((selection) => (
-            <button
-              key={`chip-${selection.label}`}
-              type="button"
-              className="selected-area-chip"
-              onClick={() => {
-                if (!isEditable) {
-                  return;
-                }
-                onRemoveRegion(selection.label);
-              }}
-              title={`Remover ${selection.label}`}
-            >
-              {selection.label} ({formatLateralityLabel(selection.laterality)} -{" "}
-              {formatPainSelectionLocation(selection)}) ×
-            </button>
-          ))}
+            Costas
+          </button>
         </div>
-      ) : (
-        <p className="muted-text">Nenhuma região selecionada.</p>
-      )}
+      </div>
+      <div className="pain-map-body">
+        <figure className={`pain-map-figure ${pendingSelection?.side === mapSide ? "has-tooltip" : ""}`}>
+          <div
+            ref={canvasRef}
+            className="pain-map-canvas"
+            data-editable={isEditable ? "true" : "false"}
+            role={isEditable ? "button" : undefined}
+            tabIndex={isEditable ? 0 : -1}
+            onClick={(event) => handleMapClick(event, activeRegions, mapSide)}
+          >
+            <img
+              src={mapSide === "front" ? "/pain-map-front.jpg" : "/pain-map-back.jpg"}
+              alt={mapSide === "front" ? "Mapa corporal frontal para seleção de dor" : "Mapa corporal traseiro para seleção de dor"}
+            />
+            {selectedOnSide.map((selection) => (
+              <button
+                key={`${mapSide}-selected-${selection.label}`}
+                type="button"
+                className="pain-dot selected"
+                style={{ left: `${selection.x}%`, top: `${selection.y}%` }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (!isEditable) {
+                    return;
+                  }
+                  onRemoveRegion(selection.label);
+                }}
+                title={`${selection.label} (${formatLateralityLabel(selection.laterality)})`}
+                aria-label={`Desmarcar ${selection.label}`}
+              />
+            ))}
+            {renderLateralityTooltip(mapSide)}
+          </div>
+        </figure>
+        <div className="pain-map-regions">
+          <button type="button" className="pain-map-edit" onClick={() => canvasRef.current?.focus()}>
+            Editar mapa
+          </button>
+          {painSelections.length > 0 ? (
+            <>
+              <p className="pain-map-regions-label">Regiões marcadas</p>
+              <div className="selected-areas">
+                {painSelections.map((selection) => (
+                  <button
+                    key={`chip-${selection.label}`}
+                    type="button"
+                    className="selected-area-chip"
+                    onClick={() => {
+                      if (!isEditable) {
+                        return;
+                      }
+                      onRemoveRegion(selection.label);
+                    }}
+                    title={`Remover ${selection.label}`}
+                  >
+                    {formatPainChip(selection)}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="muted-text pain-map-empty">Nenhuma região marcada.</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function MeasurementMarks({ measurements = [], activePoints = [], activeType = "line" }) {
+function MeasurementMarks({ measurements = [], activePoints = [], activeType = "line", showIndex = true }) {
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="photo-overlay-svg">
       {measurements.map((measurement, index) => {
@@ -1396,8 +1534,7 @@ function MeasurementMarks({ measurements = [], activePoints = [], activeType = "
                   style={{ fill: color }}
                 />
                 <text x={point.x} y={point.y - 3.4} className="measurement-point-label">
-                  {index + 1}
-                  {point.label}
+                  {showIndex ? `${index + 1}${point.label}` : point.label}
                 </text>
               </g>
             ))}
@@ -1441,15 +1578,14 @@ function PhotoMeasurementEditor({
   activePoints,
   onSelectFile,
   onChangeActivePoints,
-  onCommitMeasurement,
-  onRemoveMeasurement,
-  onUndoActivePoint,
-  onClearActivePoints
+  onMeasurementTypeChange,
+  onUndoActivePoint
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const requiredPoints = getRequiredMeasurementPoints(activeMeasurementType);
-  const draftMeasurement = buildMeasurement(activeMeasurementType, activePoints);
-  const remainingPoints = Math.max(requiredPoints - activePoints.length, 0);
+  const hint = activeMeasurementType === "angle"
+    ? "Toque em três pontos para medir um ângulo"
+    : "Toque em dois pontos para medir uma linha";
 
   const handleIncomingFile = (fileList) => {
     const file = fileList?.[0];
@@ -1477,7 +1613,7 @@ function PhotoMeasurementEditor({
 
   return (
     <div
-      className={`photo-measurement-editor ${isDragging ? "is-dragging" : ""}`}
+      className={`photo-composer-stage ${isDragging ? "is-dragging" : ""}`}
       onDragOver={(event) => {
         event.preventDefault();
         setIsDragging(true);
@@ -1493,6 +1629,42 @@ function PhotoMeasurementEditor({
         handleIncomingFile(event.dataTransfer.files);
       }}
     >
+      <div className="photo-composer-tools">
+        <div className="photo-measure-tabs" role="radiogroup" aria-label="Tipo de medição">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={activeMeasurementType !== "angle"}
+            className={activeMeasurementType !== "angle" ? "is-selected" : ""}
+            onClick={() => onMeasurementTypeChange("line")}
+          >
+            Linha A–B
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={activeMeasurementType === "angle"}
+            className={activeMeasurementType === "angle" ? "is-selected" : ""}
+            onClick={() => onMeasurementTypeChange("angle")}
+          >
+            Ângulo A–B–C
+          </button>
+        </div>
+        <button type="button" className="secondary-btn" onClick={onUndoActivePoint} disabled={!activePoints.length}>
+          Desfazer ponto
+        </button>
+        <label className="secondary-btn photo-replace-btn">
+          Trocar foto
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              handleIncomingFile(event.target.files);
+              event.target.value = "";
+            }}
+          />
+        </label>
+      </div>
       {!imageDataUrl ? (
         <label className={`photo-dropzone ${isDragging ? "is-dragging" : ""}`}>
           <input
@@ -1507,82 +1679,44 @@ function PhotoMeasurementEditor({
           <span>Arraste a imagem aqui ou clique para escolher do dispositivo.</span>
         </label>
       ) : (
-        <>
-          <div className="photo-editor-toolbar">
-            <label className="secondary-btn photo-replace-btn">
-              Trocar foto
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => {
-                  handleIncomingFile(event.target.files);
-                  event.target.value = "";
-                }}
-              />
-            </label>
-            <button type="button" className="secondary-btn" onClick={onUndoActivePoint} disabled={!activePoints.length}>
-              Desfazer ponto
-            </button>
-            <button type="button" className="secondary-btn" onClick={onClearActivePoints} disabled={!activePoints.length}>
-              Limpar marcação atual
-            </button>
-            <button type="button" className="primary-btn" onClick={onCommitMeasurement} disabled={!draftMeasurement}>
-              Adicionar medição
-            </button>
-          </div>
-          <p className="muted-text">
-            {remainingPoints > 0
-              ? `Clique na foto para marcar ${remainingPoints === 1 ? "o próximo ponto" : `mais ${remainingPoints} pontos`} desta ${
-                  activeMeasurementType === "angle" ? "medição de ângulo" : "linha"
-                }.`
-              : "Medição pronta. Adicione-a à foto e continue com outra linha ou outro ângulo."}
-          </p>
-          <div
-            className={`photo-measurement-canvas ${activePoints.length >= requiredPoints ? "is-complete" : ""}`}
-            onClick={handleImageClick}
-          >
-            <img src={imageDataUrl} alt="Foto de acompanhamento para medição" />
-            <MeasurementMarks
-              measurements={measurements}
-              activePoints={activePoints}
-              activeType={activeMeasurementType}
-            />
-          </div>
-        </>
-      )}
-
-      <div className="photo-measurement-meta">
-        <p className="muted-text">
-          Medições nesta foto: {measurements.length === 0 ? "nenhuma ainda" : measurements.length}
-        </p>
-        {draftMeasurement ? (
-          <p className="muted-text">Medição atual: {formatMeasurementValue(draftMeasurement)}</p>
-        ) : null}
-      </div>
-
-      {measurements.length > 0 ? (
-        <div className="measurement-chip-list">
-          {measurements.map((measurement, index) => (
-            <div key={measurement.id} className="measurement-chip">
+        <div
+          className={`photo-measurement-canvas ${activePoints.length >= requiredPoints ? "is-complete" : ""}`}
+          onClick={handleImageClick}
+        >
+          <img src={imageDataUrl} alt="Foto de acompanhamento para medição" />
+          <MeasurementMarks
+            measurements={measurements}
+            activePoints={activePoints}
+            activeType={activeMeasurementType}
+            showIndex={false}
+          />
+          {measurements.map((measurement) => {
+            const position = measurementBadgePosition(measurement);
+            if (!position) {
+              return null;
+            }
+            return (
               <span
-                className="measurement-chip-swatch"
-                style={{ background: MEASUREMENT_COLORS[index % MEASUREMENT_COLORS.length] }}
-              />
-              <span>
-                {index + 1}. {formatMeasurementValue(measurement)}
+                key={`badge-${measurement.id}`}
+                className="photo-measure-badge"
+                style={{ left: `${position.x}%`, top: `${position.y}%` }}
+              >
+                {measurementBadgeText(measurement)}
               </span>
-              <button type="button" onClick={() => onRemoveMeasurement(measurement.id)} aria-label={`Remover medição ${index + 1}`}>
-                ×
-              </button>
-            </div>
-          ))}
+            );
+          })}
+          <p className="photo-canvas-hint">{hint}</p>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
+const PARAMETER_UNIT_PRESETS = ["cm", "graus", "kg", "%"];
+
 function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAdd, onRemove, onClose }) {
+  const [customUnit, setCustomUnit] = useState(false);
+
   useEffect(() => {
     const onKey = (event) => {
       if (event.key === "Escape") {
@@ -1593,187 +1727,537 @@ function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAd
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    if (PARAMETER_UNIT_PRESETS.includes(form.unit)) {
+      setCustomUnit(false);
+    }
+  }, [form.unit]);
+
+  const selectPreset = (unit) => {
+    setCustomUnit(false);
+    onChange({ unit });
+  };
+
+  const selectCustomUnit = () => {
+    setCustomUnit(true);
+    if (PARAMETER_UNIT_PRESETS.includes(form.unit)) {
+      onChange({ unit: "" });
+    }
+  };
+
   return (
-    <div className="tracking-parameters">
-      {parameters.length ? (
-        <ul className="tracking-parameter-list">
-          {parameters.map((parameter) => (
-            <li key={parameter.id}>
-              <span>
+    <form className="tracking-parameter-form" onSubmit={onAdd}>
+      {parameters.length > 0 ? (
+        <>
+          <ul className="tracking-parameter-list">
+            {parameters.map((parameter) => (
+              <li key={parameter.id}>
                 <strong>{parameter.name}</strong>
-                <small>
-                  {parameter.unit} · melhora quando {parameter.improveWhen === "down" ? "diminui" : "aumenta"}
-                </small>
-              </span>
-              <button type="button" onClick={() => onRemove(parameter.id)} disabled={busy}>
-                Remover
-              </button>
-            </li>
+                <span className="parameter-row-meta">
+                  <span className="parameter-unit-chip">{parameter.unit}</span>
+                  <button
+                    type="button"
+                    className="parameter-remove"
+                    onClick={() => onRemove(parameter.id)}
+                    disabled={busy}
+                    aria-label={`Remover ${parameter.name}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <hr className="parameter-divider" />
+        </>
+      ) : null}
+      <label>
+        Nova medida
+        <input
+          value={form.name}
+          onChange={(event) => onChange({ name: event.target.value })}
+          placeholder="Ex.: alcance do ombro esquerdo"
+          maxLength={60}
+          required
+        />
+      </label>
+      <div className="parameter-unit-field">
+        <span>Unidade</span>
+        <div className="parameter-unit-options" role="radiogroup" aria-label="Unidade">
+          {PARAMETER_UNIT_PRESETS.map((unit) => (
+            <button
+              key={unit}
+              type="button"
+              role="radio"
+              aria-checked={!customUnit && form.unit === unit}
+              className={`parameter-unit-choice${!customUnit && form.unit === unit ? " is-selected" : ""}`}
+              onClick={() => selectPreset(unit)}
+            >
+              {unit}
+            </button>
           ))}
-        </ul>
-      ) : (
-        <p className="muted-text">Nenhum parâmetro ainda. Dor, estresse e sono continuam em toda sessão.</p>
-      )}
-      <form className="tracking-parameter-form" onSubmit={onAdd}>
-        <label>
-          Nome
-          <input
-            value={form.name}
-            onChange={(event) => onChange({ name: event.target.value })}
-            placeholder="Alcance do ombro direito"
-            maxLength={60}
-            required
-          />
-        </label>
-        <label>
-          Unidade
+          <button
+            type="button"
+            role="radio"
+            aria-checked={customUnit}
+            className={`parameter-unit-choice is-other${customUnit ? " is-selected" : ""}`}
+            onClick={selectCustomUnit}
+          >
+            Outra
+          </button>
+        </div>
+        {customUnit ? (
           <input
             value={form.unit}
             onChange={(event) => onChange({ unit: event.target.value })}
-            placeholder="cm"
+            placeholder="Ex.: mm"
             maxLength={16}
+            aria-label="Unidade personalizada"
             required
           />
-        </label>
-        <label>
-          A melhora aparece quando
-          <select value={form.improveWhen} onChange={(event) => onChange({ improveWhen: event.target.value })}>
-            <option value="up">O valor aumenta</option>
-            <option value="down">O valor diminui</option>
-          </select>
-        </label>
-        <button className="primary-btn" type="submit" disabled={busy}>
-          {busy ? "Salvando..." : "Adicionar parâmetro"}
-        </button>
-      </form>
+        ) : null}
+      </div>
       {error ? <p className="error-text">{error}</p> : null}
-    </div>
+      <footer className="parameter-modal-footer">
+        <button type="button" className="secondary-btn" onClick={onClose} disabled={busy}>
+          Cancelar
+        </button>
+        <button className="primary-btn" type="submit" disabled={busy}>
+          {busy ? "Salvando..." : "Adicionar medida"}
+        </button>
+      </footer>
+    </form>
+  );
+}
+
+function formatChartNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "—";
+  }
+  const rounded = Math.round(numeric * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded).replace(".", ",");
+}
+
+function niceStep(raw) {
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return 1;
+  }
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const residual = raw / magnitude;
+  const nice = residual <= 1 ? 1 : residual <= 2 ? 2 : residual <= 5 ? 5 : 10;
+  return nice * magnitude;
+}
+
+function roundedDomain(values, divisions = 2) {
+  const nums = values.map((value) => Number(value)).filter(Number.isFinite);
+  if (nums.length === 0) {
+    return { min: 0, max: 10, ticks: [0, 5, 10] };
+  }
+  let low = Math.min(...nums);
+  let high = Math.max(...nums);
+  if (high === low) {
+    low -= 5;
+    high += 5;
+  }
+  const pad = Math.max((high - low) * 0.22, 1);
+  low -= pad;
+  high += pad;
+  const step = niceStep((high - low) / divisions);
+  const min = Math.floor(low / step) * step;
+  const max = Math.ceil(high / step) * step;
+  const ticks = [];
+  for (let value = min; value <= max + step / 100; value += step) {
+    ticks.push(Math.round(value * 100) / 100);
+    if (ticks.length > 6) {
+      break;
+    }
+  }
+  return { min: ticks[0], max: ticks[ticks.length - 1], ticks };
+}
+
+function chartLabelIndexes(count) {
+  if (count <= 5) {
+    return Array.from({ length: count }, (_, index) => index);
+  }
+  const indexes = new Set([0, count - 1]);
+  for (let step = 1; step <= 3; step += 1) {
+    indexes.add(Math.round((step * (count - 1)) / 4));
+  }
+  return [...indexes].sort((first, second) => first - second);
+}
+
+function EvolutionPhonePreview({ clinicName, clientName, highlight, comments, homeCare, latest }) {
+  const firstName = String(clientName || "").trim().split(" ")[0] || "cliente";
+  const careLines = String(homeCare || "").split("\n").map((line) => line.trim()).filter(Boolean);
+  const note = String(comments || "").trim();
+  const phrase = String(highlight || "").trim();
+  return (
+    <aside className="evolution-preview" aria-label="Prévia no celular">
+      <p className="evolution-preview-kicker">Prévia no celular</p>
+      <div className="evolution-phone">
+        <header className="evolution-phone-hero">
+          <p className="evolution-phone-clinic">{clinicName || "Clínica Estética"}</p>
+          <h5>Sua evolução, {firstName}</h5>
+          {phrase ? <p className="evolution-phone-highlight">{phrase}</p> : null}
+        </header>
+        <div className="evolution-phone-body">
+          {latest ? (
+            <div className="evolution-phone-stats">
+              <div>
+                <span>Bem-estar</span>
+                <strong>{wellnessScore(latest)}</strong>
+              </div>
+              <div>
+                <span>Dor</span>
+                <strong>{latest.painLevel ?? 0}</strong>
+              </div>
+              <div>
+                <span>Estresse</span>
+                <strong>{latest.stressLevel ?? 0}</strong>
+              </div>
+              <div>
+                <span>Sono</span>
+                <strong>{formatChartNumber(latest.sleepHours)} h</strong>
+              </div>
+            </div>
+          ) : (
+            <p className="evolution-phone-note">Ainda não há sessão para mostrar os números.</p>
+          )}
+          {note ? <p className="evolution-phone-note">{note}</p> : null}
+          {careLines.length ? (
+            <div className="evolution-phone-note">
+              <span>Cuidados em casa</span>
+              <ul>
+                {careLines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function ChartDelta({ from, to, suffix = "", positiveIsGood = true, tone = "" }) {
+  const delta = (Number(to) || 0) - (Number(from) || 0);
+  const rounded = Math.round(delta * 10) / 10;
+  const text = `${rounded > 0 ? "+" : ""}${formatChartNumber(rounded)}${suffix}`;
+  let className = "record-chart-delta";
+  if (tone) {
+    className += ` ${tone}`;
+  } else if (Math.abs(rounded) >= 0.05) {
+    const improved = positiveIsGood ? rounded > 0 : rounded < 0;
+    className += improved ? " is-up" : " is-down";
+  }
+  return <strong className={className}>{text}</strong>;
+}
+
+function RecordChart({ title, aside, children }) {
+  return (
+    <article className="record-chart">
+      <header className="record-chart-head">
+        <h5>{title}</h5>
+        {aside || null}
+      </header>
+      {children}
+    </article>
+  );
+}
+
+const RECORD_CHART = { width: 360, height: 168, top: 16, right: 12, bottom: 28, left: 36 };
+
+function chartGeometry(count, domain) {
+  const { width, height, top, right, bottom, left } = RECORD_CHART;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const span = domain.max - domain.min || 1;
+  const x = (index) => (count <= 1 ? left + plotWidth / 2 : left + (index * plotWidth) / (count - 1));
+  const y = (value) => {
+    const clamped = Math.min(Math.max(Number(value) || 0, domain.min), domain.max);
+    return top + (1 - (clamped - domain.min) / span) * plotHeight;
+  };
+  return { width, height, top, right, bottom, left, plotWidth, plotHeight, x, y };
+}
+
+function ChartAxes({ geometry, domain, count, dates, formatY }) {
+  const labels = chartLabelIndexes(count);
+  return (
+    <>
+      {domain.ticks.map((tick) => (
+        <g key={tick}>
+          <line
+            x1={geometry.left}
+            y1={geometry.y(tick)}
+            x2={RECORD_CHART.width - geometry.right}
+            y2={geometry.y(tick)}
+            stroke="#eceae4"
+            strokeWidth="1"
+          />
+          <text
+            x={geometry.left - 8}
+            y={geometry.y(tick) + 4}
+            textAnchor="end"
+            fill="#8b9691"
+            fontSize="11"
+            fontWeight="600"
+          >
+            {formatY(tick)}
+          </text>
+        </g>
+      ))}
+      {labels.map((index) => {
+        const atStart = count > 1 && index === 0;
+        const atEnd = count > 1 && index === count - 1;
+        return (
+          <text
+            key={`${dates[index]}-${index}`}
+            x={atStart ? geometry.left : atEnd ? RECORD_CHART.width - geometry.right : geometry.x(index)}
+            y={RECORD_CHART.height - 8}
+            textAnchor={atStart ? "start" : atEnd ? "end" : "middle"}
+            fill="#8b9691"
+            fontSize="11"
+            fontWeight="600"
+          >
+            {formatDayMonth(dates[index])}
+          </text>
+        );
+      })}
+    </>
+  );
+}
+
+function MetricLineChart({
+  title,
+  points,
+  empty,
+  color = "#1f4d43",
+  area = false,
+  pointStyle = "end",
+  domain,
+  formatY = formatChartNumber,
+  aside
+}) {
+  if (points.length < 2) {
+    return (
+      <RecordChart title={title}>
+        <p className="muted-text">{empty}</p>
+      </RecordChart>
+    );
+  }
+
+  const resolvedDomain = domain || roundedDomain(points.map((item) => item.value));
+  const geometry = chartGeometry(points.length, resolvedDomain);
+  const line = points
+    .map((item, index) => `${index === 0 ? "M" : "L"} ${geometry.x(index)} ${geometry.y(item.value)}`)
+    .join(" ");
+  const baseline = geometry.y(resolvedDomain.min);
+  const areaPath = `${line} L ${geometry.x(points.length - 1)} ${baseline} L ${geometry.x(0)} ${baseline} Z`;
+
+  return (
+    <RecordChart title={title} aside={aside}>
+      <svg viewBox={`0 0 ${RECORD_CHART.width} ${RECORD_CHART.height}`} role="img" aria-label={title}>
+        {area ? <path d={areaPath} fill="#e6eeea" /> : null}
+        <ChartAxes
+          geometry={geometry}
+          domain={resolvedDomain}
+          count={points.length}
+          dates={points.map((item) => item.date)}
+          formatY={formatY}
+        />
+        <path d={line} fill="none" stroke={color} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
+        {points.map((item, index) => {
+          const show = pointStyle !== "end" || index === points.length - 1;
+          if (!show) {
+            return null;
+          }
+          const open = pointStyle === "open";
+          return (
+            <circle
+              key={`${item.date}-${index}`}
+              cx={geometry.x(index)}
+              cy={geometry.y(item.value)}
+              r={open ? 4 : 4.5}
+              fill={open ? "#ffffff" : color}
+              stroke={open ? color : "#ffffff"}
+              strokeWidth="2"
+            />
+          );
+        })}
+      </svg>
+    </RecordChart>
   );
 }
 
 function ParameterProgressChart({ series }) {
   const points = series.points || [];
-  const title = `${series.name} (${series.unit})`;
-  if (points.length < 2) {
-    return (
-      <div className="chart-card">
-        <h5>{title}</h5>
-        <p className="muted-text">
-          {points.length === 0
-            ? "Ainda não há medição deste parâmetro."
-            : "Registre esta medida em pelo menos 2 sessões para gerar o gráfico."}
-        </p>
-      </div>
-    );
-  }
-
-  const width = 420;
-  const height = 200;
-  const padding = 36;
-  const maxValue = chartCeiling(points.map((item) => item.value));
-  const plotWidth = width - padding * 2;
-  const plotHeight = height - padding * 2;
-  const yLabels = [0, maxValue / 2, maxValue];
-  const getX = (index) => (
-    points.length === 1 ? padding : padding + (index * plotWidth) / (points.length - 1)
-  );
-  const getY = (value) => padding + (1 - Math.min(Math.max(Number(value) || 0, 0), maxValue) / maxValue) * plotHeight;
-  const linePath = points
-    .map((item, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(item.value)}`)
-    .join(" ");
-  const formatTick = (value) => (Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10));
-
+  const last = points[points.length - 1];
+  const first = points[0];
   return (
-    <div className="chart-card">
-      <h5>{title}</h5>
-      <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label={title}>
-        {yLabels.map((marker) => {
-          const y = getY(marker);
-          return (
-            <g key={marker}>
-              <line x1={padding} y1={y} x2={width - padding} y2={y} className="chart-grid" />
-              <text x={4} y={y + 4} className="chart-axis">
-                {formatTick(marker)}
-              </text>
-            </g>
-          );
-        })}
-        <path d={linePath} className="chart-line chart-line-primary" />
-        {points.map((item, index) => (
-          <g key={`${item.date}-${index}`}>
-            <circle cx={getX(index)} cy={getY(item.value)} r="3" className="chart-point-primary" />
-            <text x={getX(index)} y={height - 8} textAnchor="middle" className="chart-axis-x">
-              {formatDatePt(item.date)}
-            </text>
-          </g>
-        ))}
-      </svg>
-      <p className="muted-text chart-footnote">
-        Unidade: {series.unit}. A melhora aparece quando o valor {series.improveWhen === "down" ? "diminui" : "aumenta"}.
-      </p>
-    </div>
+    <MetricLineChart
+      title={series.name}
+      points={points}
+      empty={points.length === 0
+        ? "Ainda não há medição deste parâmetro."
+        : "Registre esta medida em outra sessão para ver a evolução."}
+      pointStyle="open"
+      color="#b8946a"
+      aside={points.length >= 2 ? (
+        <ChartDelta
+          from={first?.value}
+          to={last?.value}
+          suffix={series.unit ? ` ${series.unit}` : ""}
+          positiveIsGood={series.improveWhen !== "down"}
+        />
+      ) : null}
+    />
   );
 }
 
-function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
+function formatDayMonth(dateValue) {
+  const parsed = new Date(`${dateValue}T00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
+}
+
+function formatSleepChip(hours, feedback) {
+  const numeric = Number(hours);
+  if (feedback) {
+    if (numeric === 7.5) return "7 a 8 h";
+    if (numeric === 6) return "5 a 6 h";
+    if (numeric === 4) return "menos de 5 h";
+    if (numeric === 9) return "mais de 8 h";
+  }
+  if (!Number.isFinite(numeric) || hours === "" || hours === null || hours === undefined) {
+    return "—";
+  }
+  const text = Number.isInteger(numeric) ? String(numeric) : String(Math.round(numeric * 10) / 10).replace(".", ",");
+  return `${text} h`;
+}
+
+function SessionDetail({ checkpoint, photos, onDelete }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   if (!checkpoint) {
     return (
-      <>
-        <button type="button" className="secondary-btn" onClick={onBack}>
-          Voltar
-        </button>
-        <p className="muted-text">Este registro não está mais disponível.</p>
-      </>
+      <article className="session-detail-card is-empty">
+        <p className="muted-text">Nenhum registro ainda. Use Nova sessão para começar o acompanhamento.</p>
+      </article>
     );
   }
 
   const feedback = isClientFeedback(checkpoint);
+  const readings = normalizeReadings(checkpoint.parameters);
+  const title = feedback
+    ? "Feedback da cliente"
+    : checkpoint.sessionNumber
+      ? `Sessão ${checkpoint.sessionNumber} · ${formatDatePt(checkpoint.date)}`
+      : formatDatePt(checkpoint.date);
 
   return (
-    <>
-      <div className="panel-header">
+    <article className="session-detail-card">
+      <header className="session-detail-header">
         <div>
-          <h4>
-            {formatDatePt(checkpoint.date)}
-            {feedback
-              ? " · Feedback do cliente"
-              : checkpoint.sessionNumber
-                ? ` · Sessão ${checkpoint.sessionNumber}`
-                : ""}
-          </h4>
-          {checkpoint.sessionType ? <p>{checkpoint.sessionType}</p> : feedback ? null : <p>Tipo não informado</p>}
+          <h3>{title}</h3>
+          <p>{checkpoint.sessionType || (feedback ? "Enviado pelo link" : "Tipo não informado")}</p>
         </div>
-        <button type="button" className="secondary-btn" onClick={onBack}>
-          Voltar
-        </button>
+        <div className="session-detail-menu">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={feedback ? "Opções do feedback" : "Opções da sessão"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((previous) => !previous)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="5" r="1.6" />
+              <circle cx="12" cy="12" r="1.6" />
+              <circle cx="12" cy="19" r="1.6" />
+            </svg>
+          </button>
+          {menuOpen ? (
+            <div className="session-detail-menu-dropdown">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete(checkpoint.id);
+                }}
+              >
+                {feedback ? "Excluir feedback" : "Excluir sessão"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </header>
+      <div className="session-stat-grid">
+        <div>
+          <span>Bem-estar</span>
+          <strong>{wellnessScore(checkpoint)}</strong>
+        </div>
+        <div>
+          <span>Dor</span>
+          <strong>{checkpoint.painLevel ?? 0}</strong>
+        </div>
+        <div>
+          <span>Estresse</span>
+          <strong>{checkpoint.stressLevel ?? 0}</strong>
+        </div>
+        <div>
+          <span>Sono</span>
+          <strong>{formatSleepChip(checkpoint.sleepHours, feedback)}</strong>
+        </div>
       </div>
-      <div className="session-detail-metrics">
-        <span>Dor {checkpoint.painLevel ?? 0}</span>
-        <span>Estresse {checkpoint.stressLevel ?? 0}</span>
-        <span>Sono {checkpoint.sleepHours ?? 0}h</span>
-        {normalizeReadings(checkpoint.parameters).map((item) => (
-          <span key={item.id}>{item.name} {formatParameterValue(item.value, item.unit)}</span>
-        ))}
-      </div>
-      {checkpoint.observations ? <p>{checkpoint.observations}</p> : null}
+      <section className="session-detail-block">
+        <h4>Observações</h4>
+        <p>{checkpoint.observations?.trim() ? checkpoint.observations : "Sem observações nesta sessão."}</p>
+      </section>
       {feedback ? null : (
-        <>
-          <h5>Fotos</h5>
+        <section className="session-detail-block">
+          <h4>Fotos e medições</h4>
           {photos.length === 0 ? (
             <p className="muted-text">Nenhuma foto nesta sessão.</p>
           ) : (
-            <ul className="list photo-analysis-list">
-              {photos.map((analysis) => (
-                <PhotoAnalysisSummary key={analysis.id} analysis={analysis} />
-              ))}
-            </ul>
+            <div className="session-photo-grid">
+              {photos.map((analysis) => {
+                const measurements = getStoredMeasurements(analysis);
+                const measurementLabel = measurements[0] ? formatMeasurementValue(measurements[0]) : "";
+                return (
+                  <figure key={analysis.id} className="session-photo-card">
+                    <div className="photo-measurement-canvas photo-analysis-preview">
+                      {analysis.imageDataUrl ? (
+                        <>
+                          <img src={analysis.imageDataUrl} alt={analysis.positionLabel || "Foto da sessão"} />
+                          <MeasurementMarks measurements={measurements} />
+                        </>
+                      ) : null}
+                    </div>
+                    <figcaption>
+                      {analysis.positionLabel || "Foto"}
+                      {measurementLabel ? ` · ${measurementLabel}` : ""}
+                    </figcaption>
+                  </figure>
+                );
+              })}
+            </div>
           )}
-        </>
+        </section>
       )}
-      <button type="button" className="danger-btn" onClick={() => onDelete(checkpoint.id)}>
-        {feedback ? "Excluir feedback" : "Excluir sessão"}
-      </button>
-    </>
+      {readings.length > 0 ? (
+        <ul className="session-reading-list">
+          {readings.map((item) => (
+            <li key={item.id}>
+              <span>{item.name}</span>
+              <strong>{formatParameterValue(item.value, item.unit)}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </article>
   );
 }
 
@@ -1817,425 +2301,262 @@ function PhotoAnalysisSummary({ analysis, onRemove, removeLabel = "Excluir" }) {
 }
 
 function ProgressLineChart({ title, points, firstMetric, secondMetric, maxValue }) {
+  const domain = { min: 0, max: maxValue, ticks: [0, maxValue / 2, maxValue] };
   if (points.length < 2) {
     return (
-      <div className="chart-card">
-        <h5>{title}</h5>
-        <p className="muted-text">Cadastre pelo menos 2 avaliações para gerar o gráfico.</p>
-      </div>
+      <RecordChart
+        title={title}
+        aside={(
+          <div className="record-chart-legend">
+            <span><i className="record-swatch is-pain" />{firstMetric.label}</span>
+            <span><i className="record-swatch is-stress" />{secondMetric.label}</span>
+          </div>
+        )}
+      >
+        <p className="muted-text">Cadastre pelo menos 2 avaliações para ver a evolução.</p>
+      </RecordChart>
     );
   }
 
-  const width = 420;
-  const height = 200;
-  const padding = 30;
-  const plotWidth = width - padding * 2;
-  const plotHeight = height - padding * 2;
-  const midValue = maxValue / 2;
-  const yLabels = [0, midValue, maxValue];
-
-  const getX = (index) =>
-    points.length === 1 ? padding : padding + (index * plotWidth) / (points.length - 1);
-
-  const getY = (value) =>
-    padding + (1 - Math.min(Math.max(Number(value) || 0, 0), maxValue) / maxValue) * plotHeight;
-
-  const linePath = (fieldName) =>
-    points
-      .map((item, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(item[fieldName])}`)
-      .join(" ");
+  const geometry = chartGeometry(points.length, domain);
+  const line = (fieldName) => points
+    .map((item, index) => `${index === 0 ? "M" : "L"} ${geometry.x(index)} ${geometry.y(item[fieldName])}`)
+    .join(" ");
 
   return (
-    <div className="chart-card">
-      <h5>{title}</h5>
-      <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label={title}>
-        {yLabels.map((marker) => {
-          const y = getY(marker);
-          return (
-            <g key={marker}>
-              <line x1={padding} y1={y} x2={width - padding} y2={y} className="chart-grid" />
-              <text x={4} y={y + 4} className="chart-axis">
-                {marker}
-              </text>
-            </g>
-          );
-        })}
-
-        <path d={linePath(firstMetric.field)} className="chart-line chart-line-primary" />
-        <path d={linePath(secondMetric.field)} className="chart-line chart-line-secondary" />
-
+    <RecordChart
+      title={title}
+      aside={(
+        <div className="record-chart-legend">
+          <span><i className="record-swatch is-pain" />{firstMetric.label}</span>
+          <span><i className="record-swatch is-stress" />{secondMetric.label}</span>
+        </div>
+      )}
+    >
+      <svg viewBox={`0 0 ${RECORD_CHART.width} ${RECORD_CHART.height}`} role="img" aria-label={title}>
+        <ChartAxes
+          geometry={geometry}
+          domain={domain}
+          count={points.length}
+          dates={points.map((item) => item.date)}
+          formatY={(value) => formatChartNumber(value)}
+        />
+        <path d={line(firstMetric.field)} fill="none" stroke="#1f4d43" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={line(secondMetric.field)} fill="none" stroke="#b8946a" strokeWidth="2.2" strokeDasharray="5 4" strokeLinejoin="round" strokeLinecap="round" />
         {points.map((item, index) => (
           <g key={`${item.date}-${index}`}>
-            <circle
-              cx={getX(index)}
-              cy={getY(item[firstMetric.field])}
-              r="3"
-              className="chart-point-primary"
-            />
-            <circle
-              cx={getX(index)}
-              cy={getY(item[secondMetric.field])}
-              r="3"
-              className="chart-point-secondary"
-            />
-            <text x={getX(index)} y={height - 8} textAnchor="middle" className="chart-axis-x">
-              {formatDatePt(item.date)}
-            </text>
+            <circle cx={geometry.x(index)} cy={geometry.y(item[firstMetric.field])} r="3.5" fill="#1f4d43" />
+            <circle cx={geometry.x(index)} cy={geometry.y(item[secondMetric.field])} r="3.5" fill="#b8946a" />
           </g>
         ))}
       </svg>
-      <div className="chart-legend">
-        <span>
-          <i className="legend-dot legend-primary" />
-          {firstMetric.label}
-        </span>
-        <span>
-          <i className="legend-dot legend-secondary" />
-          {secondMetric.label}
-        </span>
-      </div>
-    </div>
+    </RecordChart>
   );
 }
 
 function SleepBarChart({ points }) {
+  const average = points.length
+    ? points.reduce((sum, item) => sum + (Number(item.sleepHours) || 0), 0) / points.length
+    : 0;
+  const aside = points.length ? (
+    <span className="record-chart-aside">média {formatChartNumber(average)} h</span>
+  ) : null;
+
   if (points.length < 1) {
     return (
-      <div className="chart-card">
-        <h5>Sono (horas por sessão)</h5>
+      <RecordChart title="Sono por registro">
         <p className="muted-text">Sem dados de sono até o momento.</p>
-      </div>
+      </RecordChart>
     );
   }
 
-  const width = 420;
-  const height = 200;
-  const padding = 30;
+  const { width, height, top, right, bottom, left } = RECORD_CHART;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
   const maxValue = 12;
-  const plotWidth = width - padding * 2;
-  const plotHeight = height - padding * 2;
-  const barWidth = Math.max(14, plotWidth / points.length - 10);
-
-  const getX = (index) =>
-    padding +
-    index * (plotWidth / points.length) +
-    (plotWidth / points.length - barWidth) / 2;
-
-  const barHeight = (value) => (Math.min(Math.max(Number(value) || 0, 0), maxValue) / maxValue) * plotHeight;
+  const slot = plotWidth / points.length;
+  const barWidth = Math.min(42, slot * 0.46);
+  const labels = chartLabelIndexes(points.length);
 
   return (
-    <div className="chart-card">
-      <h5>Sono (horas por sessão)</h5>
-      <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label="Gráfico de sono">
-        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="chart-grid" />
-        <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="chart-grid" />
-
+    <RecordChart title="Sono por registro" aside={aside}>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Sono por registro">
+        <line x1={left} y1={height - bottom} x2={width - right} y2={height - bottom} stroke="#eceae4" strokeWidth="1" />
         {points.map((item, index) => {
-          const currentBarHeight = barHeight(item.sleepHours);
+          const value = Math.min(Math.max(Number(item.sleepHours) || 0, 0), maxValue);
+          const barHeight = (value / maxValue) * plotHeight;
+          const x = left + index * slot + (slot - barWidth) / 2;
+          const y = height - bottom - barHeight;
           return (
             <g key={`${item.date}-${index}`}>
               <rect
-                x={getX(index)}
-                y={height - padding - currentBarHeight}
+                x={x}
+                y={barHeight < 1 ? height - bottom - 2 : y}
                 width={barWidth}
-                height={currentBarHeight}
-                className="chart-bar"
+                height={Math.max(barHeight, 2)}
+                rx="5"
+                fill={index === points.length - 1 ? "#1f4d43" : "#d5e4dc"}
               />
-              <text x={getX(index) + barWidth / 2} y={height - 8} textAnchor="middle" className="chart-axis-x">
-                {formatDatePt(item.date)}
+              <text x={x + barWidth / 2} y={Math.max(y - 8, 12)} textAnchor="middle" fill="#1c2421" fontSize="12" fontWeight="700">
+                {formatChartNumber(item.sleepHours)}
               </text>
             </g>
           );
         })}
+        {labels.map((index) => {
+          const atStart = points.length > 1 && index === 0;
+          const atEnd = points.length > 1 && index === points.length - 1;
+          return (
+            <text
+              key={`${points[index].date}-${index}`}
+              x={atStart ? left : atEnd ? width - right : left + index * slot + slot / 2}
+              y={height - 8}
+              textAnchor={atStart ? "start" : atEnd ? "end" : "middle"}
+              fill="#8b9691"
+              fontSize="11"
+              fontWeight="600"
+            >
+              {formatDayMonth(points[index].date)}
+            </text>
+          );
+        })}
       </svg>
-    </div>
+    </RecordChart>
   );
 }
 
-function WellnessScoreChart({ points, className = "" }) {
-  if (points.length < 2) {
-    return (
-      <div className={`chart-card ${className}`.trim()}>
-        <h5>Índice de bem-estar por sessão</h5>
-        <p className="muted-text">Cadastre pelo menos 2 avaliações para gerar o gráfico.</p>
-      </div>
-    );
-  }
-
-  const scorePoints = points.map((item) => {
-    const pain = Math.min(Math.max(Number(item.painLevel) || 0, 0), 10);
-    const stress = Math.min(Math.max(Number(item.stressLevel) || 0, 0), 10);
-    const sleep = Math.min(Math.max(Number(item.sleepHours) || 0, 0), 10);
-    const score = Math.round(((10 - pain) * 0.4 + (10 - stress) * 0.3 + sleep * 0.3) * 10);
-    return { ...item, score };
-  });
-
-  const width = 420;
-  const height = 200;
-  const padding = 30;
-  const maxValue = 100;
-  const plotWidth = width - padding * 2;
-  const plotHeight = height - padding * 2;
-  const yLabels = [0, 50, 100];
-
-  const getX = (index) =>
-    scorePoints.length === 1
-      ? padding
-      : padding + (index * plotWidth) / (scorePoints.length - 1);
-
-  const getY = (value) =>
-    padding + (1 - Math.min(Math.max(Number(value) || 0, 0), maxValue) / maxValue) * plotHeight;
-
-  const linePath = scorePoints
-    .map((item, index) => `${index === 0 ? "M" : "L"} ${getX(index)} ${getY(item.score)}`)
-    .join(" ");
-
+function WellnessScoreChart({ points }) {
+  const scorePoints = points.map((item) => ({ date: item.date, value: wellnessScore(item) }));
+  const first = scorePoints[0];
+  const last = scorePoints[scorePoints.length - 1];
   return (
-    <div className={`chart-card ${className}`.trim()}>
-      <h5>Índice de bem-estar por sessão</h5>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="chart-svg"
-        role="img"
-        aria-label="Evolução do índice de bem-estar"
-      >
-        {yLabels.map((marker) => {
-          const y = getY(marker);
-          return (
-            <g key={marker}>
-              <line x1={padding} y1={y} x2={width - padding} y2={y} className="chart-grid" />
-              <text x={4} y={y + 4} className="chart-axis">
-                {marker}
-              </text>
-            </g>
-          );
-        })}
-
-        <path d={linePath} className="chart-line chart-line-tertiary" />
-
-        {scorePoints.map((item, index) => (
-          <g key={`${item.date}-${index}`}>
-            <circle cx={getX(index)} cy={getY(item.score)} r="3" className="chart-point-tertiary" />
-            <text x={getX(index)} y={height - 8} textAnchor="middle" className="chart-axis-x">
-              {formatDatePt(item.date)}
-            </text>
-          </g>
-        ))}
-      </svg>
-      <p className="muted-text chart-footnote">
-        Índice estimado (0-100) combinando dor, estresse e sono para acompanhamento visual.
-      </p>
-    </div>
+    <MetricLineChart
+      title="Índice de bem-estar"
+      points={scorePoints}
+      empty="Cadastre pelo menos 2 avaliações para ver a evolução."
+      area
+      aside={scorePoints.length >= 2 ? <ChartDelta from={first.value} to={last.value} /> : null}
+    />
   );
 }
 
 function AngleProgressChart({ series }) {
-  const drawableSeries = (series || [])
-    .map((item, index) => ({
-      label: item.label,
-      color: item.color || MEASUREMENT_COLORS[index % MEASUREMENT_COLORS.length],
-      points: (item.points || []).filter(
-        (point) => point.date && Number.isFinite(Number(point.angleDegrees))
-      )
-    }))
-    .filter((item) => item.points.length > 0);
-  const dates = [...new Set(drawableSeries.flatMap((item) => item.points.map((point) => point.date)))];
-
-  if (dates.length < 2) {
-    return (
-      <div className="chart-card">
-        <h5>Evolução de ângulo</h5>
-        <p className="muted-text">Cadastre ângulos em pelo menos 2 datas para gerar o gráfico.</p>
-      </div>
-    );
-  }
-
-  const width = 420;
-  const height = 200;
-  const padding = 30;
-  const maxValue = 180;
-  const plotWidth = width - padding * 2;
-  const plotHeight = height - padding * 2;
-  const yLabels = [0, 90, 180];
-
-  const getX = (index) =>
-    dates.length === 1 ? padding : padding + (index * plotWidth) / (dates.length - 1);
-
-  const getY = (value) =>
-    padding + (1 - Math.min(Math.max(Number(value) || 0, 0), maxValue) / maxValue) * plotHeight;
-
-  const buildPath = (points) => {
-    let path = "";
-    let penDown = false;
-    dates.forEach((date, index) => {
-      const match = points.find((point) => point.date === date);
-      if (!match) {
-        penDown = false;
-        return;
-      }
-      path += `${penDown ? "L" : "M"} ${getX(index)} ${getY(match.angleDegrees)} `;
-      penDown = true;
-    });
-    return path.trim();
-  };
-
+  const points = series?.points || [];
+  const first = points[0];
+  const last = points[points.length - 1];
   return (
-    <div className="chart-card">
-      <h5>Evolução de ângulo</h5>
-      <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img" aria-label="Evolução de ângulo">
-        {yLabels.map((marker) => {
-          const y = getY(marker);
-          return (
-            <g key={marker}>
-              <line x1={padding} y1={y} x2={width - padding} y2={y} className="chart-grid" />
-              <text x={4} y={y + 4} className="chart-axis">
-                {marker}
-              </text>
-            </g>
-          );
-        })}
-        {drawableSeries.map((serie) => (
-          <path key={serie.label} d={buildPath(serie.points)} className="chart-line" style={{ stroke: serie.color }} />
-        ))}
-        {drawableSeries.map((serie) =>
-          serie.points.map((point) => {
-            const dateIndex = dates.indexOf(point.date);
-            return (
-              <circle
-                key={`${serie.label}-${point.date}`}
-                cx={getX(dateIndex)}
-                cy={getY(point.angleDegrees)}
-                r="3"
-                style={{ fill: serie.color }}
-              />
-            );
-          })
-        )}
-        {dates.map((date, index) => (
-          <text key={date} x={getX(index)} y={height - 8} textAnchor="middle" className="chart-axis-x">
-            {formatDatePt(date)}
-          </text>
-        ))}
-      </svg>
-      <div className="chart-legend">
-        {drawableSeries.map((serie) => (
-          <span key={serie.label}>
-            <i className="legend-dot" style={{ background: serie.color }} />
-            {serie.label}
-          </span>
-        ))}
-      </div>
-      <p className="muted-text chart-footnote">
-        Cada linha acompanha o ângulo pela ordem em que ele foi marcado na foto.
-      </p>
-    </div>
+    <MetricLineChart
+      title={series?.label || "Ângulo"}
+      points={points}
+      empty="Marque este ângulo em outra data para ver a evolução."
+      color="#b8946a"
+      pointStyle="open"
+      formatY={(value) => `${formatChartNumber(value)}°`}
+      aside={points.length >= 2 ? (
+        <ChartDelta from={first?.value} to={last?.value} suffix="°" tone="is-measure" />
+      ) : null}
+    />
   );
 }
 
 function SessionTypeDistributionChart({ points }) {
   if (points.length < 1) {
     return (
-      <div className="chart-card">
-        <h5>Distribuição por tipo de atendimento</h5>
-        <p className="muted-text">Sem sessões registradas para montar distribuição.</p>
-      </div>
+      <RecordChart title="Tipos de atendimento">
+        <p className="muted-text">Sem sessões registradas para montar a distribuição.</p>
+      </RecordChart>
     );
   }
 
   const typeCountMap = points.reduce((accumulator, item) => {
-    const normalizedType = SESSION_TYPES.includes(item.sessionType)
-      ? item.sessionType
-      : "Não informado";
+    const normalizedType = SESSION_TYPES.includes(item.sessionType) ? item.sessionType : "Não informado";
     accumulator[normalizedType] = (accumulator[normalizedType] || 0) + 1;
     return accumulator;
   }, {});
-
-  const rows = Object.entries(typeCountMap).sort(([, a], [, b]) => b - a);
-  const maxCount = Math.max(...rows.map(([, count]) => count), 1);
+  const rows = [
+    ...SESSION_TYPES.map((type) => ({ type, count: typeCountMap[type] || 0 })),
+    ...(typeCountMap["Não informado"] ? [{ type: "Não informado", count: typeCountMap["Não informado"] }] : [])
+  ].sort((first, second) => second.count - first.count);
+  const maxCount = Math.max(...rows.map((row) => row.count), 1);
 
   return (
-    <div className="chart-card">
-      <h5>Distribuição por tipo de atendimento</h5>
-      <div className="distribution-chart">
-        {rows.map(([type, count]) => (
-          <div key={type} className="distribution-row">
-            <div className="distribution-label">{type}</div>
-            <div className="distribution-track">
-              <div
-                className="distribution-fill"
-                style={{ width: `${Math.round((count / maxCount) * 100)}%` }}
-              />
+    <RecordChart title="Tipos de atendimento">
+      <div className="record-dist">
+        {rows.map((row) => {
+          const percent = Math.round((row.count / maxCount) * 100);
+          return (
+            <div key={row.type} className="record-dist-row">
+              <span>{row.type}</span>
+              <div className="record-dist-track">
+                <div className="record-dist-fill" style={{ width: `${percent}%` }} />
+                <strong className={percent >= 28 ? "is-on-fill" : ""} style={percent >= 28 ? { left: `calc(${percent}% - 22px)` } : undefined}>
+                  {row.count}
+                </strong>
+              </div>
             </div>
-            <div className="distribution-count">{count}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-    </div>
+    </RecordChart>
   );
 }
 
 function InitialVsCurrentChart({ points }) {
   if (points.length < 2) {
     return (
-      <div className="chart-card">
-        <h5>Comparativo inicial x atual</h5>
-        <p className="muted-text">Cadastre pelo menos 2 sessões para gerar comparativo.</p>
-      </div>
+      <RecordChart title="Inicial x atual">
+        <p className="muted-text">Cadastre pelo menos 2 registros para comparar.</p>
+      </RecordChart>
     );
   }
 
   const first = points[0];
   const last = points[points.length - 1];
-
   const metricRows = [
-    { label: "Dor", field: "painLevel", max: 10, improveWhen: "down" },
-    { label: "Estresse", field: "stressLevel", max: 10, improveWhen: "down" },
-    { label: "Sono (h)", field: "sleepHours", max: 12, improveWhen: "up" }
+    { label: "Dor", field: "painLevel", max: 10, suffix: "" },
+    { label: "Estresse", field: "stressLevel", max: 10, suffix: "" },
+    { label: "Sono", field: "sleepHours", max: 12, suffix: " h" }
   ].map((metric) => {
     const firstValue = Number(first[metric.field]) || 0;
     const lastValue = Number(last[metric.field]) || 0;
-    const firstPercent = Math.min(Math.max((firstValue / metric.max) * 100, 0), 100);
-    const lastPercent = Math.min(Math.max((lastValue / metric.max) * 100, 0), 100);
-    const deltaRaw = Number((lastValue - firstValue).toFixed(1));
-    const improved =
-      metric.improveWhen === "down" ? deltaRaw <= 0 : deltaRaw >= 0;
-
     return {
       ...metric,
       firstValue,
       lastValue,
-      firstPercent,
-      lastPercent,
-      deltaRaw,
-      improved
+      firstPercent: Math.min(Math.max((firstValue / metric.max) * 100, 0), 100),
+      lastPercent: Math.min(Math.max((lastValue / metric.max) * 100, 0), 100)
     };
   });
 
   return (
-    <div className="chart-card">
-      <h5>Comparativo inicial x atual</h5>
-      <div className="comparison-chart">
-        {metricRows.map((metric) => (
-          <div key={metric.field} className="comparison-row">
-            <div className="comparison-header">
-              <strong>{metric.label}</strong>
-              <span className={metric.improved ? "delta-good" : "delta-alert"}>
-                Δ {metric.deltaRaw > 0 ? "+" : ""}
-                {metric.deltaRaw}
-              </span>
+    <RecordChart title="Inicial x atual">
+      <div className="record-compare">
+        {metricRows.map((metric) => {
+          const firstWider = metric.firstPercent >= metric.lastPercent;
+          const formatValue = (value) => `${formatChartNumber(value)}${metric.suffix}`;
+          return (
+            <div key={metric.field} className="record-compare-row">
+              <span>{metric.label}</span>
+              <div className="record-compare-track">
+                <i
+                  className={firstWider ? "is-first" : "is-last"}
+                  style={{ width: `${Math.max(metric.firstPercent, metric.lastPercent)}%` }}
+                />
+                <i
+                  className={firstWider ? "is-last" : "is-first"}
+                  style={{ width: `${Math.min(metric.firstPercent, metric.lastPercent)}%` }}
+                />
+              </div>
+              <strong>{formatValue(metric.firstValue)} → {formatValue(metric.lastValue)}</strong>
             </div>
-            <div className="comparison-track">
-              <div className="comparison-fill comparison-fill-initial" style={{ width: `${metric.firstPercent}%` }} />
-            </div>
-            <div className="comparison-meta">Início: {metric.firstValue}</div>
-            <div className="comparison-track">
-              <div className="comparison-fill comparison-fill-current" style={{ width: `${metric.lastPercent}%` }} />
-            </div>
-            <div className="comparison-meta">Atual: {metric.lastValue}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-    </div>
+      <div className="record-compare-legend">
+        <span><i className="is-first" />Primeiro registro</span>
+        <span><i className="is-last" />Último registro</span>
+      </div>
+    </RecordChart>
   );
 }
 
@@ -2337,6 +2658,7 @@ export default function App() {
   const [openServiceMenuId, setOpenServiceMenuId] = useState("");
   const [appointmentClient, setAppointmentClient] = useState("");
   const [isAppointmentClientListOpen, setIsAppointmentClientListOpen] = useState(false);
+  const [appointmentAwaitingClient, setAppointmentAwaitingClient] = useState(false);
   const [isCreatingAppointmentClient, setIsCreatingAppointmentClient] = useState(false);
   const [appointmentClientNotice, setAppointmentClientNotice] = useState("");
   const [savedAppointmentClientNames, setSavedAppointmentClientNames] = useState([]);
@@ -2362,10 +2684,12 @@ export default function App() {
   const [bookingBusy, setBookingBusy] = useState("");
   const [bookingWhatsAppUrl, setBookingWhatsAppUrl] = useState("");
   const [agendaMode, setAgendaMode] = useState("month");
+  const [selectedAgendaAppointmentId, setSelectedAgendaAppointmentId] = useState("");
   const [agendaClosures, setAgendaClosures] = useState([]);
   const [offStart, setOffStart] = useState("");
   const [offEnd, setOffEnd] = useState("");
   const [offRepeat, setOffRepeat] = useState(false);
+  const [offMode, setOffMode] = useState("interval");
   const [offBusy, setOffBusy] = useState(false);
   const [offError, setOffError] = useState("");
   const [isAgendaOffOpen, setIsAgendaOffOpen] = useState(false);
@@ -2683,6 +3007,15 @@ export default function App() {
     () => selectedClientLinks.filter((link) => link.type === "anamnese"),
     [selectedClientLinks]
   );
+  const answeredAnamneseLink = useMemo(
+    () => anamneseLinks.find((link) => link.imported || link.respondedAt || link.status === "importado" || link.status === "respondido") || null,
+    [anamneseLinks]
+  );
+  const anamneseLinkIds = useMemo(
+    () => anamneseLinks.map((link) => link.id).filter(Boolean).sort().join(","),
+    [anamneseLinks]
+  );
+  const [clientAnamneseAnswer, setClientAnamneseAnswer] = useState(null);
   const followupLinks = useMemo(
     () => selectedClientLinks.filter((link) => link.type === "acompanhamento"),
     [selectedClientLinks]
@@ -2698,7 +3031,35 @@ export default function App() {
 
   useEffect(() => {
     pendingEvolutionTokenRef.current = "";
+    setClientAnamneseAnswer(null);
   }, [selectedClientId]);
+
+  useEffect(() => {
+    if (!anamneseLinkIds) {
+      setClientAnamneseAnswer(null);
+      return undefined;
+    }
+    const stamps = new Map();
+    const publish = () => {
+      if (stamps.size === 0) {
+        setClientAnamneseAnswer(null);
+        return;
+      }
+      const latest = [...stamps.values()].sort((first, second) => getTimestampMillis(second) - getTimestampMillis(first))[0] || null;
+      setClientAnamneseAnswer({ at: latest });
+    };
+    const unsubscribers = anamneseLinkIds.split(",").map((id) => onSnapshot(doc(db, "clientLinks", id), (snapshot) => {
+      if (!snapshot.exists() || snapshot.data().status !== "respondido") {
+        stamps.delete(id);
+      } else {
+        stamps.set(id, snapshot.data().submittedAt || snapshot.data().respondedAt || null);
+      }
+      publish();
+    }));
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [anamneseLinkIds]);
 
   const pendingClientLinkIds = useMemo(
     () => shareLinks
@@ -2889,7 +3250,7 @@ export default function App() {
       return undefined;
     }
 
-    setIsEditingAnamnese(false);
+    setIsEditingAnamnese(true);
 
     const anamneseRef = doc(db, "users", user.uid, "anamneses", selectedClient.id);
     const checkpointsRef = collection(db, "users", user.uid, "anamneses", selectedClient.id, "checkpoints");
@@ -2917,7 +3278,7 @@ export default function App() {
       setClientHasAnamnese(true);
       setAnamneseForm(normalizedRecord);
       setAnamneseSnapshot(normalizedRecord);
-      setIsEditingAnamnese(false);
+      setIsEditingAnamnese(true);
     });
 
     const unsubscribeCheckpoints = onSnapshot(checkpointsRef, (snapshot) => {
@@ -3295,7 +3656,14 @@ export default function App() {
       setClientFormMessage("Cliente adicionada com sucesso.");
     }
 
+    const savedName = clientName.trim();
     resetClientForm();
+    if (appointmentAwaitingClient) {
+      setAppointmentClient(savedName);
+      setAppointmentAwaitingClient(false);
+      setIsAppointmentClientListOpen(false);
+      setAppointmentClientNotice("");
+    }
     setTimeout(() => setClientFormMessage(""), 2500);
   };
 
@@ -3383,23 +3751,29 @@ export default function App() {
   };
 
   const normalizedAppointmentClientName = appointmentClient.trim().toLowerCase();
-  const appointmentClientExists =
-    Boolean(normalizedAppointmentClientName) &&
-    (savedAppointmentClientNames.includes(normalizedAppointmentClientName) ||
-      clients.some(
-        (client) => (client.name || "").trim().toLowerCase() === normalizedAppointmentClientName
-      ));
-  const appointmentClientSuggestions = normalizedAppointmentClientName
-    ? clients
-        .filter((client) => {
-          const clientName = (client.name || "").trim().toLowerCase();
-          return (
-            clientName.includes(normalizedAppointmentClientName) &&
-            clientName !== normalizedAppointmentClientName
-          );
-        })
-        .slice(0, 6)
-    : [];
+  const appointmentClientSuggestions = clients
+    .filter((client) => {
+      const clientName = (client.name || "").trim().toLowerCase();
+      if (!clientName) {
+        return false;
+      }
+      return !normalizedAppointmentClientName || clientName.includes(normalizedAppointmentClientName);
+    })
+    .slice(0, 6);
+
+  const startAppointmentClientRegistration = () => {
+    setClientName(appointmentClient.trim());
+    setClientPhone("");
+    setClientEmail("");
+    setClientBirthDate("");
+    setClientSex("");
+    setClientAddress("");
+    setEditingClientId("");
+    setClientFormMessage("");
+    setAppointmentAwaitingClient(true);
+    setIsAppointmentClientListOpen(false);
+    setIsClientFormOpen(true);
+  };
 
   const createAppointmentClient = (rawName) => {
     const name = rawName.trim();
@@ -3503,33 +3877,6 @@ export default function App() {
     );
     setIsAppointmentModalOpen(false);
   };
-
-  const normalizedAppointmentService = appointmentService.trim().toLowerCase();
-  const isUndeterminedAppointmentService =
-    normalizedAppointmentService === UNDETERMINED_SERVICE_LABEL.toLowerCase();
-  const appointmentServiceExists =
-    Boolean(normalizedAppointmentService) &&
-    (isUndeterminedAppointmentService ||
-      savedAppointmentServiceTitles.includes(normalizedAppointmentService) ||
-      services.some(
-        (service) => (service.title || "").trim().toLowerCase() === normalizedAppointmentService
-      ));
-  const appointmentServiceSuggestions = [
-    ...(isUndeterminedAppointmentService
-      ? []
-      : [{ id: "undetermined-service", title: UNDETERMINED_SERVICE_LABEL, undetermined: true }]),
-    ...services.filter((service) => {
-      const serviceTitle = (service.title || "").trim().toLowerCase();
-      if (!serviceTitle || serviceTitle === normalizedAppointmentService) {
-        return false;
-      }
-      return !normalizedAppointmentService || serviceTitle.includes(normalizedAppointmentService);
-    }).map((service) => ({
-      id: service.id,
-      title: service.title,
-      undetermined: false
-    }))
-  ];
 
   const createAppointmentService = (rawTitle) => {
     const title = rawTitle.trim();
@@ -4148,20 +4495,11 @@ export default function App() {
     }
   };
 
-  const handleCommitMeasurement = () => {
-    if (!buildMeasurement(photoForm.activeMeasurementType, photoForm.activePoints)) {
-      showPhotoFeedback(
-        photoForm.activeMeasurementType === "angle"
-          ? "Marque os pontos A, B e C antes de adicionar o ângulo."
-          : "Marque os pontos A e B antes de adicionar a linha.",
-        "error"
-      );
-      return;
-    }
+  const handlePhotoPointsChange = (points) => {
     setPhotoForm((previous) => {
-      const measurement = buildMeasurement(previous.activeMeasurementType, previous.activePoints);
+      const measurement = buildMeasurement(previous.activeMeasurementType, points);
       if (!measurement) {
-        return previous;
+        return { ...previous, activePoints: points };
       }
       return {
         ...previous,
@@ -4207,9 +4545,13 @@ export default function App() {
     );
   };
 
-  const checkpointChartData = useMemo(() => {
-    return sortByDate(checkpoints).filter((item) => item.date && !isClientFeedback(item));
+  const metricChartData = useMemo(() => {
+    return sortByDate(checkpoints).filter((item) => item.date);
   }, [checkpoints]);
+
+  const checkpointChartData = useMemo(() => {
+    return metricChartData.filter((item) => !isClientFeedback(item));
+  }, [metricChartData]);
 
   const parameterChartSeries = useMemo(
     () => parameterSeries(checkpointChartData, trackingParameters),
@@ -4220,52 +4562,44 @@ export default function App() {
     () => groupPhotosByCheckpoint(checkpoints, photoAnalyses),
     [checkpoints, photoAnalyses]
   );
+  const sortedFollowups = useMemo(() => {
+    return [...checkpoints].sort((first, second) => {
+      const dateDiff = String(second.date || "").localeCompare(String(first.date || ""));
+      if (dateDiff !== 0) {
+        return dateDiff;
+      }
+      return Number(second.sessionNumber || 0) - Number(first.sessionNumber || 0);
+    });
+  }, [checkpoints]);
+  const activeFollowup = sortedFollowups.find((item) => item.id === selectedCheckpointId) || sortedFollowups[0] || null;
+  const followupSessionCount = sortedFollowups.filter((item) => !isClientFeedback(item)).length;
+  const followupFeedbackCount = sortedFollowups.length - followupSessionCount;
 
   const angleChartSeries = useMemo(() => {
-    const photos = sortByDate(photoAnalyses)
-      .map((item) => ({
-        date: item.date,
-        angles: getStoredMeasurements(item).filter(
-          (measurement) => measurement.type === "angle" && Number.isFinite(Number(measurement.angleDegrees))
-        )
-      }))
-      .filter((item) => item.date && item.angles.length > 0);
-    const maxAngles = photos.reduce((max, item) => Math.max(max, item.angles.length), 0);
-    return Array.from({ length: maxAngles }, (_, index) => ({
-      label: maxAngles === 1 ? "Ângulo" : `Ângulo ${index + 1}`,
-      color: MEASUREMENT_COLORS[index % MEASUREMENT_COLORS.length],
-      points: photos
-        .filter((item) => item.angles[index])
-        .map((item) => ({
-          date: item.date,
-          angleDegrees: Number(item.angles[index].angleDegrees)
-        }))
-    }));
+    const groups = new Map();
+    sortByDate(photoAnalyses).forEach((item) => {
+      if (!item.date) {
+        return;
+      }
+      const angles = getStoredMeasurements(item).filter(
+        (measurement) => measurement.type === "angle" && Number.isFinite(Number(measurement.angleDegrees))
+      );
+      angles.forEach((measurement, index) => {
+        const position = String(item.positionLabel || "posição").trim() || "posição";
+        const pretty = position.charAt(0).toLowerCase() + position.slice(1);
+        const label = index === 0 ? `Ângulo · ${pretty}` : `Ângulo ${index + 1} · ${pretty}`;
+        const current = groups.get(`${position}::${index}`) || { label, points: [] };
+        current.points.push({ date: item.date, value: Number(measurement.angleDegrees) });
+        groups.set(`${position}::${index}`, current);
+      });
+    });
+    return [...groups.values()];
   }, [photoAnalyses]);
 
   const isAnamneseViewOpen = selectedClientView === CLIENT_VIEWS.ANAMNESE;
   const isFollowupViewOpen = selectedClientView === CLIENT_VIEWS.FOLLOWUP;
   const isChartsViewOpen = selectedClientView === CLIENT_VIEWS.CHARTS;
   const isTermsViewOpen = selectedClientView === CLIENT_VIEWS.TERMS;
-  const followupChartCards = [
-    <AngleProgressChart key="angle" series={angleChartSeries} />,
-    <ProgressLineChart
-      key="pain-stress"
-      title="Evolução da dor x estresse"
-      points={checkpointChartData}
-      firstMetric={{ field: "painLevel", label: "Dor" }}
-      secondMetric={{ field: "stressLevel", label: "Estresse" }}
-      maxValue={10}
-    />,
-    ...parameterChartSeries.map((series) => (
-      <ParameterProgressChart key={series.id} series={series} />
-    )),
-    <SleepBarChart key="sleep" points={checkpointChartData} />,
-    <SessionTypeDistributionChart key="session-type" points={checkpointChartData} />,
-    <InitialVsCurrentChart key="initial-current" points={checkpointChartData} />
-  ];
-  const wellnessChartCount = followupChartCards.length + 1;
-  const wellnessSpansTwo = wellnessChartCount % 2 === 1;
 
   const currentPhotoDraft = photoDraftHasProgress(photoForm) ? buildPhotoDraft(photoForm) : null;
   const pendingPhotoCount = draftPhotos.length + (currentPhotoDraft && !currentPhotoDraft.error ? 1 : 0);
@@ -4300,6 +4634,7 @@ export default function App() {
 
   const openAgendaOff = () => {
     setOffError("");
+    setOffMode("interval");
     setIsAgendaOffOpen(true);
   };
 
@@ -4323,6 +4658,7 @@ export default function App() {
     setIsAppointmentModalOpen(false);
     setIsAppointmentClientListOpen(false);
     setIsAppointmentServiceListOpen(false);
+    setAppointmentAwaitingClient(false);
   };
 
   const openBookingReview = (appointment) => {
@@ -4377,23 +4713,24 @@ export default function App() {
     }
   };
 
-  const toggleAgendaAllDay = async (recurring) => {
-    const existing = recurring ? selectedWeekAllDay : selectedDayAllDay;
-    if (existing) {
-      await removeAgendaClosure(existing.id);
+  const handleAddAgendaOff = async () => {
+    if (offMode === "day" || offMode === "weekday") {
+      const recurring = offMode === "weekday";
+      const existing = recurring ? selectedWeekAllDay : selectedDayAllDay;
+      if (existing) {
+        setOffError(recurring ? "Esse dia da semana já está bloqueado." : "Esse dia já está bloqueado.");
+        return;
+      }
+      await saveAgendaClosure({
+        allDay: true,
+        recurring,
+        date: recurring ? "" : selectedAgendaDate,
+        weekday: selectedWeekday,
+        start: "",
+        end: ""
+      });
       return;
     }
-    await saveAgendaClosure({
-      allDay: true,
-      recurring,
-      date: recurring ? "" : selectedAgendaDate,
-      weekday: selectedWeekday,
-      start: "",
-      end: ""
-    });
-  };
-
-  const handleAddAgendaOff = async () => {
     const start = minutesOf(offStart);
     const end = minutesOf(offEnd);
     if (start == null || end == null) {
@@ -4708,6 +5045,56 @@ export default function App() {
     (appointment) => appointment.status !== "recusado" && String(appointmentAgendaDate(appointment) || "").startsWith(visibleMonthPrefix)
   ).length;
   const selectedDayActive = selectedDayAppointments.filter((appointment) => appointment.status !== "recusado");
+  const selectedDayReviewCount = selectedDayAppointments.filter(
+    (appointment) => appointment.status === "pendente" || appointment.status === "remarcacao"
+  ).length;
+  const selectedDayAppointment =
+    sortAppointments(selectedDayAppointments).find((appointment) => appointment.id === selectedAgendaAppointmentId) ||
+    sortAppointments(selectedDayActive)[0] ||
+    null;
+  const dayTimelineAppointments = sortAppointments(selectedDayAppointments).map((appointment) => {
+    const start = appointmentStartMinutes(appointment);
+    return {
+      appointment,
+      start,
+      end: start + 60,
+      openRequest: (appointment.status === "pendente" || appointment.status === "remarcacao") && !appointment.time,
+      ...agendaPlacement(start, 60)
+    };
+  });
+  const dayLaneEnds = [];
+  dayTimelineAppointments.forEach((block) => {
+    let lane = dayLaneEnds.findIndex((end) => end <= block.start);
+    if (lane < 0) {
+      lane = dayLaneEnds.length;
+      dayLaneEnds.push(block.end);
+    } else {
+      dayLaneEnds[lane] = block.end;
+    }
+    block.lane = lane;
+  });
+  const dayLaneCount = Math.max(dayLaneEnds.length, 1);
+  const dayClosureBlocks = selectedDayClosures
+    .map((closure) => normalizeClosure(closure))
+    .filter(Boolean)
+    .map((closure, index) => {
+      if (closure.allDay) {
+        return {
+          key: `closure-all-${index}`,
+          label: "Fora da agenda · dia inteiro",
+          ...agendaPlacement(AGENDA_DAY_START, AGENDA_DAY_END - AGENDA_DAY_START)
+        };
+      }
+      const start = minutesOf(closure.start);
+      const end = minutesOf(closure.end);
+      return {
+        key: `closure-${index}-${closure.start}`,
+        label: "Fora da agenda",
+        ...agendaPlacement(start, end - start)
+      };
+    });
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const showAgendaNow = selectedAgendaDate === todayIsoDate && nowMinutes >= AGENDA_DAY_START && nowMinutes <= AGENDA_DAY_END;
   const selectedDayTotal = selectedDayActive.reduce(
     (sum, appointment) => sum + (servicePriceByTitle.get(appointment.service) || 0),
     0
@@ -5155,13 +5542,46 @@ export default function App() {
 
       {activeTab === TABS.AGENDA ? (
         <section className={agendaMode === "month" ? "agenda-page" : "agenda-page is-day"}>
+          {agendaMode === "day" ? (
+            <header className="page-header agenda-header agenda-day-top">
+              <div className="agenda-day-heading">
+                <button type="button" className="agenda-nav-btn" aria-label="Dia anterior" onClick={() => shiftAgenda(-1)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+                </button>
+                <button type="button" className="agenda-nav-btn" aria-label="Próximo dia" onClick={() => shiftAgenda(1)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                </button>
+                <div>
+                  <h1>{selectedDayLabel}</h1>
+                  <p>
+                    {[
+                      selectedAgendaDate === todayIsoDate ? "Hoje" : null,
+                      `${selectedDayActive.length} atendimento${selectedDayActive.length === 1 ? "" : "s"}`,
+                      selectedDayReviewCount
+                        ? `${selectedDayReviewCount} pedido${selectedDayReviewCount === 1 ? "" : "s"} para revisar`
+                        : null
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+              </div>
+              <div className="page-actions agenda-actions">
+                <div className="segmented" role="tablist" aria-label="Visualização da agenda">
+                  <button type="button" role="tab" aria-selected={false} onClick={() => setAgendaMode("month")}>Mês</button>
+                  <button type="button" role="tab" aria-selected className="active" onClick={() => setAgendaMode("day")}>Dia</button>
+                </div>
+                {selectedAgendaDate !== todayIsoDate ? (
+                  <button type="button" className="secondary-btn" onClick={goToAgendaToday}>Hoje</button>
+                ) : null}
+                <button type="button" className="secondary-btn" onClick={openAgendaOff}>Fora da agenda</button>
+                <button className="primary-btn" type="button" onClick={openAppointmentModal}>Novo atendimento</button>
+              </div>
+            </header>
+          ) : (
           <header className="page-header agenda-header">
             <div>
               <h1>Agenda</h1>
               <p>
-                {agendaMode === "month"
-                  ? `${monthAppointmentsCount} atendimento${monthAppointmentsCount === 1 ? "" : "s"} em ${visibleMonthLabel}`
-                  : `${selectedDayActive.length} atendimento${selectedDayActive.length === 1 ? "" : "s"} neste dia`}
+                {`${monthAppointmentsCount} atendimento${monthAppointmentsCount === 1 ? "" : "s"} em ${visibleMonthLabel}`}
               </p>
             </div>
             <div className="page-actions agenda-actions">
@@ -5204,9 +5624,153 @@ export default function App() {
               </button>
             </div>
           </header>
+          )}
           {agendaNotice ? <p className="muted-text agenda-notice">{agendaNotice}</p> : null}
 
-          <div className={agendaMode === "month" ? "agenda-layout" : "agenda-layout agenda-layout-day"}>
+          {agendaMode === "day" ? (
+            <div className="agenda-day-board">
+              <div className="agenda-timeline card" aria-label="Horários do dia">
+                <div className="agenda-hours" aria-hidden="true">
+                  {Array.from({ length: 12 }, (_, index) => (
+                    <span key={index} style={agendaHourStyle(index)}>
+                      {String(8 + index).padStart(2, "0")}:00
+                    </span>
+                  ))}
+                </div>
+                <div className="agenda-canvas">
+                  {Array.from({ length: 12 }, (_, index) => (
+                    <span key={`line-${index}`} className="agenda-hour-line" style={agendaHourStyle(index)} />
+                  ))}
+                  {dayClosureBlocks.map((block) => (
+                    <div key={block.key} className="agenda-block is-closed" style={agendaHourStyle(block.hoursFromStart, block.spanHours)}>
+                      <strong>{block.label}</strong>
+                    </div>
+                  ))}
+                  {showAgendaNow ? (
+                    <div className="agenda-now" style={agendaHourStyle((nowMinutes - AGENDA_DAY_START) / 60)}>
+                      <span />
+                    </div>
+                  ) : null}
+                  {dayTimelineAppointments.map((block) => {
+                    const { appointment } = block;
+                    const tone = appointmentStatusInfo(appointment).tone;
+                    const price = servicePriceByTitle.get(appointment.service);
+                    const selected = selectedDayAppointment?.id === appointment.id;
+                    return (
+                      <button
+                        key={appointment.id}
+                        type="button"
+                        className={`agenda-block is-${block.openRequest ? "request" : tone} ${selected ? "is-selected" : ""} ${appointment.status === "recusado" ? "is-muted" : ""}`}
+                        style={{
+                          ...agendaHourStyle(block.hoursFromStart, block.spanHours),
+                          left: `calc(8px + ${block.lane} * ((100% - 16px) / ${dayLaneCount}))`,
+                          width: `calc((100% - 16px) / ${dayLaneCount} - 6px)`
+                        }}
+                        onClick={() => setSelectedAgendaAppointmentId(appointment.id)}
+                      >
+                        <span>
+                          <strong>
+                            {block.openRequest
+                              ? `Pedido de primeiro atendimento · ${appointment.client}`
+                              : `${appointment.time || periodLabel(appointment.period)} · ${appointment.client}`}
+                          </strong>
+                          <small>
+                            {block.openRequest
+                              ? [periodLabel(appointment.period), Array.isArray(appointment.reasons) ? appointment.reasons.join(" · ") : ""]
+                                .filter(Boolean)
+                                .join(" · ")
+                              : [appointment.service, price ? formatBRL(price) : ""].filter(Boolean).join(" · ")}
+                          </small>
+                        </span>
+                        {block.openRequest ? (
+                          <span
+                            className="agenda-review"
+                            role="presentation"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openBookingReview(appointment);
+                            }}
+                          >
+                            Revisar
+                          </span>
+                        ) : (
+                          <AppointmentStatusTag appointment={appointment} compact />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <aside className="agenda-day-detail card">
+                {selectedDayAppointment ? (
+                  <>
+                    <h2>
+                      {selectedDayAppointment.client}
+                      {" · "}
+                      {selectedDayAppointment.time || periodLabel(selectedDayAppointment.period)}
+                    </h2>
+                    <div className="agenda-detail-facts">
+                    <p>{selectedDayAppointment.service || "Atendimento"}</p>
+                    {servicePriceByTitle.get(selectedDayAppointment.service) ? (
+                      <p>{formatBRL(servicePriceByTitle.get(selectedDayAppointment.service))}</p>
+                    ) : null}
+                    <p>
+                      {formatPhoneBr(
+                        selectedDayAppointment.clientPhone ||
+                          clients.find(
+                            (client) => normalizeClientNameKey(client.name) === normalizeClientNameKey(selectedDayAppointment.client)
+                          )?.phone
+                      ) || "Telefone não informado"}
+                    </p>
+                    </div>
+                    <div className="agenda-detail-actions">
+                    {(selectedDayAppointment.status === "pendente" || selectedDayAppointment.status === "remarcacao") && selectedDayAppointment.requestId ? (
+                      <button type="button" className="primary-btn" onClick={() => openBookingReview(selectedDayAppointment)}>
+                        Revisar pedido
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        onClick={() => {
+                          const client = clients.find(
+                            (item) => normalizeClientNameKey(item.name) === normalizeClientNameKey(selectedDayAppointment.client)
+                          );
+                          if (!client) {
+                            setAgendaNotice("Cadastre a cliente para abrir o prontuário.");
+                            return;
+                          }
+                          setActiveTab(TABS.CLIENTES);
+                          handleOpenClientModal(client.id);
+                        }}
+                      >
+                        Abrir prontuário
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      disabled={feedbackCopyId === selectedDayAppointment.id}
+                      onClick={() => handleCopyAppointmentFeedback(selectedDayAppointment)}
+                    >
+                      {feedbackCopyId === selectedDayAppointment.id ? "Copiando..." : "Copiar link de feedback"}
+                    </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="agenda-detail-delete"
+                      onClick={() => handleDeleteByCollection("appointments", selectedDayAppointment.id)}
+                    >
+                      Excluir atendimento
+                    </button>
+                  </>
+                ) : (
+                  <p className="agenda-detail-empty">Nenhum atendimento neste dia.</p>
+                )}
+              </aside>
+            </div>
+          ) : (
+          <div className="agenda-layout">
             <article className="card agenda-calendar">
               <div className="agenda-calendar-header">
                 <button
@@ -5366,6 +5930,7 @@ export default function App() {
               )}
             </article>
           </div>
+          )}
         </section>
       ) : null}
 
@@ -5386,48 +5951,67 @@ export default function App() {
             <header className="app-modal-header">
               <div>
                 <h2>Fora da agenda</h2>
-                <p>{selectedDayLabel}. Clientes novas não conseguem pedir horário nos períodos bloqueados.</p>
+                <p>{selectedDayLabel}. Clientes novas não conseguem pedir horário nestes períodos.</p>
               </div>
               <ModalClose onClick={closeAgendaOff} />
             </header>
             <div className="app-modal-body">
-              <div className="option-list">
-                <label className={`option-row ${selectedDayAllDay ? "is-checked" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedDayAllDay)}
-                    disabled={offBusy}
-                    onChange={() => toggleAgendaAllDay(false)}
-                  />
-                  <span>Este dia inteiro</span>
-                </label>
-                <label className={`option-row ${selectedWeekAllDay ? "is-checked" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedWeekAllDay)}
-                    disabled={offBusy}
-                    onChange={() => toggleAgendaAllDay(true)}
-                  />
-                  <span>Toda {WEEKDAY_LABELS[selectedWeekday]} inteira</span>
-                </label>
-              </div>
-              <fieldset className="option-card">
-                <legend>Bloquear um intervalo</legend>
-                <div className="field-row">
-                  <label>
-                    Início
-                    <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
-                  </label>
-                  <label>
-                    Fim
-                    <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
+              <div className="away-options" role="radiogroup" aria-label="Tipo de ausência">
+                <div className={offMode === "day" ? "away-option is-selected" : "away-option"}>
+                  <label className="away-option-head">
+                    <input
+                      type="radio"
+                      name="away-mode"
+                      checked={offMode === "day"}
+                      disabled={offBusy}
+                      onChange={() => setOffMode("day")}
+                    />
+                    <span>Este dia inteiro</span>
                   </label>
                 </div>
-                <label className="check-inline">
-                  <input type="checkbox" checked={offRepeat} onChange={(event) => setOffRepeat(event.target.checked)} />
-                  Repetir toda semana
-                </label>
-              </fieldset>
+                <div className={offMode === "weekday" ? "away-option is-selected" : "away-option"}>
+                  <label className="away-option-head">
+                    <input
+                      type="radio"
+                      name="away-mode"
+                      checked={offMode === "weekday"}
+                      disabled={offBusy}
+                      onChange={() => setOffMode("weekday")}
+                    />
+                    <span>Toda {["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"][selectedWeekday]} inteira</span>
+                  </label>
+                </div>
+                <div className={offMode === "interval" ? "away-option is-selected" : "away-option"}>
+                  <label className="away-option-head">
+                    <input
+                      type="radio"
+                      name="away-mode"
+                      checked={offMode === "interval"}
+                      disabled={offBusy}
+                      onChange={() => setOffMode("interval")}
+                    />
+                    <span>Um intervalo de horário</span>
+                  </label>
+                  {offMode === "interval" ? (
+                    <div className="away-interval">
+                      <div className="field-row">
+                        <label>
+                          Início
+                          <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
+                        </label>
+                        <label>
+                          Fim
+                          <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
+                        </label>
+                      </div>
+                      <label className="check-inline">
+                        <input type="checkbox" checked={offRepeat} onChange={(event) => setOffRepeat(event.target.checked)} />
+                        Repetir toda semana
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               <p className="field-hint">Períodos que a cliente vê: manhã 8h–12h, tarde 12h–18h, noite 18h–21h.</p>
               {offError ? <p className="error-text">{offError}</p> : null}
               {selectedDayClosures.length > 0 ? (
@@ -5436,7 +6020,7 @@ export default function App() {
                   <ul className="blocked-list">
                     {selectedDayClosures.map((closure) => (
                       <li key={closure.id}>
-                        <span>{closureLabel(closure)}</span>
+                        <span>{formatAwayClosure(closure)}</span>
                         <button
                           type="button"
                           className="link-btn is-danger"
@@ -5454,7 +6038,7 @@ export default function App() {
             </div>
             <footer className="app-modal-footer">
               <button className="secondary-btn" type="button" onClick={closeAgendaOff} disabled={offBusy}>
-                Fechar
+                Cancelar
               </button>
               <button className="primary-btn" type="button" onClick={handleAddAgendaOff} disabled={offBusy}>
                 Bloquear horário
@@ -5472,7 +6056,7 @@ export default function App() {
           }}
         >
           <section
-            className="app-modal"
+            className="app-modal appointment-composer"
             role="dialog"
             aria-modal="true"
             aria-label="Novo atendimento"
@@ -5494,119 +6078,93 @@ export default function App() {
               <div className="app-modal-body form-grid">
                 <label className="full-row">
                   Cliente
-                  <div className={`client-picker ${isAppointmentClientListOpen ? "is-open" : ""}`}>
-                    <div className="client-picker-field">
+                  <div className={`client-picker appointment-client-picker ${isAppointmentClientListOpen ? "is-open" : ""}`}>
+                    <div className="appointment-client-search">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="6.5" />
+                        <path d="M16 16.5 20 20.5" />
+                      </svg>
                       <input
                         value={appointmentClient}
                         onChange={(event) => {
                           setAppointmentClient(event.target.value);
                           setAppointmentClientNotice("");
                           setIsAppointmentClientListOpen(true);
-                          setIsAppointmentServiceListOpen(false);
                         }}
-                        onFocus={() => {
-                          setIsAppointmentClientListOpen(true);
-                          setIsAppointmentServiceListOpen(false);
-                        }}
+                        onFocus={() => setIsAppointmentClientListOpen(true)}
                         onBlur={() => setIsAppointmentClientListOpen(false)}
-                        placeholder="Digite o nome da cliente"
+                        placeholder="Buscar cliente"
                         autoComplete="off"
                         required
                       />
-                      {appointmentClient.trim() && !appointmentClientExists ? (
+                    </div>
+                    {isAppointmentClientListOpen ? (
+                      <div className="appointment-client-menu">
+                        {appointmentClientSuggestions.length > 0 ? (
+                          <ul>
+                            {appointmentClientSuggestions.map((client) => {
+                              const selected = (client.name || "").trim().toLowerCase() === normalizedAppointmentClientName;
+                              return (
+                                <li key={`appointment-client-${client.id}`}>
+                                  <button
+                                    type="button"
+                                    className={selected ? "is-selected" : ""}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      setAppointmentClient(client.name || "");
+                                      setAppointmentClientNotice("");
+                                      setIsAppointmentClientListOpen(false);
+                                    }}
+                                  >
+                                    <span className="app-avatar is-soft" aria-hidden="true">
+                                      {nameInitials(client.name)}
+                                    </span>
+                                    <span className="appointment-client-copy">
+                                      <strong>{client.name}</strong>
+                                      {client.phone ? <small>{formatPhoneBr(client.phone)}</small> : null}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="appointment-client-empty">Nenhuma cliente encontrada.</p>
+                        )}
                         <button
                           type="button"
-                          className="client-picker-add"
-                          aria-label={`Adicionar ${appointmentClient.trim()}`}
-                          disabled={isCreatingAppointmentClient}
+                          className="appointment-client-create"
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => createAppointmentClient(appointmentClient)}
+                          onClick={startAppointmentClientRegistration}
                         >
-                          +
+                          + Cadastrar nova cliente
                         </button>
-                      ) : null}
-                    </div>
-                    {isAppointmentClientListOpen && appointmentClientSuggestions.length > 0 ? (
-                      <ul className="client-picker-suggestions">
-                        {appointmentClientSuggestions.map((client) => (
-                          <li key={`appointment-client-${client.id}`}>
-                            <button
-                              type="button"
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => {
-                                setAppointmentClient(client.name || "");
-                                setAppointmentClientNotice("");
-                                setIsAppointmentClientListOpen(false);
-                              }}
-                            >
-                              <span className="app-avatar is-soft" aria-hidden="true">
-                                {nameInitials(client.name)}
-                              </span>
-                              {client.name}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
+                      </div>
                     ) : null}
                   </div>
                   {appointmentClientNotice ? <p className="muted-text">{appointmentClientNotice}</p> : null}
                 </label>
                 <label className="full-row">
                   Serviço
-                  <div className={`client-picker ${isAppointmentServiceListOpen ? "is-open" : ""}`}>
-                    <div className="client-picker-field">
-                      <input
-                        value={appointmentService}
-                        onChange={(event) => {
-                          setAppointmentService(event.target.value);
-                          setAppointmentServiceNotice("");
-                          setIsAppointmentServiceListOpen(true);
-                          setIsAppointmentClientListOpen(false);
-                        }}
-                        onFocus={() => {
-                          setIsAppointmentServiceListOpen(true);
-                          setIsAppointmentClientListOpen(false);
-                        }}
-                        onBlur={() => setIsAppointmentServiceListOpen(false)}
-                        placeholder="Digite ou escolha o serviço"
-                        autoComplete="off"
-                        required
-                      />
-                      {appointmentService.trim() && !appointmentServiceExists ? (
-                        <button
-                          type="button"
-                          className="client-picker-add"
-                          aria-label={`Adicionar ${appointmentService.trim()}`}
-                          disabled={isCreatingAppointmentService}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => createAppointmentService(appointmentService)}
-                        >
-                          +
-                        </button>
-                      ) : null}
-                    </div>
-                    {isAppointmentServiceListOpen && appointmentServiceSuggestions.length > 0 ? (
-                      <ul className="client-picker-suggestions">
-                        {appointmentServiceSuggestions.map((service) => (
-                          <li key={`appointment-service-${service.id}`}>
-                            <button
-                              type="button"
-                              className={service.undetermined ? "is-special" : ""}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => {
-                                setAppointmentService(service.title || "");
-                                setAppointmentServiceNotice("");
-                                setIsAppointmentServiceListOpen(false);
-                              }}
-                            >
-                              {service.title}
-                              {Number(service.price) > 0 ? <small>{formatBRL(service.price)}</small> : null}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
+                  <select
+                    value={appointmentService}
+                    onChange={(event) => {
+                      setAppointmentService(event.target.value);
+                      setAppointmentServiceNotice("");
+                    }}
+                    required
+                  >
+                    <option value="">Selecionar</option>
+                    {[...services]
+                      .sort((first, second) => String(first.title || "").localeCompare(String(second.title || ""), "pt-BR"))
+                      .map((service) => (
+                        <option key={service.id} value={service.title}>
+                          {service.title}
+                          {Number(service.price) > 0 ? ` · ${formatBRL(service.price)}` : ""}
+                        </option>
+                      ))}
+                    <option value={UNDETERMINED_SERVICE_LABEL}>{UNDETERMINED_SERVICE_LABEL}</option>
+                  </select>
                   {appointmentServiceNotice ? <p className="muted-text">{appointmentServiceNotice}</p> : null}
                 </label>
                 <label>
@@ -5656,7 +6214,7 @@ export default function App() {
           }}
         >
           <section
-            className="app-modal"
+            className="app-modal booking-review-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Pedido de primeiro atendimento"
@@ -5668,8 +6226,9 @@ export default function App() {
               </span>
               <div>
                 <h2>{bookingReview.client}</h2>
-                <p>Primeiro atendimento</p>
-                <BookingBadge status={bookingReview.status} />
+                <span className={`booking-badge is-${bookingReview.status || "pendente"}`}>
+                  {bookingReviewPill(bookingReview.status)}
+                </span>
               </div>
               <ModalClose onClick={closeBookingReview} />
             </header>
@@ -5677,42 +6236,37 @@ export default function App() {
               <dl className="booking-tiles">
                 <div>
                   <dt>Dia pedido</dt>
-                  <dd>{formatDatePt(bookingReview.date)}</dd>
+                  <dd>{formatBookingDay(bookingReview.date)}</dd>
                 </div>
                 <div>
                   <dt>Período</dt>
                   <dd>{periodLabel(bookingReview.period)}</dd>
                 </div>
                 <div>
-                  <dt>Telefone</dt>
+                  <dt>WhatsApp</dt>
                   <dd>{formatPhoneBr(bookingReview.clientPhone) || "Não informado"}</dd>
                 </div>
-                <div className="is-wide">
-                  <dt>Motivo</dt>
-                  <dd>
-                    {Array.isArray(bookingReview.reasons) && bookingReview.reasons.length > 0 ? (
-                      <span className="chip-list">
-                        {bookingReview.reasons.map((reason) => (
-                          <span key={reason} className="chip">
-                            {reason}
-                          </span>
-                        ))}
-                      </span>
-                    ) : (
-                      "Não informado"
-                    )}
-                  </dd>
-                </div>
-                {bookingReview.status === "remarcacao" && bookingReview.suggestedDate ? (
-                  <div className="is-wide">
-                    <dt>Nova data sugerida</dt>
-                    <dd>
-                      {formatDatePt(bookingReview.suggestedDate)}
-                      {bookingReview.rescheduleReason ? `. ${bookingReview.rescheduleReason}` : ""}
-                    </dd>
-                  </div>
-                ) : null}
               </dl>
+              <div className="booking-reasons">
+                <span>Motivo</span>
+                {Array.isArray(bookingReview.reasons) && bookingReview.reasons.length > 0 ? (
+                  <span className="chip-list">
+                    {bookingReview.reasons.map((reason) => (
+                      <span key={reason} className="chip">
+                        {reason}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <p>Não informado</p>
+                )}
+              </div>
+              {bookingReview.status === "remarcacao" && bookingReview.suggestedDate ? (
+                <p className="field-hint">
+                  Nova data sugerida: {formatBookingDay(bookingReview.suggestedDate)}
+                  {bookingReview.rescheduleReason ? `. ${bookingReview.rescheduleReason}` : ""}
+                </p>
+              ) : null}
               <div className="booking-decision">
                 <button type="button" className="primary-btn" onClick={() => decideBooking("aprovado")} disabled={Boolean(bookingBusy)}>
                   {bookingBusy === "aprovado" ? "Aprovando..." : "Aprovar"}
@@ -5761,7 +6315,11 @@ export default function App() {
                 <a className="secondary-btn" href={bookingWhatsAppUrl} target="_blank" rel="noreferrer">
                   Abrir WhatsApp
                 </a>
-              ) : null}
+              ) : (
+                <button type="button" className="secondary-btn" disabled>
+                  Abrir WhatsApp
+                </button>
+              )}
             </footer>
           </section>
         </div>
@@ -6073,9 +6631,6 @@ export default function App() {
                     <ModalClose onClick={handleCloseClientView} />
                     {isRecordMenuOpen ? (
                       <div className="record-menu-dropdown" role="dialog" aria-label="Menu da cliente">
-                        <button type="button" className="record-menu-item" onClick={handleCloseClientView}>
-                          Fechar
-                        </button>
                         {clientHasAnamnese && !isEditingAnamnese ? (
                           <button
                             type="button"
@@ -6195,6 +6750,7 @@ export default function App() {
                     }}
                   >
                     Acompanhamentos
+                    {checkpoints.length > 0 ? <span className="tab-count">{checkpoints.length}</span> : null}
                   </button>
                   <button
                     type="button"
@@ -6218,32 +6774,36 @@ export default function App() {
                       event.currentTarget.scrollIntoView({ inline: "nearest", block: "nearest" });
                     }}
                   >
-                    Termos e Consentimentos
+                    Termos
                   </button>
                 </div>
                 <div className="client-modal-content">
               {isAnamneseViewOpen ? (
                 <section className="anamnese-panel">
-                  <div className="panel-header">
-                    <div>
-                      <h4>Ficha de Anamnese - {selectedClient.name}</h4>
-                      <p>Dados pessoais ficam no cadastro da cliente e são fixos.</p>
-                      {!isEditingAnamnese ? (
-                        <p className="muted-text">Modo visualização ativado (somente leitura).</p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <form className="form" onSubmit={handleSaveAnamnese}>
-                    <fieldset className="anamnese-fieldset" disabled={!isEditingAnamnese}>
-                <h5>Círculo das dores principais</h5>
+                  <form className="anamnese-layout" onSubmit={handleSaveAnamnese}>
                 <PainMapSelector
                   painSelections={anamneseForm.painSelections}
                   onSelectRegion={handleUpsertPainSelection}
                   onRemoveRegion={handleRemovePainSelection}
-                  isEditable={isEditingAnamnese}
+                  isEditable
                 />
-
+                <div className="anamnese-questions">
+                  {answeredAnamneseLink || clientAnamneseAnswer ? (
+                    <p className="anamnese-answered">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m5 12 4.2 4.2L19 7" />
+                      </svg>
+                      <span>
+                        Respondida pela cliente
+                        {formatTimestampDate(clientAnamneseAnswer?.at || answeredAnamneseLink?.respondedAt || answeredAnamneseLink?.updatedAt || answeredAnamneseLink?.createdAt)
+                          ? ` em ${formatTimestampDate(clientAnamneseAnswer?.at || answeredAnamneseLink?.respondedAt || answeredAnamneseLink?.updatedAt || answeredAnamneseLink?.createdAt)}`
+                          : ""}{" "}
+                        pelo link de anamnese. Você pode completar e ajustar.
+                      </span>
+                    </p>
+                  ) : null}
+                  <div className="anamnese-questions-body">
+                <section className="anamnese-section" id="anamnese-perguntas">
                 <h5>Perguntas-chave</h5>
                 <div className="form">
                   <div className="question-block">
@@ -6266,6 +6826,72 @@ export default function App() {
                       ))}
                     </div>
                   </div>
+                  <div className="question-block">
+                    <p className="question-title">
+                      Tipo de dor <span className="question-hint">· pode marcar mais de uma</span>
+                    </p>
+                    <div className="checkbox-grid">
+                      {PAIN_TYPE_OPTIONS.map((option) => (
+                        <label key={option} className="checkbox-field">
+                          <input
+                            type="checkbox"
+                            checked={anamneseForm.painTypeOptions.includes(option)}
+                            onChange={() => toggleArrayValue("painTypeOptions", option)}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                      <OtherDetail
+                        label="Outro"
+                        value={anamneseForm.painTypeOther}
+                        onChange={(value) => handleAnamneseFieldChange("painTypeOther", value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="question-block">
+                    <p className="question-title">Intensidade da dor</p>
+                    <div className="pain-scale" role="radiogroup" aria-label="Intensidade da dor de 0 a 10">
+                      {Array.from({ length: 11 }, (_, level) => {
+                        const selected = String(anamneseForm.painScale) !== "" && Number(anamneseForm.painScale) === level;
+                        return (
+                          <button
+                            key={`pain-scale-${level}`}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            className={selected ? "active" : ""}
+                            onClick={() => handleAnamneseFieldChange("painScale", String(level))}
+                          >
+                            {level}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="pain-scale-caption">
+                      <span>Nenhuma dor</span>
+                      <span>Máxima</span>
+                    </div>
+                  </div>
+                  <div className="question-block">
+                    <p className="question-title">Objetivos estéticos</p>
+                    <div className="checkbox-grid">
+                      {AESTHETIC_GOAL_OPTIONS.map((option) => (
+                        <label key={option} className="checkbox-field">
+                          <input
+                            type="checkbox"
+                            checked={anamneseForm.aestheticGoalOptions.includes(option)}
+                            onChange={() => toggleArrayValue("aestheticGoalOptions", option)}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                      <OtherDetail
+                        label="Outro"
+                        value={anamneseForm.aestheticGoalsOther}
+                        onChange={(value) => handleAnamneseFieldChange("aestheticGoalsOther", value)}
+                      />
+                    </div>
+                  </div>
                   <label>
                     Detalhes sobre localização/irradiação
                     <textarea
@@ -6281,33 +6907,6 @@ export default function App() {
                     <textarea
                       value={anamneseForm.firstPainEpisode}
                       onChange={(event) => handleAnamneseFieldChange("firstPainEpisode", event.target.value)}
-                    />
-                  </label>
-                  <div className="question-block">
-                    <p className="question-title">
-                      Tipo de dor (queimação, fisgada, pontada, constante)?
-                    </p>
-                    <div className="checkbox-grid">
-                      {PAIN_TYPE_OPTIONS.map((option) => (
-                        <label key={option} className="checkbox-field">
-                          <input
-                            type="checkbox"
-                            checked={anamneseForm.painTypeOptions.includes(option)}
-                            onChange={() => toggleArrayValue("painTypeOptions", option)}
-                          />
-                          {option}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <label>
-                    Outro tipo de dor
-                    <input
-                      value={anamneseForm.painTypeOther}
-                      onChange={(event) =>
-                        handleAnamneseFieldChange("painTypeOther", event.target.value)
-                      }
-                      placeholder="Opcional"
                     />
                   </label>
                   <div className="question-block">
@@ -6333,16 +6932,6 @@ export default function App() {
                         handleAnamneseFieldChange("painTriggerOther", event.target.value)
                       }
                       placeholder="Opcional"
-                    />
-                  </label>
-                  <label>
-                    Intensidade da dor (0 a 10)
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={anamneseForm.painScale}
-                      onChange={(event) => handleAnamneseFieldChange("painScale", event.target.value)}
                     />
                   </label>
                   <div className="question-block">
@@ -6481,31 +7070,11 @@ export default function App() {
                       placeholder="Opcional"
                     />
                   </label>
-                  <div className="question-block">
-                    <p className="question-title">Objetivos estéticos com a massagem</p>
-                    <div className="checkbox-grid">
-                      {AESTHETIC_GOAL_OPTIONS.map((option) => (
-                        <label key={option} className="checkbox-field">
-                          <input
-                            type="checkbox"
-                            checked={anamneseForm.aestheticGoalOptions.includes(option)}
-                            onChange={() => toggleArrayValue("aestheticGoalOptions", option)}
-                          />
-                          {option}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <label>
-                    Outro objetivo estético
-                    <input
-                      value={anamneseForm.aestheticGoalsOther}
-                      onChange={(event) =>
-                        handleAnamneseFieldChange("aestheticGoalsOther", event.target.value)
-                      }
-                      placeholder="Opcional"
-                    />
-                  </label>
+                </div>
+                </section>
+                <section className="anamnese-section" id="anamnese-habitos">
+                <h5>Hábitos</h5>
+                <div className="form">
                   <div className="question-block">
                     <p className="question-title">
                       Hábitos/atividades que podem estar contribuindo para dor
@@ -6534,8 +7103,10 @@ export default function App() {
                     />
                   </label>
                 </div>
+                </section>
 
-                <h5>Condições de saúde</h5>
+                <section className="anamnese-section" id="anamnese-saude">
+                <h5>Saúde</h5>
                 <div className="checkbox-grid">
                   {HEALTH_CONDITIONS.map((condition) => (
                     <label key={condition} className="checkbox-field">
@@ -6555,11 +7126,12 @@ export default function App() {
                     onChange={(event) => handleAnamneseFieldChange("healthOther", event.target.value)}
                   />
                 </label>
+                </section>
 
                 {selectedClient.sex === "female" ? (
-                  <>
+                  <section className="anamnese-section" id="anamnese-mulheres">
                     <h5>Para mulheres</h5>
-                    <div className="grid-form">
+                    <div className="form grid-form">
                       <label>
                         Período menstrual
                         <input
@@ -6603,10 +7175,11 @@ export default function App() {
                         </select>
                       </label>
                     </div>
-                  </>
+                  </section>
                 ) : null}
 
-                <h5>Conclusão da ficha</h5>
+                <section className="anamnese-section" id="anamnese-conclusao">
+                <h5>Conclusão</h5>
                 <label>
                   Qual área do corpo gostaria de mais atenção?
                   <textarea
@@ -6630,264 +7203,295 @@ export default function App() {
                     placeholder="Nome completo da cliente"
                   />
                 </label>
-
-                    </fieldset>
-
-                    {anamneseMessage ? <p className="success-text">{anamneseMessage}</p> : null}
-                    {isEditingAnamnese ? (
-                      <button className="primary-btn" type="submit">
-                        {clientHasAnamnese ? "Salvar edição da ficha" : "Salvar ficha de anamnese"}
-                      </button>
-                    ) : null}
+                {anamneseMessage ? <p className="success-text">{anamneseMessage}</p> : null}
+                </section>
+                  </div>
+                  <footer className="anamnese-footer">
+                    <p className="anamnese-sections">
+                      <span>Seções:</span>
+                      {[
+                        ["anamnese-perguntas", "Perguntas-chave"],
+                        ["anamnese-habitos", "Hábitos"],
+                        ["anamnese-saude", "Saúde"],
+                        ...(selectedClient.sex === "female" ? [["anamnese-mulheres", "Para mulheres"]] : []),
+                        ["anamnese-conclusao", "Conclusão"]
+                      ].map(([sectionId, sectionLabel], index, sections) => (
+                        <span key={sectionId}>
+                          {index > 0 ? <span aria-hidden="true"> · </span> : " "}
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                          >
+                            {sectionLabel}
+                          </button>
+                        </span>
+                      ))}
+                    </p>
+                    <button className="primary-btn" type="submit">
+                      Salvar ficha
+                    </button>
+                  </footer>
+                </div>
                   </form>
                 </section>
               ) : null}
 
               {isFollowupViewOpen ? (
                 <section className="followup-panel">
-                  {followupScreen === "list" ? (
-                    <>
-                      <div className="panel-header">
-                        <div>
-                          <h4>Acompanhamento</h4>
-                          <p>Sessões da clínica e feedbacks enviados pela cliente.</p>
-                        </div>
-                        <div className="panel-header-actions">
+                    <div className="followup-layout">
+                      <div className="followup-list-column">
+                        <header className="followup-list-header">
+                          <p>
+                            {followupSessionCount === 1 ? "1 sessão" : `${followupSessionCount} sessões`}
+                            {followupFeedbackCount === 1
+                              ? " e 1 feedback da cliente"
+                              : followupFeedbackCount > 1
+                                ? ` e ${followupFeedbackCount} feedbacks da cliente`
+                                : ""}
+                          </p>
                           <button type="button" className="secondary-btn" onClick={openParameterEditor}>
                             Adicionar parâmetro
                           </button>
-                          <button
-                            type="button"
-                            className="primary-btn"
-                            onClick={() => {
-                              setCheckpointForm({
-                                ...buildEmptyCheckpoint(),
-                                sessionNumber: String(getNextSessionNumber(checkpoints))
-                              });
-                              setDraftPhotos([]);
-                              setPhotoForm(buildEmptyPhotoAnalysis());
-                              setPhotoMessage("");
-                              setIsPhotoComposerOpen(false);
-                              setFollowupScreen("create");
-                            }}
-                          >
-                            Nova sessão
-                          </button>
-                        </div>
-                      </div>
-                      <ul className="list">
-                        {checkpoints.length === 0 ? (
-                          <li className="empty">Nenhum registro ainda.</li>
+                        </header>
+                        {sortedFollowups.length === 0 ? (
+                          <p className="empty">Nenhum registro ainda.</p>
                         ) : (
-                          [...checkpoints]
-                            .sort((first, second) => {
-                              const dateDiff = String(second.date || "").localeCompare(String(first.date || ""));
-                              if (dateDiff !== 0) {
-                                return dateDiff;
-                              }
-                              return Number(second.sessionNumber || 0) - Number(first.sessionNumber || 0);
-                            })
-                            .map((checkpoint) => (
-                              <li key={checkpoint.id}>
-                                <button
-                                  type="button"
-                                  className="session-open-btn"
-                                  onClick={() => {
-                                    setSelectedCheckpointId(checkpoint.id);
-                                    setFollowupScreen("detail");
-                                  }}
-                                >
-                                  <strong>
-                                    {formatDatePt(checkpoint.date)}
-                                    {isClientFeedback(checkpoint)
-                                      ? " · Feedback do cliente"
-                                      : checkpoint.sessionNumber
-                                        ? ` · Sessão ${checkpoint.sessionNumber}`
-                                        : ""}
-                                  </strong>
-                                  <p>
-                                    {checkpoint.sessionType
-                                      ? `${checkpoint.sessionType} · `
-                                      : isClientFeedback(checkpoint)
-                                        ? ""
-                                        : "Tipo não informado · "}
-                                    Dor {checkpoint.painLevel ?? 0} ·
-                                    Estresse {checkpoint.stressLevel ?? 0} · Sono {checkpoint.sleepHours ?? 0}h
-                                    {checkpointParameterSummary(checkpoint) ? ` · ${checkpointParameterSummary(checkpoint)}` : ""}
-                                  </p>
-                                </button>
-                              </li>
-                            ))
-                        )}
-                      </ul>
-                      {photosByCheckpoint.unlinked.length > 0 ? (
-                        <section className="photo-analysis-section">
-                          <h5>Fotos sem acompanhamento vinculado</h5>
-                          <ul className="list photo-analysis-list">
-                            {photosByCheckpoint.unlinked.map((analysis) => (
-                              <PhotoAnalysisSummary
-                                key={analysis.id}
-                                analysis={{
-                                  ...analysis,
-                                  positionLabel: `${formatDatePt(analysis.date)} • ${analysis.positionLabel || "Posição não informada"}`
-                                }}
-                                onRemove={() => handleDeletePhotoAnalysis(analysis.id)}
-                              />
-                            ))}
+                          <ul className="followup-session-list">
+                            {sortedFollowups.map((checkpoint) => {
+                              const feedback = isClientFeedback(checkpoint);
+                              const photoCount = photosByCheckpoint.grouped.get(checkpoint.id)?.length || 0;
+                              return (
+                                <li key={checkpoint.id}>
+                                  <button
+                                    type="button"
+                                    className={activeFollowup?.id === checkpoint.id ? "followup-session is-selected" : "followup-session"}
+                                    onClick={() => setSelectedCheckpointId(checkpoint.id)}
+                                  >
+                                    {feedback ? (
+                                      <span className="followup-session-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24">
+                                          <path d="M6 6h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-3 3v-3H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
+                                        </svg>
+                                      </span>
+                                    ) : (
+                                      <span className="followup-session-number">{checkpoint.sessionNumber || "•"}</span>
+                                    )}
+                                    <span className="followup-session-main">
+                                      <span className="followup-session-title">
+                                        <strong>
+                                          {feedback
+                                            ? "Feedback da cliente"
+                                            : `Sessão ${checkpoint.sessionNumber || ""}${checkpoint.sessionType ? ` · ${checkpoint.sessionType}` : ""}`.trim()}
+                                        </strong>
+                                        {feedback ? <em>Enviado pelo link</em> : null}
+                                        {!feedback && photoCount > 0 ? <span>{photoCount} foto{photoCount === 1 ? "" : "s"}</span> : null}
+                                      </span>
+                                      <span className="followup-session-chips">
+                                        <span>Dor {checkpoint.painLevel ?? 0}</span>
+                                        <span>Estresse {checkpoint.stressLevel ?? 0}</span>
+                                        <span>Sono {formatSleepChip(checkpoint.sleepHours, feedback)}</span>
+                                      </span>
+                                    </span>
+                                    <time>{formatDayMonth(checkpoint.date)}</time>
+                                  </button>
+                                </li>
+                              );
+                            })}
                           </ul>
-                        </section>
-                      ) : null}
-                    </>
-                  ) : null}
+                        )}
+                        {photosByCheckpoint.unlinked.length > 0 ? (
+                          <section className="photo-analysis-section">
+                            <h5>Fotos sem acompanhamento vinculado</h5>
+                            <ul className="list photo-analysis-list">
+                              {photosByCheckpoint.unlinked.map((analysis) => (
+                                <PhotoAnalysisSummary
+                                  key={analysis.id}
+                                  analysis={{
+                                    ...analysis,
+                                    positionLabel: `${formatDatePt(analysis.date)} • ${analysis.positionLabel || "Posição não informada"}`
+                                  }}
+                                  onRemove={() => handleDeletePhotoAnalysis(analysis.id)}
+                                />
+                              ))}
+                            </ul>
+                          </section>
+                        ) : null}
+                      </div>
+                      <SessionDetail
+                        checkpoint={activeFollowup}
+                        photos={activeFollowup ? photosByCheckpoint.grouped.get(activeFollowup.id) || [] : []}
+                        onDelete={async (checkpointId) => {
+                          await handleDeleteCheckpoint(checkpointId);
+                          setSelectedCheckpointId("");
+                        }}
+                      />
+                    </div>
 
-                  {followupScreen === "detail" ? (
-                    <SessionDetail
-                      checkpoint={checkpoints.find((item) => item.id === selectedCheckpointId)}
-                      photos={photosByCheckpoint.grouped.get(selectedCheckpointId) || []}
-                      onBack={() => {
+                  {followupScreen === "create" && selectedClient ? (
+                  <div
+                    className="client-modal-backdrop app-modal-backdrop session-modal-backdrop"
+                    onPointerDown={(event) => {
+                      if (event.target === event.currentTarget) {
+                        setIsPhotoComposerOpen(false);
                         setFollowupScreen("list");
-                        setSelectedCheckpointId("");
-                      }}
-                      onDelete={async (checkpointId) => {
-                        await handleDeleteCheckpoint(checkpointId);
-                        setFollowupScreen("list");
-                        setSelectedCheckpointId("");
-                      }}
-                    />
-                  ) : null}
-
-                  {followupScreen === "create" ? (
-                    <>
-                  <div className="panel-header">
+                      }
+                    }}
+                  >
+                  <section
+                    className="session-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Nova sessão"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                  <header className="profile-modal-header">
                     <div>
                       <h4>Nova sessão</h4>
-                      <p>Sessão {checkpointForm.sessionNumber || getNextSessionNumber(checkpoints)}</p>
+                      <p>{selectedClient.name} · Sessão {checkpointForm.sessionNumber || getNextSessionNumber(checkpoints)}</p>
                     </div>
-                    <div className="panel-header-actions">
-                      <button type="button" className="secondary-btn" onClick={openParameterEditor}>
-                        Adicionar parâmetro
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={() => {
-                          setIsPhotoComposerOpen(false);
-                          setFollowupScreen("list");
-                        }}
-                      >
-                        Voltar
-                      </button>
-                    </div>
-                  </div>
-
+                    <ModalClose
+                      onClick={() => {
+                        setIsPhotoComposerOpen(false);
+                        setFollowupScreen("list");
+                      }}
+                    />
+                  </header>
                   <form
                     id="followup-checkpoint-form"
-                    className="form grid-form"
+                    className="form session-form"
                     onSubmit={handleAddCheckpoint}
                   >
-                    <label>
-                      Data do atendimento
-                      <input
-                        type="date"
-                        value={checkpointForm.date}
-                        onChange={(event) => handleCheckpointFieldChange("date", event.target.value)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Tipo de atendimento
-                      <select
-                        value={checkpointForm.sessionType}
-                        onChange={(event) => handleCheckpointFieldChange("sessionType", event.target.value)}
-                      >
-                        <option value="">Selecionar</option>
-                        {SESSION_TYPES.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <ScaleSlider
-                      label="Dor (0-10)"
+                    <div className="session-form-row">
+                      <label>
+                        Data do atendimento
+                        <input
+                          type="date"
+                          value={checkpointForm.date}
+                          onChange={(event) => handleCheckpointFieldChange("date", event.target.value)}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Tipo de atendimento
+                        <select
+                          value={checkpointForm.sessionType}
+                          onChange={(event) => handleCheckpointFieldChange("sessionType", event.target.value)}
+                        >
+                          <option value="">Selecionar</option>
+                          {SESSION_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {type}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <ScaleChoice
+                      label="Dor"
+                      hint="0 nenhuma · 10 máxima"
                       value={checkpointForm.painLevel}
                       onChange={(value) => handleCheckpointFieldChange("painLevel", value)}
                     />
-                    <ScaleSlider
-                      label="Estresse/Tensão (0-10)"
+                    <ScaleChoice
+                      label="Estresse / tensão"
+                      hint="0 tranquila · 10 muito tensa"
                       value={checkpointForm.stressLevel}
                       onChange={(value) => handleCheckpointFieldChange("stressLevel", value)}
                     />
-                    <label>
-                      Sono (horas)
-                      <input
-                        type="number"
-                        min="0"
-                        max="12"
-                        step="0.5"
-                        value={checkpointForm.sleepHours}
-                        onChange={(event) => handleCheckpointFieldChange("sleepHours", event.target.value)}
-                      />
-                    </label>
-                    {trackingParameters.map((parameter) => (
-                      <label key={parameter.id}>
-                        {parameter.name} ({parameter.unit})
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={checkpointForm.parameterValues?.[parameter.id] ?? ""}
-                          onChange={(event) => handleCheckpointFieldChange("parameterValues", {
-                            ...(checkpointForm.parameterValues || {}),
-                            [parameter.id]: event.target.value
-                          })}
-                          placeholder={`Medida em ${parameter.unit}`}
-                        />
+                    <div className="session-form-row">
+                      <label>
+                        Sono
+                        <span className="input-suffix">
+                          <input
+                            type="number"
+                            min="0"
+                            max="12"
+                            step="0.5"
+                            value={checkpointForm.sleepHours}
+                            onChange={(event) => handleCheckpointFieldChange("sleepHours", event.target.value)}
+                          />
+                          <span>horas</span>
+                        </span>
                       </label>
-                    ))}
-                    {checkpointError ? <p className="error-text full-row">{checkpointError}</p> : null}
-                    <label className="full-row">
+                      {trackingParameters.map((parameter) => (
+                        <label key={parameter.id}>
+                          {parameter.name}
+                          <span className="input-suffix">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={checkpointForm.parameterValues?.[parameter.id] ?? ""}
+                              onChange={(event) => handleCheckpointFieldChange("parameterValues", {
+                                ...(checkpointForm.parameterValues || {}),
+                                [parameter.id]: event.target.value
+                              })}
+                            />
+                            <span>{parameter.unit}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    {checkpointError ? <p className="error-text">{checkpointError}</p> : null}
+                    <label>
                       Observações da sessão
                       <textarea
                         value={checkpointForm.observations}
                         onChange={(event) => handleCheckpointFieldChange("observations", event.target.value)}
+                        rows={3}
                       />
                     </label>
-                  </form>
-
-                  <div className="session-photo-actions">
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => setIsPhotoComposerOpen(true)}
-                    >
-                      Adicionar foto
-                    </button>
-                    {draftPhotos.length > 0 ? (
-                      <ul className="session-draft-list">
+                    <div className="session-photo-field">
+                      <span>Fotos</span>
+                      <div className="session-photo-tiles">
                         {draftPhotos.map((analysis) => (
-                          <li key={analysis.localId}>
-                            <span>{analysis.positionLabel || "Foto incluída"}</span>
+                          <figure key={analysis.localId} className="session-photo-tile">
+                            {analysis.imageDataUrl ? <img src={analysis.imageDataUrl} alt={analysis.positionLabel || "Foto da sessão"} /> : null}
+                            <figcaption>{analysis.positionLabel || "Foto"}</figcaption>
                             <button
                               type="button"
+                              aria-label={`Remover foto ${analysis.positionLabel || ""}`.trim()}
                               onClick={() =>
                                 setDraftPhotos((previous) =>
                                   previous.filter((item) => item.localId !== analysis.localId)
                                 )
                               }
                             >
-                              Remover
+                              ×
                             </button>
-                          </li>
+                          </figure>
                         ))}
-                      </ul>
-                    ) : (
-                      <p className="muted-text">Nenhuma foto incluída nesta sessão.</p>
-                    )}
-                    {photoMessage ? (
-                      <p className={photoMessageTone === "error" ? "error-text" : "success-text"}>{photoMessage}</p>
-                    ) : null}
-                  </div>
+                        <button type="button" className="session-photo-add" onClick={() => setIsPhotoComposerOpen(true)}>
+                          <span aria-hidden="true">+</span>
+                          Adicionar
+                        </button>
+                      </div>
+                      {photoMessage ? (
+                        <p className={photoMessageTone === "error" ? "error-text" : "success-text"}>{photoMessage}</p>
+                      ) : null}
+                    </div>
+                    <footer className="session-modal-footer">
+                      <button type="button" className="session-new-parameter" onClick={openParameterEditor}>
+                        + Novo parâmetro
+                      </button>
+                      <div className="session-modal-actions">
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          onClick={() => {
+                            setIsPhotoComposerOpen(false);
+                            setFollowupScreen("list");
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                        <button className="primary-btn" type="submit" disabled={isSavingCheckpoint}>
+                          {isSavingCheckpoint ? "Salvando..." : "Registrar sessão"}
+                        </button>
+                      </div>
+                    </footer>
+                  </form>
 
+                  </section>
                   {isPhotoComposerOpen ? (
                   <div
                     className="client-modal-backdrop app-modal-backdrop photo-composer-backdrop"
@@ -6896,7 +7500,7 @@ export default function App() {
                     }}
                   >
                   <section
-                    className="appointment-modal photo-analysis-section"
+                    className="appointment-modal photo-composer"
                     role="dialog"
                     aria-modal="true"
                     aria-label="Adicionar foto"
@@ -6905,44 +7509,71 @@ export default function App() {
                     <header className="profile-modal-header">
                       <div>
                         <h4>Adicionar foto</h4>
-                        <p>A foto fica vinculada a esta sessão e é salva junto com ela.</p>
+                        <p>
+                          A foto fica vinculada à sessão {checkpointForm.sessionNumber || getNextSessionNumber(checkpoints)} de {selectedClient.name}.
+                        </p>
                       </div>
                       <ModalClose onClick={() => setIsPhotoComposerOpen(false)} />
                     </header>
-                    <form className="form" onSubmit={handleAddPhotoAnalysis}>
-                      <div className="grid-form photo-position-fields">
-                        <label>
-                          Data deste acompanhamento
-                          <input
-                            type="date"
-                            value={photoForm.date}
-                            readOnly
-                          />
-                        </label>
-                        <label>
-                          Posição da foto
-                          <select
-                            value={photoForm.positionLabel}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setPhotoForm((previous) => ({
-                                ...previous,
-                                positionLabel: value,
-                                positionCustom: isCustomPhotoPosition(value) ? previous.positionCustom : ""
-                              }));
-                            }}
-                            required
-                          >
-                            <option value="">Selecionar</option>
-                            {PHOTO_POSITION_OPTIONS.map((option) => (
-                              <option key={`photo-position-${option}`} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                            <option value={PHOTO_POSITION_OTHER}>{PHOTO_POSITION_OTHER}</option>
-                          </select>
-                          {isCustomPhotoPosition(photoForm.positionLabel) ? (
-                            <>
+                    <form className="form photo-composer-form" onSubmit={handleAddPhotoAnalysis}>
+                      <div className="photo-composer-layout">
+                        <PhotoMeasurementEditor
+                          imageDataUrl={photoForm.imageDataUrl}
+                          measurements={photoForm.measurements}
+                          activeMeasurementType={photoForm.activeMeasurementType}
+                          activePoints={photoForm.activePoints}
+                          onSelectFile={handlePhotoFileSelect}
+                          onChangeActivePoints={handlePhotoPointsChange}
+                          onMeasurementTypeChange={handlePhotoMeasurementTypeChange}
+                          onUndoActivePoint={() =>
+                            setPhotoForm((previous) => ({
+                              ...previous,
+                              activePoints: previous.activePoints.slice(0, -1)
+                            }))
+                          }
+                        />
+                        <div className="photo-composer-side">
+                          <label>
+                            Data deste acompanhamento
+                            <input type="date" value={photoForm.date} readOnly />
+                          </label>
+                          <div className="photo-position-field">
+                            <span>Posição da foto</span>
+                            <div className="photo-position-options" role="radiogroup" aria-label="Posição da foto">
+                              {PHOTO_POSITION_OPTIONS.map((option) => (
+                                <button
+                                  key={`photo-position-${option}`}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={photoForm.positionLabel === option}
+                                  className={`photo-position-choice${photoForm.positionLabel === option ? " is-selected" : ""}`}
+                                  onClick={() =>
+                                    setPhotoForm((previous) => ({
+                                      ...previous,
+                                      positionLabel: option,
+                                      positionCustom: ""
+                                    }))
+                                  }
+                                >
+                                  {option}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                role="radio"
+                                aria-checked={isCustomPhotoPosition(photoForm.positionLabel)}
+                                className={`photo-position-choice is-other${isCustomPhotoPosition(photoForm.positionLabel) ? " is-selected" : ""}`}
+                                onClick={() =>
+                                  setPhotoForm((previous) => ({
+                                    ...previous,
+                                    positionLabel: PHOTO_POSITION_OTHER
+                                  }))
+                                }
+                              >
+                                Outra
+                              </button>
+                            </div>
+                            {isCustomPhotoPosition(photoForm.positionLabel) ? (
                               <input
                                 value={photoForm.positionCustom}
                                 onChange={(event) => handlePhotoFieldChange("positionCustom", event.target.value)}
@@ -6951,68 +7582,50 @@ export default function App() {
                                 autoFocus
                                 required
                               />
-                              <span className="muted-text">Informe a posição que não está na lista.</span>
-                            </>
-                          ) : null}
-                        </label>
+                            ) : null}
+                          </div>
+                          <div className="photo-measure-field">
+                            <span>Medições nesta foto</span>
+                            {photoForm.measurements.length > 0 ? (
+                              <ul className="photo-measure-list">
+                                {photoForm.measurements.map((measurement, index) => (
+                                  <li key={measurement.id}>
+                                    <span className="photo-measure-index">{index + 1}</span>
+                                    <strong>{measurementKindLabel(measurement)}</strong>
+                                    <em>{measurementBadgeText(measurement)}</em>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveMeasurement(measurement.id)}
+                                      aria-label={`Remover medição ${index + 1}`}
+                                    >
+                                      ×
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="photo-measure-empty">Nenhuma medição ainda.</p>
+                            )}
+                            <p>A mesma foto pode ter várias linhas e ângulos.</p>
+                          </div>
+                          <label>
+                            Observações da foto
+                            <textarea
+                              value={photoForm.notes}
+                              onChange={(event) => handlePhotoFieldChange("notes", event.target.value)}
+                              placeholder="Ex.: alinhamento, assimetria, evolução visual"
+                              rows={3}
+                            />
+                          </label>
+                        </div>
                       </div>
-
-                      <label>
-                        Tipo da próxima medição
-                        <select
-                          value={photoForm.activeMeasurementType}
-                          onChange={(event) => handlePhotoMeasurementTypeChange(event.target.value)}
-                        >
-                          <option value="line">Linha (pontos A e B)</option>
-                          <option value="angle">Ângulo (pontos A, B e C)</option>
-                        </select>
-                      </label>
-                      <p className="muted-text">
-                        A mesma foto pode receber várias linhas, vários ângulos ou os dois juntos. Não há limite de medições.
-                      </p>
-
-                      <PhotoMeasurementEditor
-                        imageDataUrl={photoForm.imageDataUrl}
-                        measurements={photoForm.measurements}
-                        activeMeasurementType={photoForm.activeMeasurementType}
-                        activePoints={photoForm.activePoints}
-                        onSelectFile={handlePhotoFileSelect}
-                        onChangeActivePoints={(points) =>
-                          setPhotoForm((previous) => ({ ...previous, activePoints: points }))
-                        }
-                        onCommitMeasurement={handleCommitMeasurement}
-                        onRemoveMeasurement={handleRemoveMeasurement}
-                        onUndoActivePoint={() =>
-                          setPhotoForm((previous) => ({
-                            ...previous,
-                            activePoints: previous.activePoints.slice(0, -1)
-                          }))
-                        }
-                        onClearActivePoints={() =>
-                          setPhotoForm((previous) => ({ ...previous, activePoints: [] }))
-                        }
-                      />
-
-                      <label>
-                        Observações da foto
-                        <textarea
-                          value={photoForm.notes}
-                          onChange={(event) => handlePhotoFieldChange("notes", event.target.value)}
-                          placeholder="Ex: alinhamento, assimetria, evolução visual..."
-                        />
-                      </label>
-
                       {photoMessage ? (
                         <p className={photoMessageTone === "error" ? "error-text" : "success-text"}>{photoMessage}</p>
                       ) : null}
-
-                      <div className="inline-actions">
-                        <button className="primary-btn" type="submit">
-                          Incluir foto neste acompanhamento
-                        </button>
+                      <footer className="photo-composer-footer">
                         <button
                           type="button"
-                          className="secondary-btn"
+                          className="photo-clear-btn"
                           onClick={() =>
                             setPhotoForm((previous) => ({
                               ...buildEmptyPhotoAnalysis(),
@@ -7022,78 +7635,93 @@ export default function App() {
                         >
                           Limpar foto
                         </button>
-                      </div>
+                        <div className="photo-composer-actions">
+                          <button type="button" className="secondary-btn" onClick={() => setIsPhotoComposerOpen(false)}>
+                            Cancelar
+                          </button>
+                          <button className="primary-btn" type="submit">
+                            Incluir na sessão
+                          </button>
+                        </div>
+                      </footer>
                     </form>
                   </section>
                   </div>
                   ) : null}
-
-                  <button
-                    className="primary-btn followup-submit-btn"
-                    type="submit"
-                    form="followup-checkpoint-form"
-                    disabled={isSavingCheckpoint}
-                  >
-                    {isSavingCheckpoint
-                      ? "Salvando acompanhamento..."
-                      : pendingPhotoCount > 0
-                        ? `Registrar sessão com ${pendingPhotoCount} foto${pendingPhotoCount > 1 ? "s" : ""}`
-                        : "Registrar sessão"}
-                  </button>
-                    </>
+                  </div>
                   ) : null}
                 </section>
               ) : null}
 
               {isChartsViewOpen ? (
                 <section className="followup-panel">
-                  <div className="panel-header">
-                    <div>
-                      <h4>Gráficos de Evolução - {selectedClient.name}</h4>
-                      <p>Visualização da evolução com base no histórico dos atendimentos.</p>
-                    </div>
-                  </div>
-                  <div className="charts-grid">
-                    <WellnessScoreChart
-                      points={checkpointChartData}
-                      className={wellnessSpansTwo ? "chart-card-span-2" : ""}
+                  <div className="record-charts">
+                    <WellnessScoreChart points={metricChartData} />
+                    <ProgressLineChart
+                      title="Dor x estresse"
+                      points={metricChartData}
+                      firstMetric={{ field: "painLevel", label: "Dor" }}
+                      secondMetric={{ field: "stressLevel", label: "Estresse" }}
+                      maxValue={10}
                     />
-                    {followupChartCards}
+                    <SleepBarChart points={metricChartData} />
+                    <InitialVsCurrentChart points={metricChartData} />
+                    <SessionTypeDistributionChart points={checkpointChartData} />
+                    {angleChartSeries.map((series) => (
+                      <AngleProgressChart key={series.label} series={series} />
+                    ))}
+                    {parameterChartSeries
+                      .filter((series) => series.points.length > 0)
+                      .map((series) => (
+                        <ParameterProgressChart key={series.id} series={series} />
+                      ))}
                   </div>
                 </section>
               ) : null}
 
               {isTermsViewOpen ? (
                 <section className="followup-panel">
-                  <div className="panel-header">
-                    <div>
-                      <h4>Termos e Consentimentos</h4>
-                      <p>Autorização de uso de imagem enviada pela cliente.</p>
-                    </div>
-                  </div>
                   {consentLinks.length === 0 ? (
-                    <p className="empty">Nenhum termo enviado. O link fica no menu do prontuário.</p>
+                    <p className="consent-empty">Nenhum termo enviado. O link fica em Links para a cliente.</p>
                   ) : (
                     <ul className="consent-list">
                       {consentLinks.map((link) => {
-                        const decision = consentDecisionLabel(link);
-                        const when = getTimestampMillis(link.respondedAt || link.createdAt);
+                        const answered = link.imageUse === "autorizado" || link.imageUse === "negado";
+                        const stamp = formatConsentStamp(answered ? (link.respondedAt || link.updatedAt || link.createdAt) : link.createdAt);
+                        const statusClass = link.imageUse === "negado"
+                          ? "consent-status is-denied"
+                          : link.imageUse === "autorizado"
+                            ? "consent-status"
+                            : "consent-status is-waiting";
                         return (
                           <li key={link.id} className="consent-card">
-                            <div className="consent-card-header">
-                              <strong className={
-                                link.imageUse === "negado"
-                                  ? "consent-status is-denied"
-                                  : link.imageUse === "autorizado"
-                                    ? "consent-status"
-                                    : "consent-status is-waiting"
-                              }>
-                                {decision}
-                              </strong>
-                              {when ? <span>{new Date(when).toLocaleDateString("pt-BR")}</span> : null}
+                            <span className="consent-icon" aria-hidden="true">
+                              <svg viewBox="0 0 24 24">
+                                <path d="M4.5 8.2h2.1l1.3-2h8.2l1.3 2h2.1A1.5 1.5 0 0 1 21 9.7v8.1a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.8V9.7a1.5 1.5 0 0 1 1.5-1.5Z" />
+                                <circle cx="12" cy="13.4" r="3" />
+                              </svg>
+                            </span>
+                            <div className="consent-copy">
+                              <div className="consent-card-title">
+                                <h5>Uso de imagem</h5>
+                                <span className={statusClass}>{consentDecisionLabel(link)}</span>
+                              </div>
+                              <p className="consent-signed">
+                                {answered ? (
+                                  link.signatureName ? (
+                                    <>
+                                      Assinado como <strong>{link.signatureName}</strong>
+                                      {stamp ? ` em ${stamp}` : ""}, pelo link enviado à cliente.
+                                    </>
+                                  ) : (
+                                    <>Respondido{stamp ? ` em ${stamp}` : ""}, pelo link enviado à cliente.</>
+                                  )
+                                ) : (
+                                  <>Link enviado à cliente{stamp ? ` em ${stamp}` : ""}. Aguardando a resposta.</>
+                                )}
+                              </p>
+                              <p className="consent-summary">{consentSummary(link)}</p>
                             </div>
-                            {link.signatureName ? <p>Confirmado por {link.signatureName}</p> : null}
-                            {link.termText ? <p className="consent-term">{link.termText}</p> : null}
                           </li>
                         );
                       })}
@@ -7109,7 +7737,7 @@ export default function App() {
       ) : null}
 
       {activeTab === TABS.AVISOS ? (
-        <NotificationLists uid={user.uid} clients={clients} shareLinks={shareLinks} onSummaryChange={setNoticeSummary} />
+        <NotificationLists uid={user.uid} clients={clients} shareLinks={shareLinks} clinicName={currentClinicName} onSummaryChange={setNoticeSummary} />
       ) : null}
 
       {activeTab === TABS.SERVICOS ? (
@@ -7270,7 +7898,7 @@ export default function App() {
           }}
         >
           <section
-            className="profile-modal"
+            className="profile-modal account-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Cadastro do profissional"
@@ -7279,152 +7907,148 @@ export default function App() {
             <header className="profile-modal-header">
               <div>
                 <h4>Meu cadastro</h4>
-                <p>Gerencie os dados do seu perfil profissional.</p>
+                <p>Estes dados aparecem nos links que as clientes recebem.</p>
               </div>
               <ModalClose onClick={handleCloseProfileModal} />
             </header>
 
-            <form className="form grid-form" onSubmit={handleSaveProfile}>
-              <div className="full-row logo-picker">
-                {profileForm.logoDataUrl ? (
-                  <img className="logo-picker-preview" src={profileForm.logoDataUrl} alt="Logo da clínica" />
-                ) : (
-                  <div className="logo-picker-empty">Sem logo</div>
-                )}
-                <div className="logo-picker-actions">
-                  <strong>Logo da clínica</strong>
-                  <div className="logo-picker-buttons">
-                    <label className="secondary-btn logo-file-btn">
-                      {profileForm.logoDataUrl ? "Trocar logo" : "Escolher logo"}
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        aria-label="Escolher logo"
-                        onChange={handleProfileLogo}
-                      />
-                    </label>
+            <form className="account-form" onSubmit={handleSaveProfile}>
+              <div className="account-layout">
+                <div className="account-logo">
+                  <div className="account-logo-frame">
                     {profileForm.logoDataUrl ? (
-                      <button type="button" className="danger-btn" onClick={() => handleProfileFieldChange("logoDataUrl", "")}>
-                        Remover
-                      </button>
-                    ) : null}
+                      <img src={profileForm.logoDataUrl} alt="Logo da clínica" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+                        <circle cx="9" cy="9" r="1.5" />
+                        <path d="m4.5 16.5 4.2-3.4 2.6 2.1 2.8-3.2 5.4 4.5" />
+                      </svg>
+                    )}
                   </div>
+                  <strong>Logo da clínica</strong>
+                  <label className="secondary-btn logo-file-btn">
+                    Escolher imagem
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      aria-label="Escolher logo"
+                      onChange={handleProfileLogo}
+                    />
+                  </label>
                   <span className="field-hint">PNG com fundo transparente fica melhor.</span>
+                  {profileForm.logoDataUrl ? (
+                    <button type="button" className="account-logo-remove" onClick={() => handleProfileFieldChange("logoDataUrl", "")}>
+                      Remover imagem
+                    </button>
+                  ) : null}
+                </div>
+                <div className="account-fields grid-form">
+                  <label>
+                    Nome completo
+                    <input
+                      value={profileForm.fullName}
+                      onChange={(event) => handleProfileFieldChange("fullName", event.target.value)}
+                      placeholder="Seu nome"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Nome da clínica
+                    <input
+                      value={profileForm.clinicName}
+                      onChange={(event) => handleProfileFieldChange("clinicName", event.target.value)}
+                      placeholder="Clínica Estética"
+                    />
+                  </label>
+                  <label>
+                    WhatsApp da clínica
+                    <input
+                      value={formatPhoneBr(profileForm.phone)}
+                      onChange={(event) => handleProfileFieldChange("phone", readMaskedPhone(event))}
+                      placeholder="(00) 00000-0000"
+                      inputMode="tel"
+                      autoComplete="tel"
+                    />
+                  </label>
+                  <label>
+                    Especialidade
+                    <input
+                      value={profileForm.professionalRole}
+                      onChange={(event) => handleProfileFieldChange("professionalRole", event.target.value)}
+                      placeholder="Esteticista"
+                    />
+                  </label>
+                  <h5 className="full-row profile-section-title">Redes sociais</h5>
+                  <label>
+                    Instagram
+                    <span className="handle-field">
+                      <span>@</span>
+                      <input
+                        value={profileForm.instagram}
+                        maxLength={80}
+                        aria-label="Instagram"
+                        onChange={(event) => handleProfileFieldChange("instagram", socialHandle(event.target.value, "instagram.com"))}
+                      />
+                    </span>
+                  </label>
+                  <label>
+                    TikTok
+                    <span className="handle-field">
+                      <span>@</span>
+                      <input
+                        value={profileForm.tiktok}
+                        maxLength={80}
+                        aria-label="TikTok"
+                        onChange={(event) => handleProfileFieldChange("tiktok", socialHandle(event.target.value, "tiktok.com"))}
+                      />
+                    </span>
+                  </label>
+                  <label>
+                    Facebook
+                    <input
+                      value={profileForm.facebook}
+                      maxLength={80}
+                      onChange={(event) => handleProfileFieldChange("facebook", event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Site
+                    <input
+                      value={profileForm.website}
+                      maxLength={120}
+                      placeholder="www.suaclinica.com.br"
+                      onChange={(event) => handleProfileFieldChange("website", event.target.value)}
+                    />
+                  </label>
+                  <label className="full-row">
+                    Mensagem padrão do WhatsApp
+                    <textarea
+                      value={profileForm.whatsappMessage}
+                      maxLength={500}
+                      rows={3}
+                      placeholder="Oi! Segue o link do seu acompanhamento: {link}"
+                      onChange={(event) => handleProfileFieldChange("whatsappMessage", event.target.value)}
+                    />
+                    <span className="field-hint">Escreva {"{link}"} onde o endereço deve entrar.</span>
+                  </label>
+                  {profileError ? <p className="error-text full-row">{profileError}</p> : null}
+                  {profileMessage ? <p className="success-text full-row">{profileMessage}</p> : null}
                 </div>
               </div>
-              <label>
-                Nome completo
-                <input
-                  value={profileForm.fullName}
-                  onChange={(event) => handleProfileFieldChange("fullName", event.target.value)}
-                  placeholder="Seu nome"
-                  required
-                />
-              </label>
-              <label>
-                Nome da clínica
-                <input
-                  value={profileForm.clinicName}
-                  onChange={(event) => handleProfileFieldChange("clinicName", event.target.value)}
-                  placeholder="Ex: Clínica Estética"
-                />
-              </label>
-              <label>
-                Telefone
-                <input
-                  value={formatPhoneBr(profileForm.phone)}
-                  onChange={(event) => handleProfileFieldChange("phone", readMaskedPhone(event))}
-                  placeholder="(00) 00000-0000"
-                  inputMode="tel"
-                  autoComplete="tel"
-                />
-              </label>
-              <label>
-                Função / especialidade
-                <input
-                  value={profileForm.professionalRole}
-                  onChange={(event) =>
-                    handleProfileFieldChange("professionalRole", event.target.value)
-                  }
-                  placeholder="Ex: Esteticista"
-                />
-              </label>
-              <h5 className="full-row profile-section-title">Redes sociais</h5>
-              <label>
-                Instagram
-                <span className="handle-field">
-                  <span>@</span>
-                  <input
-                    value={profileForm.instagram}
-                    maxLength={80}
-                    placeholder="suaclinica"
-                    aria-label="Instagram"
-                    onChange={(event) => handleProfileFieldChange("instagram", socialHandle(event.target.value, "instagram.com"))}
-                  />
-                </span>
-              </label>
-              <label>
-                TikTok
-                <span className="handle-field">
-                  <span>@</span>
-                  <input
-                    value={profileForm.tiktok}
-                    maxLength={80}
-                    placeholder="suaclinica"
-                    aria-label="TikTok"
-                    onChange={(event) => handleProfileFieldChange("tiktok", socialHandle(event.target.value, "tiktok.com"))}
-                  />
-                </span>
-              </label>
-              <label>
-                Facebook
-                <input
-                  value={profileForm.facebook}
-                  maxLength={80}
-                  placeholder="Página ou link"
-                  onChange={(event) => handleProfileFieldChange("facebook", event.target.value)}
-                />
-              </label>
-              <label>
-                Site
-                <input
-                  value={profileForm.website}
-                  maxLength={120}
-                  placeholder="www.suaclinica.com"
-                  onChange={(event) => handleProfileFieldChange("website", event.target.value)}
-                />
-              </label>
-              <label className="full-row">
-                Mensagem do WhatsApp
-                <textarea
-                  value={profileForm.whatsappMessage}
-                  maxLength={500}
-                  rows={3}
-                  placeholder="Olá! Segue o seu link: {link}"
-                  onChange={(event) => handleProfileFieldChange("whatsappMessage", event.target.value)}
-                />
-                <span className="field-hint">Escreva {"{link}"} onde o endereço deve entrar. Se não escrever, o link vai no final.</span>
-              </label>
-              <label className="full-row">
-                E-mail da conta
-                <input value={user?.email || ""} readOnly />
-              </label>
-
-              {profileError ? <p className="error-text full-row">{profileError}</p> : null}
-              {profileMessage ? <p className="success-text full-row">{profileMessage}</p> : null}
-
-              <button className="primary-btn full-row" type="submit">
-                {userProfile ? "Salvar alterações do cadastro" : "Criar meu cadastro"}
-              </button>
-              {userProfile ? (
-                <button
-                  type="button"
-                  className="danger-btn full-row"
-                  onClick={handleDeleteProfile}
-                >
-                  Excluir meu cadastro
+              <footer className="account-footer">
+                <button type="button" className="account-delete" onClick={handleDeleteProfile} disabled={!userProfile}>
+                  Excluir minha conta
                 </button>
-              ) : null}
+                <div className="account-footer-actions">
+                  <button type="button" className="secondary-btn" onClick={handleCloseProfileModal}>
+                    Cancelar
+                  </button>
+                  <button className="primary-btn" type="submit">
+                    Salvar alterações
+                  </button>
+                </div>
+              </footer>
             </form>
           </section>
         </div>
@@ -7449,60 +8073,83 @@ export default function App() {
             <header className="profile-modal-header">
               <div>
                 <h4>Evolução de {selectedClient.name.split(" ")[0]}</h4>
-                <p>A cliente vê o que você escrever aqui, junto com os gráficos de bem-estar, dor, estresse e sono.</p>
+                <p>A cliente vê este texto junto com os gráficos de bem-estar, dor, estresse e sono.</p>
               </div>
               <ModalClose onClick={() => setIsEvolutionComposerOpen(false)} />
             </header>
-            <form className="form" onSubmit={handleUpdateEvolution}>
-              <label>
-                Destaque
-                <input
-                  value={evolutionDraft.highlight}
-                  maxLength={EVOLUTION_HIGHLIGHT_LIMIT}
-                  placeholder="Ex: Menos dor depois de 4 sessões"
-                  onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, highlight: event.target.value }))}
-                />
-                <span className="field-hint">Frase curta no topo da tela e na imagem para as redes. {evolutionDraft.highlight.length}/{EVOLUTION_HIGHLIGHT_LIMIT}</span>
-              </label>
-              <label>
-                Recado da clínica
-                <textarea
-                  value={evolutionDraft.comments}
-                  maxLength={EVOLUTION_TEXT_LIMIT}
-                  rows={4}
-                  placeholder="Uma mensagem para a cliente ler no link"
-                  onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, comments: event.target.value }))}
-                />
-                <span className="field-hint">{evolutionDraft.comments.length}/{EVOLUTION_TEXT_LIMIT}</span>
-              </label>
-              <label>
-                Cuidados em casa
-                <textarea
-                  value={evolutionDraft.homeCare}
-                  maxLength={EVOLUTION_TEXT_LIMIT}
-                  rows={4}
-                  placeholder={"Um cuidado por linha\nEx: Hidratar a pele de manhã e à noite"}
-                  onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, homeCare: event.target.value }))}
-                />
-                <span className="field-hint">Um cuidado por linha. {evolutionDraft.homeCare.length}/{EVOLUTION_TEXT_LIMIT}</span>
-              </label>
+            <form className="form evolution-composer-layout" onSubmit={handleUpdateEvolution}>
+              <div className="evolution-composer-fields">
+                <label>
+                  <span className="evolution-field-label">
+                    Destaque
+                    <span className="evolution-field-count">{evolutionDraft.highlight.length}/{EVOLUTION_HIGHLIGHT_LIMIT}</span>
+                  </span>
+                  <input
+                    value={evolutionDraft.highlight}
+                    maxLength={EVOLUTION_HIGHLIGHT_LIMIT}
+                    placeholder="Ex: Menos dor depois de 4 sessões"
+                    onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, highlight: event.target.value }))}
+                  />
+                  <span className="field-hint">Frase curta no topo da tela e na imagem para as redes.</span>
+                </label>
+                <label>
+                  <span className="evolution-field-label">
+                    Recado da clínica
+                    <span className="evolution-field-count">{evolutionDraft.comments.length}/{EVOLUTION_TEXT_LIMIT}</span>
+                  </span>
+                  <textarea
+                    value={evolutionDraft.comments}
+                    maxLength={EVOLUTION_TEXT_LIMIT}
+                    rows={4}
+                    placeholder="Uma mensagem para a cliente ler no link"
+                    onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, comments: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span className="evolution-field-label">
+                    Cuidados em casa
+                    <span className="evolution-field-count">{evolutionDraft.homeCare.length}/{EVOLUTION_TEXT_LIMIT}</span>
+                  </span>
+                  <textarea
+                    value={evolutionDraft.homeCare}
+                    maxLength={EVOLUTION_TEXT_LIMIT}
+                    rows={4}
+                    placeholder={"Protetor solar todos os dias\nHidratante à noite"}
+                    onChange={(event) => setEvolutionDraft((previous) => ({ ...previous, homeCare: event.target.value }))}
+                  />
+                  <span className="field-hint">Um cuidado por linha.</span>
+                </label>
+              </div>
+              <EvolutionPhonePreview
+                clinicName={currentClinicName}
+                clientName={selectedClient.name}
+                highlight={evolutionDraft.highlight}
+                comments={evolutionDraft.comments}
+                homeCare={evolutionDraft.homeCare}
+                latest={checkpointChartData[checkpointChartData.length - 1] || null}
+              />
               {shareNotice?.scope === "charts" ? (
-                <p className={shareNotice.tone === "error" ? "error-text" : "success-text"}>{shareNotice.text}</p>
+                <p className={`evolution-composer-notice ${shareNotice.tone === "error" ? "error-text" : "success-text"}`}>{shareNotice.text}</p>
               ) : null}
-              <div className="evolution-composer-actions">
-                <button className="primary-btn" type="submit" disabled={Boolean(shareBusy)}>
-                  {shareBusy === "charts" ? "Salvando..." : evolutionLink || composerLinkReady ? "Atualizar link" : "Gerar link"}
-                </button>
-                {evolutionLink || composerLinkReady ? (
+              <div className="evolution-composer-footer">
+                <p className={evolutionLink || composerLinkReady ? "evolution-publish-status" : "evolution-publish-status is-pending"}>
+                  {evolutionLink || composerLinkReady
+                    ? `Link publicado${formatDayMonthStamp(evolutionLink?.updatedAt || evolutionLink?.createdAt) ? ` em ${formatDayMonthStamp(evolutionLink?.updatedAt || evolutionLink?.createdAt)}` : ""} · a cliente vê a versão salva`
+                    : "O link ainda não foi publicado."}
+                </p>
+                <div className="evolution-composer-actions">
                   <button
                     type="button"
                     className="secondary-btn"
-                    disabled={Boolean(shareBusy)}
+                    disabled={Boolean(shareBusy) || !(evolutionLink || composerLinkReady)}
                     onClick={() => copyShareLink(evolutionLink?.id || pendingEvolutionTokenRef.current, "charts")}
                   >
                     Copiar link
                   </button>
-                ) : null}
+                  <button className="primary-btn" type="submit" disabled={Boolean(shareBusy)}>
+                    {shareBusy === "charts" ? "Salvando..." : evolutionLink || composerLinkReady ? "Salvar e atualizar link" : "Gerar link"}
+                  </button>
+                </div>
               </div>
             </form>
           </section>
@@ -7604,16 +8251,16 @@ export default function App() {
           }}
         >
           <section
-            className="profile-modal"
+            className="profile-modal parameter-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Adicionar parâmetro"
+            aria-label={`Parâmetros de ${selectedClient.name.trim().split(/\s+/)[0] || selectedClient.name}`}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-modal-header">
               <div>
-                <h4>Parâmetros de {selectedClient.name}</h4>
-                <p>Crie uma medida desta cliente e a unidade. Ex.: alcance do ombro direito, em cm.</p>
+                <h4>Parâmetros de {selectedClient.name.trim().split(/\s+/)[0] || selectedClient.name}</h4>
+                <p>Medidas que você acompanha a cada sessão.</p>
               </div>
               <ModalClose onClick={closeParameterEditor} />
             </header>

@@ -278,7 +278,7 @@ export async function importSubmittedLink(uid, link, helpers) {
       signatureName: String(data.answers?.signatureName || "").trim().slice(0, 80),
       termText: typeof data.termText === "string" ? data.termText : "",
       termVersion: typeof data.termVersion === "string" ? data.termVersion : "",
-      respondedAt: serverTimestamp()
+      respondedAt: data.submittedAt || serverTimestamp()
     });
     return;
   }
@@ -338,7 +338,8 @@ export async function importSubmittedLink(uid, link, helpers) {
 
   await updateDoc(doc(db, "users", uid, "shareLinks", link.id), {
     imported: true,
-    status: "importado"
+    status: "importado",
+    respondedAt: data.submittedAt || serverTimestamp()
   });
 }
 

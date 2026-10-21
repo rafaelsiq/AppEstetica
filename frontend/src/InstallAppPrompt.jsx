@@ -80,7 +80,122 @@ function notifyNeeded() {
   return true;
 }
 
-export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
+export function ClinicNotifyCard() {
+  const [open, setOpen] = useState(() => notifyNeeded());
+
+  if (!open) {
+    return null;
+  }
+
+  async function allow() {
+    if (!("Notification" in window) || Notification.permission !== "default") {
+      setOpen(false);
+      return;
+    }
+    try {
+      const result = await Notification.requestPermission();
+      if (result === "granted") {
+        window.dispatchEvent(new Event("clinica-notifications-granted"));
+      }
+      if (result !== "default") {
+        setOpen(false);
+      }
+    } catch {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <section className="quiz-notify">
+      <span className="quiz-notify-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 16.5V11a6 6 0 1 1 12 0v5.5" />
+          <path d="M4.5 16.5h15" />
+          <path d="M10 19a2 2 0 0 0 4 0" />
+        </svg>
+      </span>
+      <strong>Receba os avisos da clínica</strong>
+      <p>Lembretes de retorno e cuidados chegam direto no seu celular.</p>
+      <div className="quiz-notify-actions">
+        <button
+          type="button"
+          className="secondary-btn"
+          onClick={() => {
+            rememberDismiss(NOTIFY_DISMISS_KEY);
+            setOpen(false);
+          }}
+        >
+          Agora não
+        </button>
+        <button type="button" className="primary-btn" onClick={allow}>Permitir</button>
+      </div>
+    </section>
+  );
+}
+
+export function InstallGuideCard() {
+  const [installEvent, setInstallEvent] = useState(() => window.__clinicaInstallPrompt || null);
+  const [open, setOpen] = useState(() => installNeeded());
+  const ios = isIos();
+
+  useEffect(() => {
+    const onReady = () => setInstallEvent(window.__clinicaInstallPrompt || null);
+    window.addEventListener("clinica-install-ready", onReady);
+    return () => window.removeEventListener("clinica-install-ready", onReady);
+  }, []);
+
+  if (!open) {
+    return null;
+  }
+
+  function dismiss() {
+    rememberDismiss(INSTALL_DISMISS_KEY);
+    setOpen(false);
+  }
+
+  async function confirm() {
+    if (!ios && installEvent) {
+      const event = installEvent;
+      setInstallEvent(null);
+      window.__clinicaInstallPrompt = null;
+      try {
+        event.prompt();
+        const choice = await event.userChoice;
+        if (choice?.outcome === "accepted") {
+          dismiss();
+          return;
+        }
+      } catch {
+        // O navegador fechou o pedido de instalação.
+      }
+    }
+    dismiss();
+  }
+
+  return (
+    <section className="notice-install">
+      <h3>Instale o acompanhamento</h3>
+      <p>
+        {ios
+          ? "No iPhone, os avisos só chegam com o app na tela inicial."
+          : "Adicione o acompanhamento à tela inicial para receber os avisos da clínica."}
+      </p>
+      {ios ? (
+        <ol className="notice-install-steps">
+          <li>Toque em Compartilhar no navegador</li>
+          <li>Escolha Adicionar à Tela de Início</li>
+          <li>Confirme em Adicionar</li>
+        </ol>
+      ) : null}
+      <div className="notice-install-actions">
+        <button type="button" className="secondary-btn" onClick={dismiss}>Agora não</button>
+        <button type="button" className="notice-install-ok" onClick={confirm}>Entendi</button>
+      </div>
+    </section>
+  );
+}
+
+export default function ClientAccessPrompts({ clinicName, unlocked = false, hideNotify = false, hideInstall = false }) {
   const [installEvent, setInstallEvent] = useState(() => window.__clinicaInstallPrompt || null);
   const [installOpen, setInstallOpen] = useState(false);
   const [installSettled, setInstallSettled] = useState(() => !installNeeded());
@@ -102,7 +217,7 @@ export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
   }, []);
 
   useEffect(() => {
-    if (installSettled) {
+    if (hideInstall || installSettled) {
       return undefined;
     }
     const delay = sessionSeen(INSTALL_SEEN_KEY) ? 0 : 700;
@@ -111,14 +226,14 @@ export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
       setInstallOpen(true);
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [installSettled]);
+  }, [hideInstall, installSettled]);
 
   useEffect(() => {
     const onNeed = () => {
-      if (notificationPermission() === "granted") {
+      if (hideNotify || notificationPermission() === "granted") {
         return;
       }
-      if (isIos() && !isInstalled()) {
+      if (!hideInstall && isIos() && !isInstalled()) {
         setInstallSettled(false);
         setInstallOpen(true);
         return;
@@ -129,10 +244,10 @@ export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
     };
     window.addEventListener("clinica-notice-needs-permission", onNeed);
     return () => window.removeEventListener("clinica-notice-needs-permission", onNeed);
-  }, []);
+  }, [hideNotify, hideInstall]);
 
   useEffect(() => {
-    if (!unlocked || !installSettled || installOpen || notifyOpen || !notifyNeeded()) {
+    if (hideNotify || !unlocked || !installSettled || installOpen || notifyOpen || !notifyNeeded()) {
       return undefined;
     }
     const delay = sessionSeen(NOTIFY_SEEN_KEY) ? 0 : 400;
@@ -141,7 +256,7 @@ export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
       setNotifyOpen(true);
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [unlocked, installSettled, installOpen, notifyOpen]);
+  }, [hideNotify, unlocked, installSettled, installOpen, notifyOpen]);
 
   function dismissInstall() {
     rememberDismiss(INSTALL_DISMISS_KEY);

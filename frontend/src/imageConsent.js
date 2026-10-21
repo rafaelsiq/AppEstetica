@@ -15,3 +15,13 @@ export function consentDecisionLabel(link) {
   }
   return "Aguardando";
 }
+
+export function consentSummary(link) {
+  if (link?.imageUse === "autorizado") {
+    return "Fotos podem ficar no prontuário e em materiais da clínica. Dados de saúde não entram nessa divulgação.";
+  }
+  if (link?.imageUse === "negado") {
+    return "As fotos não entram em materiais da clínica. O atendimento continua igual.";
+  }
+  return "A cliente ainda não respondeu se autoriza o uso das fotos fora do prontuário.";
+}

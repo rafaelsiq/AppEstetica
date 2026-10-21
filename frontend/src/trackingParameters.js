@@ -3,7 +3,7 @@ export const PARAMETER_NAME_LIMIT = 60;
 export const PARAMETER_UNIT_LIMIT = 16;
 
 export function emptyParameterForm() {
-  return { name: "", unit: "", improveWhen: "up" };
+  return { name: "", unit: "cm", improveWhen: "up" };
 }
 
 export function validateParameter(input, existing = []) {

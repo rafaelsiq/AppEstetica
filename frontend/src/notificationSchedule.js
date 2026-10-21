@@ -50,8 +50,8 @@ export function validateNotificationList(list) {
   }
   if (list.frequency === "monthly") {
     const day = Number(list.monthDay);
-    if (!Number.isInteger(day) || day < 1 || day > 28) {
-      return "Escolha um dia do mês entre 1 e 28.";
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      return "Escolha um dia do mês entre 1 e 31.";
     }
   }
   if ((list.audience === "only" || list.audience === "except") && !(list.clientIds || []).length) {

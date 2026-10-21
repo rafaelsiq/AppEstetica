@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { collection, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import ModalClose from "./ModalClose";
 import { publishNotificationList, removeNotificationList } from "./notificationLists.js";
 import {
-  WEEKDAYS,
   audienceLabel,
   emptyNotificationList,
   frequencyLabel,
@@ -12,44 +12,115 @@ import {
   validateNotificationList
 } from "./notificationSchedule";
 
-function formatDateBr(value) {
+const WEEKDAY_FULL = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+const WEEKDAY_SHORT = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+function parseIsoDate(value) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+  if (!match) {
+    return null;
+  }
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-function repeatSummary(list) {
-  const start = formatDateBr(list.date);
-  const end = formatDateBr(list.until);
-  const base = frequencyLabel(list);
-  if (start && end) {
-    return `${base}. De ${start} até ${end}.`;
-  }
-  if (start) {
-    return `${base}. A partir de ${start}.`;
-  }
-  return base;
+function shortDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  return match ? `${match[3]}/${match[2]}` : "";
 }
 
-function validateRepeat(draft) {
-  if (!/^\d{2}:\d{2}$/.test(draft.time || "")) {
-    return "Informe o horário.";
+function weekdayArticle(name) {
+  return name === "sábado" || name === "domingo" ? "todo" : "toda";
+}
+
+function scheduleFields(frequency, date) {
+  const parsed = parseIsoDate(date);
+  const weekday = parsed ? parsed.getDay() : 1;
+  const monthDay = parsed ? parsed.getDate() : 1;
+  if (frequency === "weekly") {
+    return { weekdays: [weekday], monthDay: 0 };
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date || "")) {
-    return "Informe a data.";
+  if (frequency === "monthly") {
+    return { weekdays: [], monthDay };
   }
-  if (draft.frequency === "weekly" && (!Array.isArray(draft.weekdays) || draft.weekdays.length === 0)) {
-    return "Escolha ao menos um dia da semana.";
+  return { weekdays: [], monthDay: 0 };
+}
+
+const WEEKDAY_LETTER = ["D", "S", "T", "Q", "Q", "S", "S"];
+
+function selectedWeekdays(list) {
+  return [...new Set((list.weekdays || []).map(Number))].filter((day) => day >= 0 && day <= 6);
+}
+
+function schedulePhrase(list) {
+  const time = list.time || "--:--";
+  const date = parseIsoDate(list.date);
+  if (list.frequency === "daily") {
+    return `Todo dia às ${time}`;
   }
-  if (draft.frequency === "monthly") {
-    const day = Number(draft.monthDay);
-    if (!Number.isInteger(day) || day < 1 || day > 28) {
-      return "Escolha um dia do mês entre 1 e 28.";
+  if (list.frequency === "weekly") {
+    const days = selectedWeekdays(list);
+    if (days.length === 1) {
+      const name = WEEKDAY_SHORT[days[0]];
+      const lead = weekdayArticle(name);
+      return `${lead.charAt(0).toUpperCase()}${lead.slice(1)} ${name} às ${time}`;
     }
+    if (days.length > 1) {
+      return `${days.map((day) => WEEKDAY_SHORT[day]).join(", ")} às ${time}`;
+    }
+    return `Toda semana às ${time}`;
   }
-  if (draft.until && draft.until < draft.date) {
-    return "A data final precisa ser igual ou posterior ao início.";
+  if (list.frequency === "monthly") {
+    const day = date ? date.getDate() : "";
+    return `Todo dia ${day} às ${time}`;
   }
   return "";
+}
+
+function frequencyResume(list) {
+  const time = list.time || "--:--";
+  const from = shortDate(list.date) || "—";
+  const date = parseIsoDate(list.date);
+  if (list.frequency === "daily") {
+    return `todo dia às ${time}, a partir de ${from}.`;
+  }
+  if (list.frequency === "weekly") {
+    const days = selectedWeekdays(list);
+    if (days.length === 1) {
+      const name = WEEKDAY_FULL[days[0]];
+      return `${weekdayArticle(name)} ${name} às ${time}, a partir de ${from}.`;
+    }
+    if (days.length > 1) {
+      return `${days.map((day) => WEEKDAY_SHORT[day]).join(", ")} às ${time}, a partir de ${from}.`;
+    }
+    return `toda semana às ${time}, a partir de ${from}.`;
+  }
+  const day = date ? date.getDate() : "—";
+  return `todo dia ${day} às ${time}, a partir de ${from}.`;
+}
+
+function readySchedule(form) {
+  if (form.frequency === "monthly") {
+    return { ...form, weekdays: [], monthDay: parseIsoDate(form.date)?.getDate() || Number(form.monthDay) || 1 };
+  }
+  if (form.frequency === "weekly") {
+    const weekdays = selectedWeekdays(form);
+    return {
+      ...form,
+      weekdays: weekdays.length ? weekdays : scheduleFields("weekly", form.date).weekdays,
+      monthDay: 0
+    };
+  }
+  return { ...form, weekdays: [], monthDay: 0 };
+}
+
+function recipientCount(form, clients) {
+  if (form.audience === "only") {
+    return clients.filter((client) => (form.clientIds || []).includes(client.id)).length;
+  }
+  if (form.audience === "except") {
+    return clients.filter((client) => !(form.clientIds || []).includes(client.id)).length;
+  }
+  return clients.length;
 }
 
 function todayIso() {
@@ -86,7 +157,7 @@ function readImage(file) {
   });
 }
 
-export default function NotificationLists({ uid, clients, shareLinks, onSummaryChange }) {
+export default function NotificationLists({ uid, clients, shareLinks, clinicName = "Clínica Estética", onSummaryChange }) {
   const [lists, setLists] = useState([]);
 
   useEffect(() => {
@@ -94,8 +165,8 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
     onSummaryChange?.({ active: lists.length - paused, paused });
   }, [lists, onSummaryChange]);
   const [form, setForm] = useState(null);
-  const [repeatDraft, setRepeatDraft] = useState(null);
-  const [repeatError, setRepeatError] = useState("");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleDraft, setScheduleDraft] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [openMenuId, setOpenMenuId] = useState("");
@@ -156,20 +227,6 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
   }, [lists, clients, shareLinks, uid]);
 
   useEffect(() => {
-    if (!repeatDraft) {
-      return undefined;
-    }
-    const onKey = (event) => {
-      if (event.key === "Escape") {
-        setRepeatDraft(null);
-        setRepeatError("");
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [repeatDraft]);
-
-  useEffect(() => {
     if (!openMenuId) {
       return undefined;
     }
@@ -198,58 +255,63 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
       return;
     }
     setForm(null);
-    setRepeatDraft(null);
-    setRepeatError("");
+    setScheduleOpen(false);
+    setScheduleDraft(null);
+    setError("");
   };
 
-  const openRepeat = () => {
+  const chooseOnce = () => {
+    setScheduleOpen(false);
+    setScheduleDraft(null);
+    update({ frequency: "once", weekdays: [], monthDay: 0 });
+  };
+
+  const chooseRepeat = () => {
+    if (!form || form.frequency === "once") {
+      update({ frequency: "weekly", ...scheduleFields("weekly", form?.date) });
+    }
+  };
+
+  const openSchedule = () => {
     if (!form) {
       return;
     }
-    setRepeatError("");
-    setRepeatDraft({
-      frequency: form.frequency === "once" ? "weekly" : form.frequency,
+    const frequency = form.frequency === "once" ? "weekly" : form.frequency;
+    const weekdays = frequency === "weekly"
+      ? (selectedWeekdays(form).length ? [selectedWeekdays(form)[0]] : scheduleFields("weekly", form.date).weekdays)
+      : [];
+    setScheduleDraft({
+      frequency,
       date: form.date,
-      time: form.time,
-      weekdays: (form.weekdays || []).length ? [...form.weekdays] : [1, 2, 3, 4, 5],
-      monthDay: form.monthDay || 1,
-      until: form.until || ""
+      time: form.time || "09:00",
+      weekdays,
+      monthDay: form.monthDay
     });
+    setScheduleOpen(true);
   };
 
-  const updateRepeat = (patch) => setRepeatDraft((current) => (current ? { ...current, ...patch } : current));
-
-  const toggleDraftWeekday = (day) => {
-    setRepeatDraft((current) => {
-      if (!current) {
-        return current;
-      }
-      const selected = new Set((current.weekdays || []).map(Number));
-      if (selected.has(day)) {
-        selected.delete(day);
-      } else {
-        selected.add(day);
-      }
-      return { ...current, weekdays: [...selected] };
-    });
+  const cancelSchedule = () => {
+    setScheduleOpen(false);
+    setScheduleDraft(null);
   };
 
-  const confirmRepeat = () => {
-    const message = validateRepeat(repeatDraft || {});
-    if (message) {
-      setRepeatError(message);
+  const confirmSchedule = () => {
+    if (!scheduleDraft) {
       return;
     }
-    update({
-      frequency: repeatDraft.frequency,
-      date: repeatDraft.date,
-      time: repeatDraft.time,
-      weekdays: repeatDraft.frequency === "weekly" ? repeatDraft.weekdays.map(Number) : [],
-      monthDay: repeatDraft.frequency === "monthly" ? Number(repeatDraft.monthDay) : 0,
-      until: repeatDraft.until || ""
+    update(readySchedule(scheduleDraft));
+    setScheduleOpen(false);
+    setScheduleDraft(null);
+  };
+
+  const setDraftFrequency = (frequency) => {
+    setScheduleDraft((current) => {
+      const next = { ...current, frequency };
+      if (frequency === "weekly" && !selectedWeekdays(current).length) {
+        next.weekdays = scheduleFields("weekly", current.date).weekdays;
+      }
+      return next;
     });
-    setRepeatError("");
-    setRepeatDraft(null);
   };
 
   const toggleClient = (clientId) => {
@@ -266,7 +328,8 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
 
   const save = async (event) => {
     event.preventDefault();
-    const message = validateNotificationList(form);
+    const ready = readySchedule(form);
+    const message = validateNotificationList(ready);
     if (message) {
       setError(message);
       return;
@@ -287,7 +350,7 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
       const ref = form.id
         ? doc(db, "users", uid, "notificationLists", form.id)
         : doc(collection(db, "users", uid, "notificationLists"));
-      const draft = { ...form, active: form.active !== false, deliveredTokens: form.deliveredTokens || [] };
+      const draft = { ...ready, active: form.active !== false, deliveredTokens: form.deliveredTokens || [] };
       const deliveredTokens = await publishNotificationList({
         listId: ref.id,
         list: draft,
@@ -312,6 +375,7 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
         updatedAt: serverTimestamp()
       }, { merge: true });
       setForm(null);
+      setScheduleOpen(false);
     } catch (saveError) {
       setError("Não foi possível salvar a lista. Tente novamente.");
     } finally {
@@ -356,7 +420,7 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
           <p>Listas de notificação que chegam no celular das clientes.</p>
         </div>
         <div className="page-actions">
-          <button type="button" className="primary-btn notification-add-btn" aria-label="Nova lista" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>
+          <button type="button" className="primary-btn notification-add-btn" aria-label="Nova lista" onClick={() => { setError(""); setScheduleOpen(false); setForm(emptyNotificationList(todayIso())); }}>
             <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             <span className="btn-label">Nova lista</span>
           </button>
@@ -417,6 +481,7 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
                     onClick={() => {
                       setOpenMenuId("");
                       setError("");
+                      setScheduleOpen(false);
                       setForm({ ...emptyNotificationList(todayIso()), ...list, clientIds: list.clientIds || [], weekdays: list.weekdays || [] });
                     }}
                   >
@@ -435,7 +500,7 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
           </li>
         ))}
         <li className="notification-add-item">
-          <button type="button" className="notification-add" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>
+          <button type="button" className="notification-add" onClick={() => { setError(""); setScheduleOpen(false); setForm(emptyNotificationList(todayIso())); }}>
             <span aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
             </span>
@@ -444,20 +509,23 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
         </li>
       </ul>
 
-      {form ? (
-        <div className="client-modal-backdrop app-modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget && !busy && !repeatDraft) closeForm(); }}>
-          <section className="profile-modal" role="dialog" aria-modal="true" aria-label="Lista de notificação" onClick={(event) => event.stopPropagation()}>
+      {form ? createPortal(
+        <div className="client-modal-backdrop app-modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget && !busy) closeForm(); }}>
+          <section className="profile-modal notice-composer" role="dialog" aria-modal="true" aria-labelledby="notice-composer-title" onClick={(event) => event.stopPropagation()}>
             <header className="profile-modal-header">
               <div>
-                <h4>{form.id ? "Editar lista" : "Nova lista"}</h4>
+                <h4 id="notice-composer-title">{form.id ? "Editar lista" : "Nova lista"}</h4>
                 <p>Defina quando enviar, para quem e o que a cliente vai ler.</p>
               </div>
               <ModalClose onClick={closeForm} />
             </header>
-            <form className="form profile-modal-body" onSubmit={save}>
+            <form className="form notice-composer-form" onSubmit={save}>
+              <div className="notice-composer-layout">
+              <div className="notice-composer-fields">
               <label>
                 Nome da lista
                 <input value={form.name} onChange={(event) => update({ name: event.target.value })} maxLength={80} required />
+                <span className="notice-hint">Só você vê.</span>
               </label>
               <label>
                 Título da notificação
@@ -467,10 +535,13 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
                 Texto
                 <textarea value={form.body} onChange={(event) => update({ body: event.target.value })} maxLength={400} rows={4} required />
               </label>
-              <div className="notification-image-field">
-                <span>Imagem</span>
+              <div className="notice-image-row">
+                <div>
+                  <strong>Imagem</strong>
+                  <span>Opcional. Aparece na notificação expandida.</span>
+                </div>
                 <label className="secondary-btn notification-file-btn">
-                  Escolher imagem
+                  Escolher
                 <input
                   type="file"
                   accept="image/*"
@@ -496,59 +567,38 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
                   <button type="button" className="secondary-btn" onClick={() => update({ imageDataUrl: "" })}>Remover imagem</button>
                 </div>
               ) : null}
-              <fieldset className="notification-choice">
-                <legend>Frequência</legend>
-                <label>
-                  <input
-                    type="radio"
-                    name="frequency"
-                    checked={form.frequency === "once" && !repeatDraft}
-                    onChange={() => {
-                      setRepeatDraft(null);
-                      setRepeatError("");
-                      update({ frequency: "once" });
-                    }}
-                  />
-                  Uma vez
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="frequency"
-                    checked={form.frequency !== "once" || Boolean(repeatDraft)}
-                    onChange={openRepeat}
-                    onClick={() => {
-                      if (form.frequency !== "once") {
-                        openRepeat();
-                      }
-                    }}
-                  />
-                  Com repetições
-                </label>
-              </fieldset>
-              {form.frequency === "once" ? (
-                <div className="grid-form">
-                  <label>
-                    Data
-                    <input type="date" value={form.date} onChange={(event) => update({ date: event.target.value })} required />
-                  </label>
-                  <label>
-                    Horário
-                    <input type="time" value={form.time} onChange={(event) => update({ time: event.target.value })} required />
-                  </label>
+              <div className="notice-frequency">
+                <span className="notice-field-label" id="notice-frequency-label">Frequência</span>
+                <div className="segmented" role="tablist" aria-labelledby="notice-frequency-label">
+                  <button type="button" role="tab" aria-selected={form.frequency === "once"} className={form.frequency === "once" ? "is-selected" : ""} onClick={chooseOnce}>Uma vez</button>
+                  <button type="button" role="tab" aria-selected={form.frequency !== "once"} className={form.frequency !== "once" ? "is-selected" : ""} onClick={chooseRepeat}>Repetir</button>
                 </div>
-              ) : (
-                <div className="notification-repeat-summary">
-                  <p>{repeatSummary(form)}</p>
-                  <button type="button" className="secondary-btn" onClick={openRepeat}>Alterar frequência</button>
+                {form.frequency === "once" ? (
+                  <div className="grid-form">
+                    <label>
+                      Data
+                      <input type="date" value={form.date} onChange={(event) => update({ date: event.target.value })} required />
+                    </label>
+                    <label>
+                      Horário
+                      <input type="time" value={form.time} onChange={(event) => update({ time: event.target.value })} required />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="notice-schedule-line">
+                    <p>{schedulePhrase(form)}</p>
+                    <button type="button" className="notice-alter" onClick={openSchedule}>Alterar</button>
+                  </div>
+                )}
+              </div>
+              <div className="notice-frequency">
+                <span className="notice-field-label" id="notice-audience-label">Quem recebe</span>
+                <div className="segmented" role="tablist" aria-labelledby="notice-audience-label">
+                  <button type="button" role="tab" aria-selected={form.audience === "all"} className={form.audience === "all" ? "is-selected" : ""} onClick={() => update({ audience: "all", clientIds: [] })}>Todas</button>
+                  <button type="button" role="tab" aria-selected={form.audience === "except"} className={form.audience === "except" ? "is-selected" : ""} onClick={() => update({ audience: "except" })}>Exceto</button>
+                  <button type="button" role="tab" aria-selected={form.audience === "only"} className={form.audience === "only" ? "is-selected" : ""} onClick={() => update({ audience: "only" })}>Somente</button>
                 </div>
-              )}
-              <fieldset className="notification-choice">
-                <legend>Quem recebe</legend>
-                <label><input type="radio" name="audience" checked={form.audience === "all"} onChange={() => update({ audience: "all", clientIds: [] })} /> Todas</label>
-                <label><input type="radio" name="audience" checked={form.audience === "except"} onChange={() => update({ audience: "except" })} /> Todas, exceto</label>
-                <label><input type="radio" name="audience" checked={form.audience === "only"} onChange={() => update({ audience: "only" })} /> Somente estas</label>
-              </fieldset>
+              </div>
               {form.audience !== "all" ? (
                 <div className="audience-picker">
                   {clients.length === 0 ? <p className="muted-text">Nenhuma cliente cadastrada.</p> : null}
@@ -560,80 +610,100 @@ export default function NotificationLists({ uid, clients, shareLinks, onSummaryC
                   ))}
                 </div>
               ) : null}
+              <p className="notice-count">{recipientCount(form, clients) === 1 ? "1 cliente recebe" : `${recipientCount(form, clients)} clientes recebem`}</p>
+              </div>
+              <aside className="notice-preview" aria-label="Prévia">
+                <p className="notice-preview-kicker">Prévia</p>
+                <div className="notice-phone">
+                  <strong className="notice-phone-clock">{form.time || "--:--"}</strong>
+                  <article className="notice-phone-card">
+                    <span className="notice-phone-mark" aria-hidden="true">{(clinicName || "C").trim().charAt(0).toUpperCase()}</span>
+                    <div>
+                      <p>{clinicName || "Clínica Estética"} · agora</p>
+                      <strong>{form.title.trim() || "Título da notificação"}</strong>
+                      <span>{form.body.trim() || "O texto da notificação aparece aqui."}</span>
+                    </div>
+                  </article>
+                </div>
+              </aside>
+              </div>
               {error ? <p className="error-text">{error}</p> : null}
-              <button className="primary-btn" type="submit" disabled={busy}>{busy ? "Salvando..." : "Salvar lista"}</button>
+              <footer className="notice-composer-footer">
+                <button type="button" className="secondary-btn" onClick={closeForm} disabled={busy}>Cancelar</button>
+                <button className="primary-btn" type="submit" disabled={busy}>{busy ? "Salvando..." : "Salvar lista"}</button>
+              </footer>
             </form>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
-      {repeatDraft ? (
+
+      {scheduleOpen && scheduleDraft ? createPortal(
         <div
           className="client-modal-backdrop app-modal-backdrop notification-repeat-backdrop"
           onPointerDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setRepeatDraft(null);
-              setRepeatError("");
-            }
+            if (event.target === event.currentTarget) cancelSchedule();
           }}
         >
           <section
-            className="profile-modal"
+            className="app-modal frequency-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Frequência"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-modal-header">
+            <header className="app-modal-header">
               <div>
-                <h4>Frequência</h4>
+                <h2>Frequência</h2>
                 <p>Escolha como a notificação se repete.</p>
               </div>
-              <ModalClose onClick={() => { setRepeatDraft(null); setRepeatError(""); }} />
+              <ModalClose onClick={cancelSchedule} />
             </header>
-            <div className="form">
-              <label>
-                Repetição
-                <select value={repeatDraft.frequency} onChange={(event) => updateRepeat({ frequency: event.target.value })}>
-                  <option value="daily">Todo dia</option>
-                  <option value="weekly">Toda semana</option>
-                  <option value="monthly">Todo mês</option>
-                </select>
-              </label>
-              <div className="grid-form">
-                <label>
-                  Começa em
-                  <input type="date" value={repeatDraft.date} onChange={(event) => updateRepeat({ date: event.target.value })} required />
-                </label>
-                <label>
-                  Horário
-                  <input type="time" value={repeatDraft.time} onChange={(event) => updateRepeat({ time: event.target.value })} required />
-                </label>
+            <div className="app-modal-body">
+              <div className="segmented" role="tablist" aria-label="Repetição">
+                <button type="button" role="tab" aria-selected={scheduleDraft.frequency === "daily"} className={scheduleDraft.frequency === "daily" ? "is-selected" : ""} onClick={() => setDraftFrequency("daily")}>Todo dia</button>
+                <button type="button" role="tab" aria-selected={scheduleDraft.frequency === "weekly"} className={scheduleDraft.frequency === "weekly" ? "is-selected" : ""} onClick={() => setDraftFrequency("weekly")}>Toda semana</button>
+                <button type="button" role="tab" aria-selected={scheduleDraft.frequency === "monthly"} className={scheduleDraft.frequency === "monthly" ? "is-selected" : ""} onClick={() => setDraftFrequency("monthly")}>Todo mês</button>
               </div>
-              {repeatDraft.frequency === "weekly" ? (
-                <div className="weekday-picker">
-                  {WEEKDAYS.map(([day, label]) => (
-                    <label key={day}>
-                      <input type="checkbox" checked={(repeatDraft.weekdays || []).map(Number).includes(day)} onChange={() => toggleDraftWeekday(day)} />
-                      {label}
-                    </label>
-                  ))}
+              {scheduleDraft.frequency === "weekly" ? (
+                <div className="frequency-days">
+                  <span id="frequency-days-label">Dias da semana</span>
+                  <div className="frequency-day-row" role="radiogroup" aria-labelledby="frequency-days-label">
+                    {WEEKDAY_LETTER.map((letter, day) => (
+                      <button
+                        key={WEEKDAY_FULL[day]}
+                        type="button"
+                        role="radio"
+                        aria-checked={scheduleDraft.weekdays[0] === day}
+                        aria-label={WEEKDAY_FULL[day]}
+                        className={scheduleDraft.weekdays[0] === day ? "frequency-day is-selected" : "frequency-day"}
+                        onClick={() => setScheduleDraft((current) => ({ ...current, weekdays: [day] }))}
+                      >
+                        {letter}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : null}
-              {repeatDraft.frequency === "monthly" ? (
+              <div className="frequency-when">
                 <label>
-                  Dia do mês
-                  <input type="number" min="1" max="28" value={repeatDraft.monthDay} onChange={(event) => updateRepeat({ monthDay: Number(event.target.value) })} />
+                  Horário
+                  <input type="time" value={scheduleDraft.time} onChange={(event) => setScheduleDraft((current) => ({ ...current, time: event.target.value }))} />
                 </label>
-              ) : null}
-              <label>
-                Termina em
-                <input type="date" value={repeatDraft.until} onChange={(event) => updateRepeat({ until: event.target.value })} />
-              </label>
-              {repeatError ? <p className="error-text">{repeatError}</p> : null}
-              <button type="button" className="primary-btn" onClick={confirmRepeat}>Concluir</button>
+                <label>
+                  Começa em
+                  <input type="date" value={scheduleDraft.date} onChange={(event) => setScheduleDraft((current) => ({ ...current, date: event.target.value }))} />
+                </label>
+              </div>
+              <p className="frequency-resume"><strong>Resumo:</strong> {frequencyResume(scheduleDraft)}</p>
             </div>
+            <footer className="app-modal-footer">
+              <button type="button" className="secondary-btn" onClick={cancelSchedule}>Cancelar</button>
+              <button type="button" className="primary-btn" onClick={confirmSchedule}>Concluir</button>
+            </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </section>
   );
