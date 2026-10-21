@@ -86,8 +86,13 @@ function readImage(file) {
   });
 }
 
-export default function NotificationLists({ uid, clients, shareLinks }) {
+export default function NotificationLists({ uid, clients, shareLinks, onSummaryChange }) {
   const [lists, setLists] = useState([]);
+
+  useEffect(() => {
+    const paused = lists.filter((list) => list.active === false).length;
+    onSummaryChange?.({ active: lists.length - paused, paused });
+  }, [lists, onSummaryChange]);
   const [form, setForm] = useState(null);
   const [repeatDraft, setRepeatDraft] = useState(null);
   const [repeatError, setRepeatError] = useState("");
@@ -344,20 +349,34 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
   };
 
   return (
-    <section className="card notification-lists">
-      <div className="notification-heading">
+    <section className="notification-lists">
+      <header className="page-header">
         <div>
-          <h3>Listas de notificação</h3>
-          <p className="muted-text">
-            Escolha a frequência, quem recebe e o conteúdo. Na hora marcada, o aviso chega na área de notificações do celular, mesmo com o aplicativo fechado. A cliente precisa abrir o link uma vez e permitir as notificações. Pode levar alguns minutos depois do horário.
-          </p>
+          <h1>Avisos</h1>
+          <p>Listas de notificação que chegam no celular das clientes.</p>
         </div>
-        <button type="button" className="primary-btn" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>
-          Nova lista
-        </button>
+        <div className="page-actions">
+          <button type="button" className="primary-btn notification-add-btn" aria-label="Nova lista" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>
+            <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            <span className="btn-label">Nova lista</span>
+          </button>
+        </div>
+      </header>
+      <div className="info-callout">
+        <span className="info-callout-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5M12 8h.01" /></svg>
+        </span>
+        <p>
+          <span className="info-callout-long">
+            <strong>Como funciona:</strong> na hora marcada, o aviso chega na área de notificações do celular, mesmo com o aplicativo fechado. A cliente precisa abrir o link uma vez e permitir as notificações. Pode levar alguns minutos depois do horário.
+          </span>
+          <span className="info-callout-short">
+            O aviso chega no celular mesmo com o app fechado. A cliente precisa abrir o link uma vez e permitir as notificações.
+          </span>
+        </p>
       </div>
-      <ul className="list">
-        {lists.length === 0 ? <li className="empty">Nenhuma lista criada.</li> : null}
+      <ul className="notification-grid">
+        {lists.length === 0 ? <li className="notification-empty">Nenhuma lista criada.</li> : null}
         {lists.map((list) => (
           <li
             key={list.id}
@@ -370,10 +389,10 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
             <div className="notification-card-copy">
               <div className="notification-card-title">
                 <strong>{list.name}</strong>
-                {list.active === false ? <span className="notification-status">Pausada</span> : null}
+                <span className={list.active === false ? "notification-status" : "notification-status is-active"}>{list.active === false ? "Pausada" : "Ativa"}</span>
               </div>
-              <p>{frequencyLabel(list)}</p>
-              <p>{audienceLabel(list, clients)}</p>
+              <p className="notification-meta is-frequency">{frequencyLabel(list)}</p>
+              <p className="notification-meta is-audience">{audienceLabel(list, clients)}</p>
             </div>
             <div className="notification-card-menu" ref={openMenuId === list.id ? menuRef : null}>
               <button
@@ -415,10 +434,18 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
             </div>
           </li>
         ))}
+        <li className="notification-add-item">
+          <button type="button" className="notification-add" onClick={() => { setError(""); setForm(emptyNotificationList(todayIso())); }}>
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+            </span>
+            Criar nova lista
+          </button>
+        </li>
       </ul>
 
       {form ? (
-        <div className="client-modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget && !busy && !repeatDraft) closeForm(); }}>
+        <div className="client-modal-backdrop app-modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget && !busy && !repeatDraft) closeForm(); }}>
           <section className="profile-modal" role="dialog" aria-modal="true" aria-label="Lista de notificação" onClick={(event) => event.stopPropagation()}>
             <header className="profile-modal-header">
               <div>
@@ -541,7 +568,7 @@ export default function NotificationLists({ uid, clients, shareLinks }) {
       ) : null}
       {repeatDraft ? (
         <div
-          className="client-modal-backdrop notification-repeat-backdrop"
+          className="client-modal-backdrop app-modal-backdrop notification-repeat-backdrop"
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) {
               setRepeatDraft(null);

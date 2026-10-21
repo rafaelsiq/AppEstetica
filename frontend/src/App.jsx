@@ -143,6 +143,15 @@ const LATERALITY_OPTIONS = [
   { value: "both", label: "Ambos", short: "A" }
 ];
 
+const CLIENT_SORT_OPTIONS = [
+  { value: "name_asc", label: "Nome (A–Z)" },
+  { value: "name_desc", label: "Nome (Z–A)" },
+  { value: "last_appointment_desc", label: "Último atendimento (mais recente)" },
+  { value: "last_appointment_asc", label: "Último atendimento (mais antigo)" },
+  { value: "updated_desc", label: "Atualização mais recente" },
+  { value: "updated_asc", label: "Atualização mais antiga" }
+];
+
 const SEX_OPTIONS = [
   { value: "", label: "Selecionar" },
   { value: "female", label: "Feminino" },
@@ -256,6 +265,97 @@ function BookingBadge({ status }) {
     return null;
   }
   return <span className={`booking-badge is-${status}`}>{label}</span>;
+}
+
+const NAV_ITEMS = [
+  { tab: TABS.INICIO, label: "Início" },
+  { tab: TABS.AGENDA, label: "Agenda" },
+  { tab: TABS.CLIENTES, label: "Clientes" },
+  { tab: TABS.SERVICOS, label: "Serviços" },
+  { tab: TABS.AVISOS, label: "Avisos" }
+];
+
+function NavIcon({ tab }) {
+  if (tab === TABS.AGENDA) {
+    return (
+      <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="4" y="5" width="16" height="15" rx="2" />
+        <path d="M8 3.5v3M16 3.5v3M4 9.5h16" />
+      </svg>
+    );
+  }
+  if (tab === TABS.CLIENTES) {
+    return (
+      <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="9" cy="9" r="3.2" />
+        <path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5" />
+        <circle cx="17" cy="9.5" r="2.4" />
+        <path d="M16 14.6c2.3 0 4 1.3 4.6 3.9" />
+      </svg>
+    );
+  }
+  if (tab === TABS.SERVICOS) {
+    return (
+      <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3.5l1.8 4.7 4.7 1.8-4.7 1.8L12 16.5l-1.8-4.7L5.5 10l4.7-1.8z" />
+        <path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
+      </svg>
+    );
+  }
+  if (tab === TABS.AVISOS) {
+    return (
+      <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 9.5a6 6 0 1 1 12 0c0 4 1.5 5.2 1.5 5.2H4.5S6 13.5 6 9.5Z" />
+        <path d="M10 18.5a2 2 0 0 0 4 0" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M7 10.5V20h10v-9.5" />
+    </svg>
+  );
+}
+
+function nameInitials(name) {
+  return String(name || "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function appointmentStatusInfo(appointment) {
+  if (appointment?.status === "pendente") {
+    return { label: "Aguardando aprovação", tone: "waiting" };
+  }
+  if (appointment?.status === "remarcacao") {
+    return { label: "Aguardando confirmação", tone: "waiting" };
+  }
+  if (appointment?.status === "recusado") {
+    return { label: "Recusado", tone: "refused" };
+  }
+  return { label: "Confirmado", tone: "confirmed" };
+}
+
+function AppointmentStatusTag({ appointment }) {
+  const { label, tone } = appointmentStatusInfo(appointment);
+  return <span className={`status-tag is-${tone}`}>{label}</span>;
+}
+
+function shortClientName(name) {
+  const parts = String(name || "").split(" ").filter(Boolean);
+  if (parts.length < 2) {
+    return parts[0] || "";
+  }
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
+
+function formatBRL(value) {
+  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function sortAppointments(items) {
@@ -2232,6 +2332,9 @@ export default function App() {
   const [clientFormMessage, setClientFormMessage] = useState("");
   const [serviceTitle, setServiceTitle] = useState("");
   const [servicePrice, setServicePrice] = useState("");
+  const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
+  const [noticeSummary, setNoticeSummary] = useState(null);
+  const [openServiceMenuId, setOpenServiceMenuId] = useState("");
   const [appointmentClient, setAppointmentClient] = useState("");
   const [isAppointmentClientListOpen, setIsAppointmentClientListOpen] = useState(false);
   const [isCreatingAppointmentClient, setIsCreatingAppointmentClient] = useState(false);
@@ -2284,6 +2387,7 @@ export default function App() {
   const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [clientSexFilter, setClientSexFilter] = useState("all");
   const [clientSortMode, setClientSortMode] = useState("name_asc");
+  const [isClientSortMenuOpen, setIsClientSortMenuOpen] = useState(false);
   const [anamneseForm, setAnamneseForm] = useState(buildEmptyAnamnese());
   const [anamneseSnapshot, setAnamneseSnapshot] = useState(buildEmptyAnamnese());
   const [isEditingAnamnese, setIsEditingAnamnese] = useState(false);
@@ -4548,6 +4652,70 @@ export default function App() {
   const greetingName = currentUserDisplayName.split(" ")[0] || currentUserDisplayName;
   const dayPeriod = new Date().getHours();
   const greetingLabel = dayPeriod < 12 ? "Bom dia" : dayPeriod < 18 ? "Boa tarde" : "Boa noite";
+  const userInitials = nameInitials(currentUserDisplayName) || "?";
+  const handleStartNewSession = () => {
+    setSelectedClientView(CLIENT_VIEWS.FOLLOWUP);
+    setIsRecordMenuOpen(false);
+    setCheckpointForm({
+      ...buildEmptyCheckpoint(),
+      sessionNumber: String(getNextSessionNumber(checkpoints))
+    });
+    setDraftPhotos([]);
+    setPhotoForm(buildEmptyPhotoAnalysis());
+    setPhotoMessage("");
+    setIsPhotoComposerOpen(false);
+    setFollowupScreen("create");
+  };
+  const topbarMobileSubtitle =
+    activeTab === TABS.CLIENTES
+      ? `${clients.length} cadastrada${clients.length === 1 ? "" : "s"}`
+      : activeTab === TABS.SERVICOS
+        ? `${services.length} no catálogo`
+        : activeTab === TABS.AVISOS && noticeSummary
+          ? noticeSummary.active + noticeSummary.paused === 0
+            ? "Nenhuma lista criada"
+            : `${noticeSummary.active} ativa${noticeSummary.active === 1 ? "" : "s"}, ${noticeSummary.paused} pausada${
+                noticeSummary.paused === 1 ? "" : "s"
+              }`
+          : "";
+  const todayWeekdayLabel = new Date().toLocaleDateString("pt-BR", { weekday: "long" }).replace("-feira", "");
+  const todayDateLabel = `${todayWeekdayLabel.charAt(0).toUpperCase()}${todayWeekdayLabel.slice(1)}, ${new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}`;
+  const servicePriceByTitle = new Map(services.map((service) => [service.title, Number(service.price || 0)]));
+  const todayActive = todayAppointments.filter((appointment) => appointment.status !== "recusado");
+  const todayTotal = todayActive.reduce((sum, appointment) => sum + (servicePriceByTitle.get(appointment.service) || 0), 0);
+  const nowTime = `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`;
+  const nextToday = sortAppointments(todayActive).find((appointment) => appointment.time && appointment.time >= nowTime) || null;
+  const weekStart = parseIsoDate(todayIsoDate);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const weekStartIso = toIsoDate(weekStart);
+  const weekEndIso = toIsoDate(weekEnd);
+  const weekAppointmentsCount = appointments.filter((appointment) => {
+    const date = appointmentAgendaDate(appointment);
+    return appointment.status !== "recusado" && date >= weekStartIso && date <= weekEndIso;
+  }).length;
+  const appointmentsByDate = new Map();
+  sortAppointments(appointments).forEach((appointment) => {
+    const date = appointmentAgendaDate(appointment);
+    if (!date || appointment.status === "recusado") {
+      return;
+    }
+    appointmentsByDate.set(date, [...(appointmentsByDate.get(date) || []), appointment]);
+  });
+  const visibleMonthPrefix = `${agendaVisibleMonth.getFullYear()}-${String(agendaVisibleMonth.getMonth() + 1).padStart(2, "0")}-`;
+  const monthAppointmentsCount = appointments.filter(
+    (appointment) => appointment.status !== "recusado" && String(appointmentAgendaDate(appointment) || "").startsWith(visibleMonthPrefix)
+  ).length;
+  const selectedDayActive = selectedDayAppointments.filter((appointment) => appointment.status !== "recusado");
+  const selectedDayTotal = selectedDayActive.reduce(
+    (sum, appointment) => sum + (servicePriceByTitle.get(appointment.service) || 0),
+    0
+  );
+  const homeSummary =
+    todayActive.length === 0
+      ? "Nenhum atendimento marcado para hoje."
+      : `Você tem ${todayActive.length} atendimento${todayActive.length > 1 ? "s" : ""} hoje.${nextToday ? ` O próximo começa às ${nextToday.time}.` : ""}`;
   const activeTabLabel =
     activeTab === TABS.AGENDA
       ? "Agenda"
@@ -4565,64 +4733,98 @@ export default function App() {
 
   if (!user) {
     return (
-      <main className="page auth-page">
-        <section className="card auth-card">
-          <h1>Gestão da Clínica</h1>
-          <p className="subtitle">Acesse para gerenciar agenda, clientes e serviços.</p>
-
-          <div className="auth-switch">
-            <button
-              type="button"
-              className={authMode === "login" ? "active" : ""}
-              onClick={() => setAuthMode("login")}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              className={authMode === "register" ? "active" : ""}
-              onClick={() => setAuthMode("register")}
-            >
-              Cadastro
-            </button>
+      <main className="auth-page auth-split">
+        <section className="auth-brand-panel">
+          <div className="auth-brand">
+            <span className="app-brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14z" />
+                <path d="M5 19 13 11" />
+              </svg>
+            </span>
+            <span>Gestão da Clínica</span>
           </div>
+          <div className="auth-pitch">
+            <h2>A rotina da sua clínica em um só lugar.</h2>
+            <p>Agenda, fichas de anamnese, evolução das clientes e avisos no celular.</p>
+          </div>
+          <ul className="auth-features">
+            <li>
+              <strong>Agenda</strong>
+              <span>Mês e dia</span>
+            </li>
+            <li>
+              <strong>Fichas</strong>
+              <span>Anamnese e evolução</span>
+            </li>
+            <li>
+              <strong>Avisos</strong>
+              <span>Notificações no celular</span>
+            </li>
+          </ul>
+        </section>
 
-          <form className="form" onSubmit={handleAuthSubmit}>
-            <label>
-              E-mail
-              <input
-                type="email"
-                value={authEmail}
-                onChange={(event) => setAuthEmail(event.target.value)}
-                placeholder="voce@clinica.com"
-                required
-              />
-            </label>
-            <label>
-              Senha
-              <input
-                type="password"
-                value={authPassword}
-                onChange={(event) => setAuthPassword(event.target.value)}
-                placeholder="********"
-                minLength={6}
-                required
-              />
-            </label>
+        <section className="auth-form-panel">
+          <div className="auth-card">
+            <h1>{authMode === "login" ? "Entrar" : "Criar conta"}</h1>
+            <p className="subtitle">Acesse para gerenciar agenda, clientes e serviços.</p>
 
-            {authError ? <p className="error-text">{authError}</p> : null}
+            <div className="auth-switch">
+              <button
+                type="button"
+                className={authMode === "login" ? "active" : ""}
+                onClick={() => setAuthMode("login")}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                className={authMode === "register" ? "active" : ""}
+                onClick={() => setAuthMode("register")}
+              >
+                Cadastro
+              </button>
+            </div>
 
-            <button className="primary-btn" type="submit">
-              {authMode === "login" ? "Entrar" : "Criar conta"}
-            </button>
-          </form>
+            <form className="form" onSubmit={handleAuthSubmit}>
+              <label>
+                E-mail
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(event) => setAuthEmail(event.target.value)}
+                  placeholder="voce@clinica.com"
+                  autoComplete="email"
+                  required
+                />
+              </label>
+              <label>
+                Senha
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(event) => setAuthPassword(event.target.value)}
+                  placeholder="Mínimo de 6 caracteres"
+                  autoComplete={authMode === "login" ? "current-password" : "new-password"}
+                  minLength={6}
+                  required
+                />
+              </label>
+
+              {authError ? <p className="error-text">{authError}</p> : null}
+
+              <button className="primary-btn" type="submit">
+                {authMode === "login" ? "Entrar" : "Criar conta"}
+              </button>
+            </form>
+          </div>
         </section>
       </main>
     );
   }
 
   return (
-    <main className="page app-page">
+    <main className="page app-page app-shell">
       <ClinicNoticeRunner
         uid={user.uid}
         tokens={shareLinks
@@ -4641,11 +4843,60 @@ export default function App() {
         />
       ) : null}
 
+      <aside className="app-sidebar">
+        <div className="app-brand">
+          {String(userProfile?.logoDataUrl || "").startsWith("data:image/") ? (
+            <img className="app-brand-logo" src={userProfile.logoDataUrl} alt="" />
+          ) : (
+            <span className="app-brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14z" />
+                <path d="M5 19 13 11" />
+              </svg>
+            </span>
+          )}
+          <div>
+            <strong>{currentClinicName}</strong>
+            <span>Gestão</span>
+          </div>
+        </div>
+        <nav className="app-nav" aria-label="Menu principal">
+          <span className="app-nav-label">Menu</span>
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={`side-${item.tab}`}
+              type="button"
+              className={activeTab === item.tab ? "active" : ""}
+              aria-current={activeTab === item.tab ? "page" : undefined}
+              onClick={() => setActiveTab(item.tab)}
+            >
+              <NavIcon tab={item.tab} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="app-sidebar-footer">
+          <button type="button" className="app-profile" onClick={handleOpenProfileModal}>
+            <span className="app-avatar" aria-hidden="true">{userInitials}</span>
+            <span className="app-profile-text">
+              <strong>{greetingName}</strong>
+              <span>Meu cadastro</span>
+            </span>
+          </button>
+          <button type="button" className="app-signout" aria-label="Sair" onClick={() => signOut(auth)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
+              <path d="M10 16l-4-4 4-4M6 12h10" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
       <header className="topbar">
         <div className="topbar-row">
           <button
             type="button"
-            className="topbar-icon-btn"
+            className="topbar-icon-btn topbar-menu-btn"
             aria-label="Abrir menu"
             aria-expanded={isHeaderMenuOpen}
             onClick={() => {
@@ -4660,7 +4911,11 @@ export default function App() {
               <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6" />
             </svg>
           </button>
-          <h2>{activeTabLabel}</h2>
+          <div className="topbar-title">
+            <span className={topbarMobileSubtitle ? "topbar-date has-mobile-subtitle" : "topbar-date"}>{todayDateLabel}</span>
+            {topbarMobileSubtitle ? <span className="topbar-subtitle">{topbarMobileSubtitle}</span> : null}
+            <h2>{activeTab === TABS.INICIO ? `${greetingLabel}, ${greetingName}` : activeTabLabel}</h2>
+          </div>
           <button
             type="button"
             className="topbar-icon-btn"
@@ -4730,250 +4985,253 @@ export default function App() {
             )}
           </div>
         ) : null}
-
-        <div className="topbar-greeting">
-          <h3>Olá, {greetingName}!</h3>
-          <p>{greetingLabel}</p>
-        </div>
       </header>
 
-      <nav className="tabs" aria-label="Seções">
-        <button
-          type="button"
-          className={activeTab === TABS.INICIO ? "active" : ""}
-          onClick={() => setActiveTab(TABS.INICIO)}
-        >
-          Início
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.AGENDA ? "active" : ""}
-          onClick={() => setActiveTab(TABS.AGENDA)}
-        >
-          Agenda
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.CLIENTES ? "active" : ""}
-          onClick={() => setActiveTab(TABS.CLIENTES)}
-        >
-          Clientes
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.SERVICOS ? "active" : ""}
-          onClick={() => setActiveTab(TABS.SERVICOS)}
-        >
-          Serviços
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.AVISOS ? "active" : ""}
-          onClick={() => setActiveTab(TABS.AVISOS)}
-        >
-          Avisos
-        </button>
-      </nav>
-
       <nav className="bottom-nav" aria-label="Menu principal">
-        <button
-          type="button"
-          className={activeTab === TABS.INICIO ? "active" : ""}
-          onClick={() => setActiveTab(TABS.INICIO)}
-        >
-          <span className="bottom-nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M4 11.5 12 4l8 7.5" />
-              <path d="M7 10.5V20h10v-9.5" />
-            </svg>
-          </span>
-          <span>Início</span>
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.AGENDA ? "active" : ""}
-          onClick={() => setActiveTab(TABS.AGENDA)}
-        >
-          <span className="bottom-nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <rect x="4" y="5" width="16" height="15" rx="2" />
-              <path d="M8 3.5v3M16 3.5v3M4 9.5h16" />
-            </svg>
-          </span>
-          <span>Agenda</span>
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.CLIENTES ? "active" : ""}
-          onClick={() => setActiveTab(TABS.CLIENTES)}
-        >
-          <span className="bottom-nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle cx="9" cy="9" r="3" />
-              <path d="M4.5 18.5c.6-2.4 2.4-3.5 4.5-3.5s3.9 1.1 4.5 3.5" />
-              <circle cx="16.5" cy="9.5" r="2.2" />
-              <path d="M15.2 15.2c1.6.2 2.9 1 3.5 3" />
-            </svg>
-          </span>
-          <span>Clientes</span>
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.SERVICOS ? "active" : ""}
-          onClick={() => setActiveTab(TABS.SERVICOS)}
-        >
-          <span className="bottom-nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
-              <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
-              <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
-              <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
-            </svg>
-          </span>
-          <span>Serviços</span>
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.AVISOS ? "active" : ""}
-          onClick={() => setActiveTab(TABS.AVISOS)}
-        >
-          <span className="bottom-nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M6 16h12l-1.2-2.2V10a4.8 4.8 0 0 0-9.6 0v3.8L6 16z" />
-              <path d="M10 16.5a2 2 0 0 0 4 0" />
-            </svg>
-          </span>
-          <span>Avisos</span>
-        </button>
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={`bottom-${item.tab}`}
+            type="button"
+            className={activeTab === item.tab ? "active" : ""}
+            aria-current={activeTab === item.tab ? "page" : undefined}
+            onClick={() => setActiveTab(item.tab)}
+          >
+            <span className="bottom-nav-icon" aria-hidden="true">
+              <NavIcon tab={item.tab} />
+            </span>
+            <span>{item.label}</span>
+          </button>
+        ))}
       </nav>
 
       {activeTab === TABS.INICIO ? (
         <section className="home-page">
-          <article className="home-hero">
-            <h3>Resumo de hoje</h3>
-            <p>
-              {todayAppointments.length === 0
-                ? "Nenhum horário marcado para hoje."
-                : `${todayAppointments.length} horário${todayAppointments.length > 1 ? "s" : ""} na agenda de hoje.`}
-            </p>
-            <button className="primary-btn" type="button" onClick={() => setActiveTab(TABS.AGENDA)}>
-              Abrir agenda
-            </button>
-          </article>
+          <header className="page-header home-header">
+            <div>
+              <h1>
+                {greetingLabel}, {greetingName}
+              </h1>
+              <p>{homeSummary}</p>
+            </div>
+            <div className="page-actions">
+              <button className="secondary-btn" type="button" onClick={handleFirstContactLink} disabled={firstContactBusy}>
+                <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+                  <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+                </svg>
+                {firstContactBusy
+                  ? "Gerando link..."
+                  : firstContactLink
+                    ? "Copiar link de primeiro atendimento"
+                    : "Link de primeiro atendimento"}
+              </button>
+              <button className="primary-btn" type="button" onClick={openAppointmentModal}>
+                <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Novo atendimento
+              </button>
+            </div>
+          </header>
+          {agendaNotice ? <p className="muted-text home-notice">{agendaNotice}</p> : null}
 
           <div className="home-stats">
             <button type="button" onClick={() => setActiveTab(TABS.AGENDA)}>
-              <strong>{todayAppointments.length}</strong>
-              <span>Hoje</span>
+              <span>Atendimentos hoje</span>
+              <strong>{todayActive.length}</strong>
+              <small>{nextToday ? `Próximo às ${nextToday.time}` : "Nenhum próximo hoje"}</small>
+            </button>
+            <button type="button" onClick={() => setActiveTab(TABS.AGENDA)}>
+              <span>Esta semana</span>
+              <strong>{weekAppointmentsCount}</strong>
+              <small>Atendimentos marcados</small>
             </button>
             <button type="button" onClick={() => setActiveTab(TABS.CLIENTES)}>
-              <strong>{clients.length}</strong>
               <span>Clientes</span>
+              <strong>{clients.length}</strong>
+              <small>Cadastradas</small>
             </button>
             <button type="button" onClick={() => setActiveTab(TABS.SERVICOS)}>
-              <strong>{services.length}</strong>
               <span>Serviços</span>
+              <strong>{services.length}</strong>
+              <small>No catálogo</small>
             </button>
           </div>
 
-          <article className="card">
-            <div className="section-header">
-              <h3>Agenda de hoje</h3>
-              <button className="secondary-btn" type="button" onClick={() => setActiveTab(TABS.AGENDA)}>
-                Ver tudo
+          <article className="card home-agenda">
+            <div className="home-card-header">
+              <h2>Agenda de hoje</h2>
+              <button className="link-btn" type="button" onClick={() => setActiveTab(TABS.AGENDA)}>
+                Ver agenda completa
               </button>
             </div>
-            <ul className="list">
-              {todayAppointments.length === 0 ? (
-                <li className="empty">Nada marcado para hoje.</li>
-              ) : (
-                todayAppointments.map((appointment) => (
+            {todayAppointments.length === 0 ? (
+              <p className="home-empty">Nada marcado para hoje.</p>
+            ) : (
+              <ul className="home-agenda-list">
+                {sortAppointments(todayAppointments).map((appointment) => (
                   <li key={`home-${appointment.id}`} className={appointment.status === "recusado" ? "is-muted" : ""}>
-                    <div>
-                      <strong>
-                        {(appointment.time || (appointment.period ? periodLabel(appointment.period) : "--:--"))} · {appointment.client}
-                      </strong>
-                      {appointment.requestId ? <BookingBadge status={appointment.status} /> : null}
-                      <p>{appointment.service}</p>
-                      {appointment.notes ? <p>{appointment.notes}</p> : null}
-                    </div>
-                    {appointment.requestId ? (
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={() => {
-                          setAgendaSelectedDate(appointmentAgendaDate(appointment));
-                          setActiveTab(TABS.AGENDA);
-                          openBookingReview(appointment);
-                        }}
-                      >
-                        Ver pedido
-                      </button>
-                    ) : null}
+                    <span className="home-agenda-time">
+                      {appointment.time || (appointment.period ? periodLabel(appointment.period) : "--:--")}
+                    </span>
+                    <span className="home-agenda-client">
+                      <span className="app-avatar is-soft" aria-hidden="true">
+                        {nameInitials(appointment.client)}
+                      </span>
+                      <span>
+                        <strong>{appointment.client}</strong>
+                        <span>{appointment.service}</span>
+                        {appointment.notes ? <span>{appointment.notes}</span> : null}
+                      </span>
+                    </span>
+                    <span className="home-agenda-price">
+                      {servicePriceByTitle.get(appointment.service) ? formatBRL(servicePriceByTitle.get(appointment.service)) : ""}
+                    </span>
+                    <span className="home-agenda-status">
+                      <AppointmentStatusTag appointment={appointment} />
+                      {appointment.requestId ? (
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          onClick={() => {
+                            setAgendaSelectedDate(appointmentAgendaDate(appointment));
+                            setActiveTab(TABS.AGENDA);
+                            openBookingReview(appointment);
+                          }}
+                        >
+                          Ver pedido
+                        </button>
+                      ) : null}
+                    </span>
                   </li>
-                ))
-              )}
-            </ul>
+                ))}
+              </ul>
+            )}
           </article>
+
+          <article className="home-today">
+            <span>Previsto para hoje</span>
+            <strong>{formatBRL(todayTotal)}</strong>
+            <small>
+              {todayActive.length === 0
+                ? "Nenhum atendimento marcado"
+                : `Soma dos ${todayActive.length} atendimento${todayActive.length > 1 ? "s" : ""} de hoje`}
+            </small>
+          </article>
+
+          <article className="card home-shortcuts">
+            <h2>Atalhos</h2>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab(TABS.CLIENTES);
+                handleStartCreateClient();
+              }}
+            >
+              <span className="home-shortcut-icon" aria-hidden="true">
+                <NavIcon tab={TABS.CLIENTES} />
+              </span>
+              Nova cliente
+            </button>
+            <button type="button" onClick={() => setActiveTab(TABS.SERVICOS)}>
+              <span className="home-shortcut-icon" aria-hidden="true">
+                <NavIcon tab={TABS.SERVICOS} />
+              </span>
+              Novo serviço
+            </button>
+            <button type="button" onClick={() => setActiveTab(TABS.AVISOS)}>
+              <span className="home-shortcut-icon" aria-hidden="true">
+                <NavIcon tab={TABS.AVISOS} />
+              </span>
+              Nova lista de avisos
+            </button>
+          </article>
+
+          <button className="primary-btn home-mobile-cta" type="button" onClick={openAppointmentModal}>
+            Novo atendimento
+          </button>
         </section>
       ) : null}
 
       {activeTab === TABS.AGENDA ? (
-        <section className="agenda-page">
-          <div className="agenda-toolbar">
-            <div className="agenda-switch" role="tablist" aria-label="Visualização da agenda">
-              <button
-                type="button"
-                className={agendaMode === "month" ? "active" : ""}
-                onClick={() => setAgendaMode("month")}
-              >
-                Mês
-              </button>
-              <button
-                type="button"
-                className={agendaMode === "day" ? "active" : ""}
-                onClick={() => setAgendaMode("day")}
-              >
-                Dia
-              </button>
+        <section className={agendaMode === "month" ? "agenda-page" : "agenda-page is-day"}>
+          <header className="page-header agenda-header">
+            <div>
+              <h1>Agenda</h1>
+              <p>
+                {agendaMode === "month"
+                  ? `${monthAppointmentsCount} atendimento${monthAppointmentsCount === 1 ? "" : "s"} em ${visibleMonthLabel}`
+                  : `${selectedDayActive.length} atendimento${selectedDayActive.length === 1 ? "" : "s"} neste dia`}
+              </p>
             </div>
-            <div className="agenda-toolbar-actions">
+            <div className="page-actions agenda-actions">
+              <div className="segmented" role="tablist" aria-label="Visualização da agenda">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={agendaMode === "month"}
+                  className={agendaMode === "month" ? "active" : ""}
+                  onClick={() => setAgendaMode("month")}
+                >
+                  Mês
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={agendaMode === "day"}
+                  className={agendaMode === "day" ? "active" : ""}
+                  onClick={() => setAgendaMode("day")}
+                >
+                  Dia
+                </button>
+              </div>
               <button className="secondary-btn" type="button" onClick={handleFirstContactLink} disabled={firstContactBusy}>
+                <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+                  <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+                </svg>
                 {firstContactBusy
                   ? "Gerando link..."
                   : firstContactLink
-                    ? "Copiar link do primeiro atendimento"
-                    : "Gerar link do primeiro atendimento"}
+                    ? "Copiar link de primeiro atendimento"
+                    : "Link de primeiro atendimento"}
               </button>
               <button className="primary-btn" type="button" onClick={openAppointmentModal}>
-                Inserir atendimento
+                <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Novo atendimento
               </button>
             </div>
-          </div>
+          </header>
           {agendaNotice ? <p className="muted-text agenda-notice">{agendaNotice}</p> : null}
 
           <div className={agendaMode === "month" ? "agenda-layout" : "agenda-layout agenda-layout-day"}>
-            <article className="card agenda-card">
-              <div className="agenda-nav">
+            <article className="card agenda-calendar">
+              <div className="agenda-calendar-header">
                 <button
                   type="button"
+                  className="agenda-nav-btn"
                   aria-label={agendaMode === "month" ? "Mês anterior" : "Dia anterior"}
                   onClick={() => shiftAgenda(-1)}
                 >
-                  ‹
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m15 6-6 6 6 6" />
+                  </svg>
                 </button>
-                <div className="agenda-nav-title">
-                  <h3>{agendaNavTitle}</h3>
-                  <button type="button" className="agenda-today" onClick={goToAgendaToday}>
-                    Hoje
-                  </button>
-                </div>
                 <button
                   type="button"
+                  className="agenda-nav-btn"
                   aria-label={agendaMode === "month" ? "Próximo mês" : "Próximo dia"}
                   onClick={() => shiftAgenda(1)}
                 >
-                  ›
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </button>
+                <h2>{agendaNavTitle}</h2>
+                <button type="button" className="secondary-btn agenda-today" onClick={goToAgendaToday}>
+                  Hoje
                 </button>
               </div>
 
@@ -4990,6 +5248,7 @@ export default function App() {
                     }
                     const dayIsOff = isDayClosed(agendaClosures, isoDate);
                     const dayPartialOff = !dayIsOff && closedPeriods(agendaClosures, isoDate).length > 0;
+                    const dayAppointments = appointmentsByDate.get(isoDate) || [];
                     return (
                       <button
                         key={isoDate}
@@ -4997,25 +5256,40 @@ export default function App() {
                         className={`month-day ${isoDate === selectedAgendaDate ? "is-selected" : ""} ${
                           isoDate === todayIsoDate ? "is-today" : ""
                         } ${dayIsOff ? "is-off" : ""} ${
-                          appointmentCountByDate.get(isoDate) ? "has-appointments" : ""
+                          dayAppointments.length ? "has-appointments" : ""
                         } ${pendingDates.has(isoDate) ? "has-pending" : ""}`}
                         aria-pressed={isoDate === selectedAgendaDate}
                         aria-label={`${formatAgendaDayLabel(isoDate)}${
                           dayIsOff ? ", fora da agenda" : ""
                         }${dayPartialOff ? ", horário off" : ""}${
-                          appointmentCountByDate.get(isoDate)
-                            ? `, ${appointmentCountByDate.get(isoDate)} atendimento${
-                                appointmentCountByDate.get(isoDate) > 1 ? "s" : ""
-                              }`
+                          dayAppointments.length
+                            ? `, ${dayAppointments.length} atendimento${dayAppointments.length > 1 ? "s" : ""}`
                             : ""
                         }`}
                         onClick={() => setAgendaSelectedDate(isoDate)}
                       >
-                        <span>{parseIsoDate(isoDate).getDate()}</span>
-                        <span className="month-day-marks">
-                          <span className="month-day-dot" />
-                          {dayPartialOff ? <span className="month-day-off" /> : null}
+                        <span className="month-day-top">
+                          <span className="month-day-number">{parseIsoDate(isoDate).getDate()}</span>
+                          {dayPartialOff ? <span className="month-day-off" aria-hidden="true" /> : null}
                         </span>
+                        <span className="month-day-dot" aria-hidden="true" />
+                        {dayAppointments.slice(0, 2).map((appointment) => (
+                          <span
+                            key={`chip-${appointment.id}`}
+                            className={`month-chip ${
+                              appointment.status === "pendente" || appointment.status === "remarcacao" ? "is-pending" : ""
+                            }`}
+                            aria-hidden="true"
+                          >
+                            {appointment.time ? `${appointment.time} ` : ""}
+                            {shortClientName(appointment.client)}
+                          </span>
+                        ))}
+                        {dayAppointments.length > 2 ? (
+                          <span className="month-more" aria-hidden="true">
+                            +{dayAppointments.length - 2} mais
+                          </span>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -5023,36 +5297,48 @@ export default function App() {
               ) : null}
             </article>
 
-            <article className="card">
+            <article className="card agenda-day-panel">
               <div className="agenda-day-header">
-                {agendaMode === "month" ? <h3 className="day-heading">{selectedDayLabel}</h3> : null}
+                <div>
+                  {agendaMode === "month" ? <h2>{selectedDayLabel}</h2> : null}
+                  <p>
+                    {selectedDayActive.length} atendimento{selectedDayActive.length === 1 ? "" : "s"}
+                    {selectedDayTotal > 0 ? ` · ${formatBRL(selectedDayTotal)}` : ""}
+                  </p>
+                </div>
                 <button type="button" className="secondary-btn" onClick={openAgendaOff}>
                   Fora da agenda
                 </button>
               </div>
-              <ul className="list">
-                {selectedDayAppointments.length === 0 ? (
-                  <li className="empty">Nenhum atendimento neste dia.</li>
-                ) : (
-                  selectedDayAppointments.map((appointment) => (
+              {selectedDayAppointments.length === 0 ? (
+                <p className="agenda-empty">Nenhum atendimento neste dia.</p>
+              ) : (
+                <ul className="agenda-appointments">
+                  {sortAppointments(selectedDayAppointments).map((appointment) => (
                     <li key={appointment.id} className={appointment.status === "recusado" ? "is-muted" : ""}>
-                      <div>
+                      <div className="agenda-appointment-top">
                         <strong>
-                          {appointment.time || (appointment.period ? periodLabel(appointment.period) : "Sem horário")} · {appointment.client}
+                          {appointment.time || (appointment.period ? periodLabel(appointment.period) : "Sem horário")}
                         </strong>
-                        {appointment.requestId ? <BookingBadge status={appointment.status} /> : null}
-                        <p>{appointment.service}</p>
-                        {appointment.status === "remarcacao" && appointment.date ? (
-                          <p>
-                            Pedido original em {formatDatePt(appointment.date)}. A confirmação da cliente é pelo WhatsApp.
-                          </p>
-                        ) : null}
-                        {appointment.requestId && Array.isArray(appointment.reasons) && appointment.reasons.length > 0 ? (
-                          <p>{appointment.reasons.join(", ")}</p>
-                        ) : null}
-                        {appointment.notes ? <p>{appointment.notes}</p> : null}
+                        <AppointmentStatusTag appointment={appointment} />
                       </div>
-                      <div className="inline-actions appointment-actions">
+                      <strong className="agenda-appointment-client">{appointment.client}</strong>
+                      <span className="agenda-appointment-meta">
+                        {appointment.service}
+                        {servicePriceByTitle.get(appointment.service)
+                          ? ` · ${formatBRL(servicePriceByTitle.get(appointment.service))}`
+                          : ""}
+                      </span>
+                      {appointment.status === "remarcacao" && appointment.date ? (
+                        <p className="agenda-appointment-note">
+                          Pedido original em {formatDatePt(appointment.date)}. A confirmação da cliente é pelo WhatsApp.
+                        </p>
+                      ) : null}
+                      {appointment.requestId && Array.isArray(appointment.reasons) && appointment.reasons.length > 0 ? (
+                        <p className="agenda-appointment-note">{appointment.reasons.join(", ")}</p>
+                      ) : null}
+                      {appointment.notes ? <p className="agenda-appointment-note">{appointment.notes}</p> : null}
+                      <div className="agenda-appointment-actions">
                         {appointment.requestId ? (
                           <button type="button" className="secondary-btn" onClick={() => openBookingReview(appointment)}>
                             Ver pedido
@@ -5068,16 +5354,16 @@ export default function App() {
                         </button>
                         <button
                           type="button"
-                          className="danger-btn"
+                          className="link-btn is-danger"
                           onClick={() => handleDeleteByCollection("appointments", appointment.id)}
                         >
                           Excluir
                         </button>
                       </div>
                     </li>
-                  ))
-                )}
-              </ul>
+                  ))}
+                </ul>
+              )}
             </article>
           </div>
         </section>
@@ -5085,493 +5371,607 @@ export default function App() {
 
       {isAgendaOffOpen ? (
         <div
-          className="client-modal-backdrop"
+          className="client-modal-backdrop app-modal-backdrop"
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) closeAgendaOff();
           }}
         >
           <section
-            className="profile-modal agenda-off-modal"
+            className="app-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Fora da agenda"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-modal-header">
+            <header className="app-modal-header">
               <div>
-                <h4>Fora da agenda</h4>
-                <p>
-                  {selectedDayLabel}. A cliente não consegue pedir o primeiro atendimento nestes dias ou horários. Manhã vai de 8h às 12h, tarde de 12h às 18h e noite de 18h às 21h.
-                </p>
+                <h2>Fora da agenda</h2>
+                <p>{selectedDayLabel}. Clientes novas não conseguem pedir horário nos períodos bloqueados.</p>
               </div>
               <ModalClose onClick={closeAgendaOff} />
             </header>
-            <div className="agenda-off">
-              <div className="agenda-off-choices">
-                <label>
+            <div className="app-modal-body">
+              <div className="option-list">
+                <label className={`option-row ${selectedDayAllDay ? "is-checked" : ""}`}>
                   <input
                     type="checkbox"
                     checked={Boolean(selectedDayAllDay)}
                     disabled={offBusy}
                     onChange={() => toggleAgendaAllDay(false)}
                   />
-                  Este dia inteiro
+                  <span>Este dia inteiro</span>
                 </label>
-                <label>
+                <label className={`option-row ${selectedWeekAllDay ? "is-checked" : ""}`}>
                   <input
                     type="checkbox"
                     checked={Boolean(selectedWeekAllDay)}
                     disabled={offBusy}
                     onChange={() => toggleAgendaAllDay(true)}
                   />
-                  Toda {WEEKDAY_LABELS[selectedWeekday]} inteira
+                  <span>Toda {WEEKDAY_LABELS[selectedWeekday]} inteira</span>
                 </label>
               </div>
-              <div className="agenda-off-times">
-                <label>
-                  Início
-                  <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
-                </label>
-                <label>
-                  Fim
-                  <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
-                </label>
-              </div>
-              <div className="agenda-off-choices">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={offRepeat}
-                    onChange={(event) => setOffRepeat(event.target.checked)}
-                  />
+              <fieldset className="option-card">
+                <legend>Bloquear um intervalo</legend>
+                <div className="field-row">
+                  <label>
+                    Início
+                    <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
+                  </label>
+                  <label>
+                    Fim
+                    <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
+                  </label>
+                </div>
+                <label className="check-inline">
+                  <input type="checkbox" checked={offRepeat} onChange={(event) => setOffRepeat(event.target.checked)} />
                   Repetir toda semana
                 </label>
-              </div>
-              <button className="secondary-btn" type="button" onClick={handleAddAgendaOff} disabled={offBusy}>
-                Bloquear horário
-              </button>
+              </fieldset>
+              <p className="field-hint">Períodos que a cliente vê: manhã 8h–12h, tarde 12h–18h, noite 18h–21h.</p>
               {offError ? <p className="error-text">{offError}</p> : null}
               {selectedDayClosures.length > 0 ? (
-                <ul className="agenda-off-list">
-                  {selectedDayClosures.map((closure) => (
-                    <li key={closure.id}>
-                      <span>{closureLabel(closure)}</span>
-                      <button
-                        type="button"
-                        className="danger-btn"
-                        disabled={offBusy}
-                        aria-label={`Remover ${closureLabel(closure)}`}
-                        onClick={() => removeAgendaClosure(closure.id)}
-                      >
-                        Remover
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="modal-section">
+                  <span className="section-label">Já bloqueado</span>
+                  <ul className="blocked-list">
+                    {selectedDayClosures.map((closure) => (
+                      <li key={closure.id}>
+                        <span>{closureLabel(closure)}</span>
+                        <button
+                          type="button"
+                          className="link-btn is-danger"
+                          disabled={offBusy}
+                          aria-label={`Remover ${closureLabel(closure)}`}
+                          onClick={() => removeAgendaClosure(closure.id)}
+                        >
+                          Remover
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
             </div>
+            <footer className="app-modal-footer">
+              <button className="secondary-btn" type="button" onClick={closeAgendaOff} disabled={offBusy}>
+                Fechar
+              </button>
+              <button className="primary-btn" type="button" onClick={handleAddAgendaOff} disabled={offBusy}>
+                Bloquear horário
+              </button>
+            </footer>
           </section>
         </div>
       ) : null}
 
       {isAppointmentModalOpen ? (
         <div
-          className="client-modal-backdrop"
+          className="client-modal-backdrop app-modal-backdrop"
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) closeAppointmentModal();
           }}
         >
           <section
-            className="appointment-modal"
+            className="app-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Inserir atendimento"
+            aria-label="Novo atendimento"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-modal-header">
+            <header className="app-modal-header">
               <div>
-                <h4>Inserir atendimento</h4>
+                <h2>Novo atendimento</h2>
                 <p>{formatAgendaDayLabel(appointmentDate || selectedAgendaDate)}</p>
                 {isDayClosed(agendaClosures, appointmentDate || selectedAgendaDate) ? (
-                  <p className="muted-text">Este dia está off para a cliente. Você ainda pode inserir o atendimento.</p>
+                  <p className="modal-notice">Este dia está fora da agenda para a cliente. Você ainda pode inserir o atendimento.</p>
                 ) : closedPeriods(agendaClosures, appointmentDate || selectedAgendaDate).length > 0 ? (
-                  <p className="muted-text">Alguns horários deste dia estão off para a cliente. Você ainda pode inserir o atendimento.</p>
+                  <p className="modal-notice">Alguns horários deste dia estão fora da agenda para a cliente. Você ainda pode inserir o atendimento.</p>
                 ) : null}
               </div>
               <ModalClose onClick={closeAppointmentModal} />
             </header>
-            <form className="form grid-form" onSubmit={handleAddAppointment}>
-            <label>
-              Cliente
-              <div className={`client-picker ${isAppointmentClientListOpen ? "is-open" : ""}`}>
-                <div className="client-picker-field">
-                  <input
-                    value={appointmentClient}
-                    onChange={(event) => {
-                      setAppointmentClient(event.target.value);
-                      setAppointmentClientNotice("");
-                      setIsAppointmentClientListOpen(true);
-                      setIsAppointmentServiceListOpen(false);
-                    }}
-                    onFocus={() => {
-                      setIsAppointmentClientListOpen(true);
-                      setIsAppointmentServiceListOpen(false);
-                    }}
-                    onBlur={() => setIsAppointmentClientListOpen(false)}
-                    placeholder="Digite o nome da cliente"
-                    autoComplete="off"
-                    required
-                  />
-                  {appointmentClient.trim() && !appointmentClientExists ? (
-                    <button
-                      type="button"
-                      className="client-picker-add"
-                      aria-label={`Adicionar ${appointmentClient.trim()}`}
-                      disabled={isCreatingAppointmentClient}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => createAppointmentClient(appointmentClient)}
-                    >
-                      +
-                    </button>
-                  ) : null}
-                </div>
-                {isAppointmentClientListOpen && appointmentClientSuggestions.length > 0 ? (
-                  <ul className="client-picker-suggestions">
-                    {appointmentClientSuggestions.map((client) => (
-                      <li key={`appointment-client-${client.id}`}>
+            <form className="app-modal-form" onSubmit={handleAddAppointment}>
+              <div className="app-modal-body form-grid">
+                <label className="full-row">
+                  Cliente
+                  <div className={`client-picker ${isAppointmentClientListOpen ? "is-open" : ""}`}>
+                    <div className="client-picker-field">
+                      <input
+                        value={appointmentClient}
+                        onChange={(event) => {
+                          setAppointmentClient(event.target.value);
+                          setAppointmentClientNotice("");
+                          setIsAppointmentClientListOpen(true);
+                          setIsAppointmentServiceListOpen(false);
+                        }}
+                        onFocus={() => {
+                          setIsAppointmentClientListOpen(true);
+                          setIsAppointmentServiceListOpen(false);
+                        }}
+                        onBlur={() => setIsAppointmentClientListOpen(false)}
+                        placeholder="Digite o nome da cliente"
+                        autoComplete="off"
+                        required
+                      />
+                      {appointmentClient.trim() && !appointmentClientExists ? (
                         <button
                           type="button"
+                          className="client-picker-add"
+                          aria-label={`Adicionar ${appointmentClient.trim()}`}
+                          disabled={isCreatingAppointmentClient}
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => {
-                            setAppointmentClient(client.name || "");
-                            setAppointmentClientNotice("");
-                            setIsAppointmentClientListOpen(false);
-                          }}
+                          onClick={() => createAppointmentClient(appointmentClient)}
                         >
-                          {client.name}
+                          +
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-              {appointmentClientNotice ? <p className="muted-text">{appointmentClientNotice}</p> : null}
-            </label>
-            <label>
-              Serviço
-              <div className={`client-picker ${isAppointmentServiceListOpen ? "is-open" : ""}`}>
-                <div className="client-picker-field">
-                  <input
-                    value={appointmentService}
-                    onChange={(event) => {
-                      setAppointmentService(event.target.value);
-                      setAppointmentServiceNotice("");
-                      setIsAppointmentServiceListOpen(true);
-                      setIsAppointmentClientListOpen(false);
-                    }}
-                    onFocus={() => {
-                      setIsAppointmentServiceListOpen(true);
-                      setIsAppointmentClientListOpen(false);
-                    }}
-                    onBlur={() => setIsAppointmentServiceListOpen(false)}
-                    placeholder="Digite ou escolha o serviço"
-                    autoComplete="off"
-                    required
-                  />
-                  {appointmentService.trim() && !appointmentServiceExists ? (
-                    <button
-                      type="button"
-                      className="client-picker-add"
-                      aria-label={`Adicionar ${appointmentService.trim()}`}
-                      disabled={isCreatingAppointmentService}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => createAppointmentService(appointmentService)}
-                    >
-                      +
-                    </button>
-                  ) : null}
-                </div>
-                {isAppointmentServiceListOpen && appointmentServiceSuggestions.length > 0 ? (
-                  <ul className="client-picker-suggestions">
-                    {appointmentServiceSuggestions.map((service) => (
-                      <li key={`appointment-service-${service.id}`}>
+                      ) : null}
+                    </div>
+                    {isAppointmentClientListOpen && appointmentClientSuggestions.length > 0 ? (
+                      <ul className="client-picker-suggestions">
+                        {appointmentClientSuggestions.map((client) => (
+                          <li key={`appointment-client-${client.id}`}>
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => {
+                                setAppointmentClient(client.name || "");
+                                setAppointmentClientNotice("");
+                                setIsAppointmentClientListOpen(false);
+                              }}
+                            >
+                              <span className="app-avatar is-soft" aria-hidden="true">
+                                {nameInitials(client.name)}
+                              </span>
+                              {client.name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  {appointmentClientNotice ? <p className="muted-text">{appointmentClientNotice}</p> : null}
+                </label>
+                <label className="full-row">
+                  Serviço
+                  <div className={`client-picker ${isAppointmentServiceListOpen ? "is-open" : ""}`}>
+                    <div className="client-picker-field">
+                      <input
+                        value={appointmentService}
+                        onChange={(event) => {
+                          setAppointmentService(event.target.value);
+                          setAppointmentServiceNotice("");
+                          setIsAppointmentServiceListOpen(true);
+                          setIsAppointmentClientListOpen(false);
+                        }}
+                        onFocus={() => {
+                          setIsAppointmentServiceListOpen(true);
+                          setIsAppointmentClientListOpen(false);
+                        }}
+                        onBlur={() => setIsAppointmentServiceListOpen(false)}
+                        placeholder="Digite ou escolha o serviço"
+                        autoComplete="off"
+                        required
+                      />
+                      {appointmentService.trim() && !appointmentServiceExists ? (
                         <button
                           type="button"
-                          className={service.undetermined ? "is-special" : ""}
+                          className="client-picker-add"
+                          aria-label={`Adicionar ${appointmentService.trim()}`}
+                          disabled={isCreatingAppointmentService}
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => {
-                            setAppointmentService(service.title || "");
-                            setAppointmentServiceNotice("");
-                            setIsAppointmentServiceListOpen(false);
-                          }}
+                          onClick={() => createAppointmentService(appointmentService)}
                         >
-                          {service.title}
+                          +
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                      ) : null}
+                    </div>
+                    {isAppointmentServiceListOpen && appointmentServiceSuggestions.length > 0 ? (
+                      <ul className="client-picker-suggestions">
+                        {appointmentServiceSuggestions.map((service) => (
+                          <li key={`appointment-service-${service.id}`}>
+                            <button
+                              type="button"
+                              className={service.undetermined ? "is-special" : ""}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => {
+                                setAppointmentService(service.title || "");
+                                setAppointmentServiceNotice("");
+                                setIsAppointmentServiceListOpen(false);
+                              }}
+                            >
+                              {service.title}
+                              {Number(service.price) > 0 ? <small>{formatBRL(service.price)}</small> : null}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  {appointmentServiceNotice ? <p className="muted-text">{appointmentServiceNotice}</p> : null}
+                </label>
+                <label>
+                  Data
+                  <input
+                    type="date"
+                    value={appointmentDate}
+                    onChange={(event) => setAppointmentDate(event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  Horário
+                  <input
+                    type="time"
+                    value={appointmentTime}
+                    onChange={(event) => setAppointmentTime(event.target.value)}
+                  />
+                </label>
+                <label className="full-row">
+                  Observações
+                  <input
+                    value={appointmentNotes}
+                    onChange={(event) => setAppointmentNotes(event.target.value)}
+                    placeholder="Opcional"
+                  />
+                </label>
               </div>
-              {appointmentServiceNotice ? <p className="muted-text">{appointmentServiceNotice}</p> : null}
-            </label>
-            <label>
-              Data
-              <input
-                type="date"
-                value={appointmentDate}
-                onChange={(event) => setAppointmentDate(event.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Horário
-              <input
-                type="time"
-                value={appointmentTime}
-                onChange={(event) => setAppointmentTime(event.target.value)}
-              />
-            </label>
-            <label className="full-row">
-              Observações
-              <input
-                value={appointmentNotes}
-                onChange={(event) => setAppointmentNotes(event.target.value)}
-                placeholder="Opcional"
-              />
-            </label>
-            <button className="primary-btn full-row" type="submit">
-              Salvar atendimento
-            </button>
-          </form>
+              <footer className="app-modal-footer">
+                <button className="secondary-btn" type="button" onClick={closeAppointmentModal}>
+                  Cancelar
+                </button>
+                <button className="primary-btn" type="submit">
+                  Salvar atendimento
+                </button>
+              </footer>
+            </form>
           </section>
         </div>
       ) : null}
 
       {bookingReview ? (
         <div
-          className="client-modal-backdrop"
+          className="client-modal-backdrop app-modal-backdrop"
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) closeBookingReview();
           }}
         >
           <section
-            className="appointment-modal booking-review"
+            className="app-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Pedido de primeiro atendimento"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-modal-header">
+            <header className="app-modal-header booking-review-header">
+              <span className="app-avatar is-warm" aria-hidden="true">
+                {nameInitials(bookingReview.client)}
+              </span>
               <div>
-                <h4>{bookingReview.client}</h4>
+                <h2>{bookingReview.client}</h2>
                 <p>Primeiro atendimento</p>
+                <BookingBadge status={bookingReview.status} />
               </div>
               <ModalClose onClick={closeBookingReview} />
             </header>
-            <BookingBadge status={bookingReview.status} />
-            <dl className="booking-details">
-              <div>
-                <dt>Telefone</dt>
-                <dd>{formatPhoneBr(bookingReview.clientPhone) || "Não informado"}</dd>
-              </div>
-              <div>
-                <dt>Dia pedido</dt>
-                <dd>{formatDatePt(bookingReview.date)}</dd>
-              </div>
-              <div>
-                <dt>Período</dt>
-                <dd>{periodLabel(bookingReview.period)}</dd>
-              </div>
-              <div>
-                <dt>Motivo</dt>
-                <dd>{Array.isArray(bookingReview.reasons) && bookingReview.reasons.length > 0 ? bookingReview.reasons.join(", ") : "Não informado"}</dd>
-              </div>
-              {bookingReview.status === "remarcacao" && bookingReview.suggestedDate ? (
+            <div className="app-modal-body">
+              <dl className="booking-tiles">
                 <div>
-                  <dt>Nova data sugerida</dt>
+                  <dt>Dia pedido</dt>
+                  <dd>{formatDatePt(bookingReview.date)}</dd>
+                </div>
+                <div>
+                  <dt>Período</dt>
+                  <dd>{periodLabel(bookingReview.period)}</dd>
+                </div>
+                <div>
+                  <dt>Telefone</dt>
+                  <dd>{formatPhoneBr(bookingReview.clientPhone) || "Não informado"}</dd>
+                </div>
+                <div className="is-wide">
+                  <dt>Motivo</dt>
                   <dd>
-                    {formatDatePt(bookingReview.suggestedDate)}
-                    {bookingReview.rescheduleReason ? `. ${bookingReview.rescheduleReason}` : ""}
+                    {Array.isArray(bookingReview.reasons) && bookingReview.reasons.length > 0 ? (
+                      <span className="chip-list">
+                        {bookingReview.reasons.map((reason) => (
+                          <span key={reason} className="chip">
+                            {reason}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      "Não informado"
+                    )}
                   </dd>
                 </div>
-              ) : null}
-            </dl>
-            <div className="booking-actions">
-              <button type="button" className="primary-btn" onClick={() => decideBooking("aprovado")} disabled={Boolean(bookingBusy)}>
-                {bookingBusy === "aprovado" ? "Aprovando..." : "Aprovar"}
-              </button>
-              <button type="button" className="danger-btn" onClick={() => decideBooking("recusado")} disabled={Boolean(bookingBusy)}>
-                {bookingBusy === "recusado" ? "Recusando..." : "Recusar"}
-              </button>
+                {bookingReview.status === "remarcacao" && bookingReview.suggestedDate ? (
+                  <div className="is-wide">
+                    <dt>Nova data sugerida</dt>
+                    <dd>
+                      {formatDatePt(bookingReview.suggestedDate)}
+                      {bookingReview.rescheduleReason ? `. ${bookingReview.rescheduleReason}` : ""}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+              <div className="booking-decision">
+                <button type="button" className="primary-btn" onClick={() => decideBooking("aprovado")} disabled={Boolean(bookingBusy)}>
+                  {bookingBusy === "aprovado" ? "Aprovando..." : "Aprovar"}
+                </button>
+                <button type="button" className="danger-btn" onClick={() => decideBooking("recusado")} disabled={Boolean(bookingBusy)}>
+                  {bookingBusy === "recusado" ? "Recusando..." : "Recusar"}
+                </button>
+              </div>
+              <form
+                className="option-card booking-reschedule"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  decideBooking("remarcacao");
+                }}
+              >
+                <strong>Sugerir outra data</strong>
+                <div className="field-row">
+                  <label>
+                    Nova data
+                    <input
+                      type="date"
+                      value={rescheduleDate}
+                      min={todayIsoDate}
+                      onChange={(event) => setRescheduleDate(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Motivo
+                    <input
+                      value={rescheduleReason}
+                      maxLength={400}
+                      onChange={(event) => setRescheduleReason(event.target.value)}
+                      placeholder="Conte por que esse dia não funciona"
+                    />
+                  </label>
+                </div>
+                <button className="secondary-btn" type="submit" disabled={Boolean(bookingBusy)}>
+                  {bookingBusy === "remarcacao" ? "Enviando..." : "Remarcar e pedir confirmação"}
+                </button>
+              </form>
+              {bookingNotice ? <p className="muted-text">{bookingNotice}</p> : null}
             </div>
-            <form
-              className="form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                decideBooking("remarcacao");
-              }}
-            >
-              <label>
-                Sugerir outra data
-                <input
-                  type="date"
-                  value={rescheduleDate}
-                  min={todayIsoDate}
-                  onChange={(event) => setRescheduleDate(event.target.value)}
-                />
-              </label>
-              <label>
-                Motivo da remarcação
-                <textarea
-                  value={rescheduleReason}
-                  maxLength={400}
-                  onChange={(event) => setRescheduleReason(event.target.value)}
-                  placeholder="Conte por que esse dia não funciona"
-                />
-              </label>
-              <button className="secondary-btn" type="submit" disabled={Boolean(bookingBusy)}>
-                {bookingBusy === "remarcacao" ? "Enviando..." : "Remarcar e pedir confirmação"}
-              </button>
-            </form>
-            {bookingNotice ? <p className="muted-text">{bookingNotice}</p> : null}
-            {bookingWhatsAppUrl ? (
-              <a className="primary-btn" href={bookingWhatsAppUrl} target="_blank" rel="noreferrer">Abrir WhatsApp</a>
-            ) : null}
+            <footer className="app-modal-footer is-split">
+              <span className="field-hint">Depois da decisão, avise a cliente pelo WhatsApp.</span>
+              {bookingWhatsAppUrl ? (
+                <a className="secondary-btn" href={bookingWhatsAppUrl} target="_blank" rel="noreferrer">
+                  Abrir WhatsApp
+                </a>
+              ) : null}
+            </footer>
           </section>
         </div>
       ) : null}
 
       {activeTab === TABS.CLIENTES ? (
-        <section className="card">
-          <div className="section-header">
-            <h3>Clientes</h3>
-            <button type="button" className="primary-btn" onClick={handleStartCreateClient}>
-              Nova cliente
-            </button>
-          </div>
+        <section className="clients-page">
+          <header className="page-header">
+            <div>
+              <h1>Clientes</h1>
+              <p>
+                {clients.length} cliente{clients.length === 1 ? "" : "s"} cadastrada{clients.length === 1 ? "" : "s"}. Abra a ficha para ver
+                anamnese e evolução.
+              </p>
+            </div>
+            <div className="page-actions">
+              <button type="button" className="primary-btn clients-add-btn" onClick={handleStartCreateClient} aria-label="Nova cliente">
+                <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span className="btn-label">Nova cliente</span>
+              </button>
+            </div>
+          </header>
 
           {clientFormMessage ? <p className="success-text">{clientFormMessage}</p> : null}
 
-          <div className="clients-toolbar">
-            <label>
-              Buscar cliente
-              <input
-                value={clientSearchTerm}
-                onChange={(event) => setClientSearchTerm(event.target.value)}
-                placeholder="Nome, telefone, e-mail ou endereço"
-              />
-            </label>
-            <label>
-              Filtrar por sexo
-              <select
-                value={clientSexFilter}
-                onChange={(event) => setClientSexFilter(event.target.value)}
-              >
-                <option value="all">Todos</option>
-                {SEX_OPTIONS.filter((option) => option.value).map((option) => (
-                  <option key={`filter-${option.value}`} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Ordenar
-              <select
-                value={clientSortMode}
-                onChange={(event) => setClientSortMode(event.target.value)}
-              >
-                <option value="name_asc">Nome (A-Z)</option>
-                <option value="name_desc">Nome (Z-A)</option>
-                <option value="last_appointment_desc">Último atendimento (mais recente)</option>
-                <option value="last_appointment_asc">Último atendimento (mais antigo)</option>
-                <option value="updated_desc">Atualização mais recente</option>
-                <option value="updated_asc">Atualização mais antiga</option>
-              </select>
-            </label>
-          </div>
-          <p className="muted-text clients-toolbar-summary">
-            Exibindo {visibleClients.length} de {clients.length} cliente(s).
-          </p>
-
-          <ul className="list">
-            {clients.length === 0 ? (
-              <li className="empty">Nenhuma cliente cadastrada.</li>
-            ) : visibleClients.length === 0 ? (
-              <li className="empty">Nenhuma cliente encontrada com os filtros atuais.</li>
-            ) : (
-              visibleClients.map((client) => {
-                const lastAppointmentInfo = lastAppointmentByClientName.get(
-                  normalizeClientNameKey(client.name)
-                );
-                const lastAppointmentDate = lastAppointmentInfo?.date || "";
-
-                return (
-                  <li key={client.id} className="client-card">
+          <article className="card table-card">
+            <div className="table-toolbar">
+              <label className="search-field">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6" />
+                  <path d="m20 20-4.2-4.2" />
+                </svg>
+                <input
+                  value={clientSearchTerm}
+                  onChange={(event) => setClientSearchTerm(event.target.value)}
+                  placeholder="Nome, telefone, e-mail ou endereço"
+                  aria-label="Buscar cliente"
+                />
+              </label>
+              <label className="inline-select">
+                Sexo
+                <select value={clientSexFilter} onChange={(event) => setClientSexFilter(event.target.value)}>
+                  <option value="all">Todos</option>
+                  {SEX_OPTIONS.filter((option) => option.value).map((option) => (
+                    <option key={`filter-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-select">
+                Ordenar
+                <select value={clientSortMode} onChange={(event) => setClientSortMode(event.target.value)}>
+                  {CLIENT_SORT_OPTIONS.map((option) => (
+                    <option key={`sort-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="filter-chips-row">
+                <div className="filter-chips" role="group" aria-label="Filtrar por sexo">
+                  <button
+                    type="button"
+                    className={clientSexFilter === "all" ? "active" : ""}
+                    aria-pressed={clientSexFilter === "all"}
+                    onClick={() => setClientSexFilter("all")}
+                  >
+                    Todas
+                  </button>
+                  {SEX_OPTIONS.filter((option) => option.value).map((option) => (
                     <button
+                      key={`chip-${option.value}`}
                       type="button"
-                      className="client-menu-trigger"
-                      aria-label={`Abrir opções de ${client.name}`}
-                      onClick={() => handleToggleClientMenu(client.id)}
+                      className={clientSexFilter === option.value ? "active" : ""}
+                      aria-pressed={clientSexFilter === option.value}
+                      onClick={() => setClientSexFilter(option.value)}
                     >
-                      ☰
+                      {option.label}
                     </button>
-                    {openClientMenuId === client.id ? (
-                      <div className="client-menu-dropdown">
+                  ))}
+                </div>
+                <div className="sort-menu">
+                  <button
+                    type="button"
+                    className="sort-menu-trigger"
+                    aria-label="Ordenar clientes"
+                    aria-expanded={isClientSortMenuOpen}
+                    onClick={() => setIsClientSortMenuOpen((previous) => !previous)}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3" />
+                    </svg>
+                  </button>
+                  {isClientSortMenuOpen ? (
+                    <div className="sort-menu-dropdown" role="menu" aria-label="Ordenar por">
+                      {CLIENT_SORT_OPTIONS.map((option) => (
+                        <button
+                          key={`sort-menu-${option.value}`}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={clientSortMode === option.value}
+                          className={clientSortMode === option.value ? "active" : ""}
+                          onClick={() => {
+                            setClientSortMode(option.value);
+                            setIsClientSortMenuOpen(false);
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {clients.length === 0 ? (
+              <p className="table-empty">Nenhuma cliente cadastrada.</p>
+            ) : visibleClients.length === 0 ? (
+              <p className="table-empty">Nenhuma cliente encontrada com os filtros atuais.</p>
+            ) : (
+              <ul className="data-table clients-table">
+                <li className="data-table-head" aria-hidden="true">
+                  <span>Cliente</span>
+                  <span>Telefone</span>
+                  <span>Último atendimento</span>
+                  <span />
+                </li>
+                {visibleClients.map((client) => {
+                  const lastAppointmentInfo = lastAppointmentByClientName.get(normalizeClientNameKey(client.name));
+                  const lastAppointmentDate = lastAppointmentInfo?.date || "";
+
+                  return (
+                    <li key={client.id}>
+                      <button
+                        type="button"
+                        className="clients-name"
+                        onClick={() => handleOpenClientModal(client.id)}
+                        disabled={isClientFormOpen}
+                      >
+                        <span className="app-avatar is-soft" aria-hidden="true">
+                          {nameInitials(client.name)}
+                        </span>
+                        <span>
+                          <strong>{client.name}</strong>
+                          <span>{client.email || (client.phone ? formatPhoneBr(client.phone) : "Sem contato")}</span>
+                        </span>
+                      </button>
+                      <span className="clients-cell">{client.phone ? formatPhoneBr(client.phone) : "Não informado"}</span>
+                      <span className="clients-cell">
+                        {lastAppointmentDate ? formatDatePt(lastAppointmentDate) : "Sem atendimento"}
+                      </span>
+                      <span className="row-actions">
                         <button
                           type="button"
                           className="secondary-btn"
-                          onClick={() => handleEditClient(client)}
+                          onClick={() => handleOpenClientModal(client.id)}
+                          disabled={isClientFormOpen}
                         >
-                          Editar cadastro
+                          Ver ficha
                         </button>
-                        <button
-                          type="button"
-                          className="danger-btn"
-                          onClick={() => {
-                            setOpenClientMenuId("");
-                            handleDeleteByCollection("clients", client.id);
-                          }}
-                        >
-                          Excluir cliente
-                        </button>
-                      </div>
-                    ) : null}
-
-                    <button
-                      type="button"
-                      className="client-card-open"
-                      onClick={() => handleOpenClientModal(client.id)}
-                      disabled={isClientFormOpen}
-                    >
-                      <div className="client-card-main">
-                        <div className="client-card-title-row">
-                          <strong>{client.name}</strong>
-                          <span className="client-open-hint">Clique para abrir o prontuário</span>
-                        </div>
-
-                        <div className="client-contact-row">
-                          <span className="client-pill">
-                            Telefone: {client.phone ? formatPhoneBr(client.phone) : "Não informado"}
-                          </span>
-                          <span className="client-pill">
-                            Último atendimento:{" "}
-                            {lastAppointmentDate
-                              ? formatDatePt(lastAppointmentDate)
-                              : "Sem atendimento"}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })
+                        <span className="row-menu">
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label={`Abrir opções de ${client.name}`}
+                            aria-expanded={openClientMenuId === client.id}
+                            onClick={() => handleToggleClientMenu(client.id)}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <circle cx="12" cy="5" r="1.6" />
+                              <circle cx="12" cy="12" r="1.6" />
+                              <circle cx="12" cy="19" r="1.6" />
+                            </svg>
+                          </button>
+                          {openClientMenuId === client.id ? (
+                            <span className="row-menu-dropdown">
+                              <button type="button" onClick={() => handleEditClient(client)}>
+                                Editar cadastro
+                              </button>
+                              <button
+                                type="button"
+                                className="is-danger"
+                                onClick={() => {
+                                  setOpenClientMenuId("");
+                                  handleDeleteByCollection("clients", client.id);
+                                }}
+                              >
+                                Excluir cliente
+                              </button>
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </ul>
+            <div className="table-footer">
+              Exibindo {visibleClients.length} de {clients.length} cliente{clients.length === 1 ? "" : "s"}
+            </div>
+          </article>
 
           {selectedClient && selectedClientView ? (
             <div
-              className="client-modal-backdrop"
+              className="client-modal-backdrop record-backdrop"
               onPointerDown={(event) => {
                 if (event.target === event.currentTarget) handleCloseClientView();
               }}
@@ -5594,30 +5994,81 @@ export default function App() {
                     }}
                   />
                 ) : null}
-                <header className="client-modal-header">
-                  <div>
-                    <h4>{selectedClient.name}</h4>
-                    <p>Prontuário da cliente</p>
+                <header className="client-modal-header record-header">
+                  <button type="button" className="record-back" onClick={handleCloseClientView}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m15 6-6 6 6 6" />
+                    </svg>
+                    Clientes
+                  </button>
+                  <div className="record-identity">
+                    <span className="app-avatar is-soft record-avatar" aria-hidden="true">
+                      {nameInitials(selectedClient.name)}
+                    </span>
+                    <div>
+                      <h4>{selectedClient.name}</h4>
+                      <p className="record-meta">
+                        {selectedClient.phone ? <span>{formatPhoneBr(selectedClient.phone)}</span> : null}
+                        {selectedClient.email ? <span>{selectedClient.email}</span> : null}
+                        {selectedClient.birthDate ? <span>Nascimento {formatDatePt(selectedClient.birthDate)}</span> : null}
+                        {lastAppointmentByClientName.get(normalizeClientNameKey(selectedClient.name))?.date ? (
+                          <span>
+                            Último atendimento{" "}
+                            {formatDatePt(lastAppointmentByClientName.get(normalizeClientNameKey(selectedClient.name)).date)}
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
                   </div>
                   <div className="client-modal-header-actions">
                     <button
                       type="button"
+                      className="secondary-btn record-action"
+                      aria-label="Editar cadastro"
+                      onClick={() => handleEditClient(selectedClient)}
+                    >
+                      <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 20h4L19 9l-4-4L4 16z" />
+                      </svg>
+                      <span className="record-action-label">Editar cadastro</span>
+                    </button>
+                    <button
+                      type="button"
                       className="record-menu-trigger"
-                      aria-label={isRecordMenuOpen ? "Fechar menu" : "Abrir menu"}
+                      aria-label={isRecordMenuOpen ? "Fechar links para a cliente" : "Links para a cliente"}
                       aria-expanded={isRecordMenuOpen}
                       onClick={() => setIsRecordMenuOpen((previous) => !previous)}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
-                        {isRecordMenuOpen ? (
-                          <path d="M6 6l12 12M18 6L6 18" />
-                        ) : (
-                          <>
-                            <path d="M4 7h16" />
-                            <path d="M4 12h16" />
-                            <path d="M4 17h16" />
-                          </>
-                        )}
+                        <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+                        <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
                       </svg>
+                      <span className="record-menu-trigger-label">Links para a cliente</span>
+                      <svg className="record-menu-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d={isRecordMenuOpen ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn record-action record-action-icon"
+                      aria-label="Exportar PDF"
+                      title="Exportar PDF"
+                      onClick={handleExportAnamnesePdf}
+                    >
+                      <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-btn record-action"
+                      aria-label="Nova sessão"
+                      onClick={handleStartNewSession}
+                    >
+                      <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                      <span className="record-action-label">Nova sessão</span>
                     </button>
                     <ModalClose onClick={handleCloseClientView} />
                     {isRecordMenuOpen ? (
@@ -6439,7 +6890,7 @@ export default function App() {
 
                   {isPhotoComposerOpen ? (
                   <div
-                    className="client-modal-backdrop photo-composer-backdrop"
+                    className="client-modal-backdrop app-modal-backdrop photo-composer-backdrop"
                     onPointerDown={(event) => {
                       if (event.target === event.currentTarget) setIsPhotoComposerOpen(false);
                     }}
@@ -6658,65 +7109,162 @@ export default function App() {
       ) : null}
 
       {activeTab === TABS.AVISOS ? (
-        <NotificationLists uid={user.uid} clients={clients} shareLinks={shareLinks} />
+        <NotificationLists uid={user.uid} clients={clients} shareLinks={shareLinks} onSummaryChange={setNoticeSummary} />
       ) : null}
 
       {activeTab === TABS.SERVICOS ? (
-        <section className="card">
-          <h3>Serviços</h3>
-          <form className="form" onSubmit={handleAddService}>
-            <label>
-              Nome do serviço
-              <input
-                value={serviceTitle}
-                onChange={(event) => setServiceTitle(event.target.value)}
-                placeholder="Ex: Limpeza de pele"
-                required
-              />
-            </label>
-            <label>
-              Preço (R$)
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={servicePrice}
-                onChange={(event) => setServicePrice(event.target.value)}
-                placeholder="0,00"
-              />
-            </label>
-            <button className="primary-btn" type="submit">
-              Adicionar serviço
-            </button>
-          </form>
+        <section className="services-page">
+          <header className="page-header">
+            <div>
+              <h1>Serviços</h1>
+              <p>Procedimentos e preços usados ao marcar atendimentos.</p>
+            </div>
+            <div className="page-actions services-add-actions">
+              <button
+                type="button"
+                className="primary-btn services-add-btn"
+                aria-label="Novo serviço"
+                onClick={() => setIsServiceSheetOpen(true)}
+              >
+                <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+            </div>
+          </header>
 
-          <ul className="list">
-            {services.length === 0 ? (
-              <li className="empty">Nenhum serviço cadastrado.</li>
-            ) : (
-              services.map((service) => (
-                <li key={service.id}>
-                  <div>
-                    <strong>{service.title}</strong>
-                    <p>R$ {Number(service.price || 0).toFixed(2)}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="danger-btn"
-                    onClick={() => handleDeleteByCollection("services", service.id)}
-                  >
-                    Excluir
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
+          <div className="services-layout">
+            <article className="card table-card">
+              <div className="table-card-header">
+                <h2>Catálogo</h2>
+                <span>
+                  {services.length} serviço{services.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {services.length === 0 ? (
+                <p className="table-empty">Nenhum serviço cadastrado.</p>
+              ) : (
+                <ul className="data-table services-table">
+                  <li className="data-table-head" aria-hidden="true">
+                    <span>Serviço</span>
+                    <span>Preço</span>
+                    <span />
+                  </li>
+                  {[...services]
+                    .sort((first, second) => String(first.title || "").localeCompare(String(second.title || ""), "pt-BR"))
+                    .map((service) => (
+                      <li key={service.id}>
+                        <span className="services-name">
+                          <span className="services-icon" aria-hidden="true">
+                            <NavIcon tab={TABS.SERVICOS} />
+                          </span>
+                          <strong>{service.title}</strong>
+                        </span>
+                        <span className="services-price">{formatBRL(service.price)}</span>
+                        <span className="row-actions">
+                          <button
+                            type="button"
+                            className="icon-btn is-danger services-delete-btn"
+                            aria-label={`Excluir ${service.title}`}
+                            onClick={() => handleDeleteByCollection("services", service.id)}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M5 7h14M10 11v6M14 11v6M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12M9.5 7V5h5v2" />
+                            </svg>
+                          </button>
+                          <span className="row-menu services-row-menu">
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label={`Ações de ${service.title}`}
+                              aria-expanded={openServiceMenuId === service.id}
+                              onClick={() => setOpenServiceMenuId((current) => (current === service.id ? "" : service.id))}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="5" r="1.6" />
+                                <circle cx="12" cy="12" r="1.6" />
+                                <circle cx="12" cy="19" r="1.6" />
+                              </svg>
+                            </button>
+                            {openServiceMenuId === service.id ? (
+                              <span className="row-menu-dropdown">
+                                <button
+                                  type="button"
+                                  className="is-danger"
+                                  onClick={() => {
+                                    setOpenServiceMenuId("");
+                                    handleDeleteByCollection("services", service.id);
+                                  }}
+                                >
+                                  Excluir serviço
+                                </button>
+                              </span>
+                            ) : null}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </article>
+
+            <div className={isServiceSheetOpen ? "services-form-wrap is-open" : "services-form-wrap"}>
+            <button
+              type="button"
+              className="services-sheet-backdrop"
+              aria-label="Fechar"
+              tabIndex={-1}
+              onClick={() => setIsServiceSheetOpen(false)}
+            />
+            <form
+              className="card services-form"
+              onSubmit={(event) => {
+                handleAddService(event);
+                setIsServiceSheetOpen(false);
+              }}
+            >
+              <div className="services-form-header">
+                <div>
+                  <h2>Adicionar serviço</h2>
+                  <p>Aparece na lista ao marcar um atendimento.</p>
+                </div>
+                <ModalClose onClick={() => setIsServiceSheetOpen(false)} />
+              </div>
+              <label>
+                Nome do serviço
+                <input
+                  value={serviceTitle}
+                  onChange={(event) => setServiceTitle(event.target.value)}
+                  placeholder="Ex.: Limpeza de pele"
+                  required
+                />
+              </label>
+              <label>
+                Preço
+                <span className="input-affix">
+                  <span aria-hidden="true">R$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={servicePrice}
+                    onChange={(event) => setServicePrice(event.target.value)}
+                    placeholder="0,00"
+                  />
+                </span>
+              </label>
+              <button className="primary-btn" type="submit">
+                Adicionar serviço
+              </button>
+            </form>
+            </div>
+          </div>
         </section>
       ) : null}
 
       {isProfileModalOpen ? (
         <div
-          className="client-modal-backdrop"
+          className="client-modal-backdrop app-modal-backdrop"
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) handleCloseProfileModal();
           }}
@@ -6885,7 +7433,7 @@ export default function App() {
 
       {isEvolutionComposerOpen && selectedClient ? (
         <div
-          className="client-modal-backdrop evolution-composer-backdrop"
+          className="client-modal-backdrop app-modal-backdrop evolution-composer-backdrop"
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) setIsEvolutionComposerOpen(false);
           }}
@@ -6963,7 +7511,7 @@ export default function App() {
 
       {isClientFormOpen ? (
         <div
-          className="client-modal-backdrop"
+          className="client-modal-backdrop app-modal-backdrop"
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) resetClientForm();
           }}
@@ -7050,7 +7598,7 @@ export default function App() {
 
       {isParameterEditorOpen && selectedClient ? (
         <div
-          className="client-modal-backdrop"
+          className="client-modal-backdrop app-modal-backdrop"
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) closeParameterEditor();
           }}
