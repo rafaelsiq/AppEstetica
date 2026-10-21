@@ -168,13 +168,30 @@ export function occurrenceKey(notice, now = new Date()) {
   if (!notice || notice.active === false) {
     return "";
   }
+  const time = notice.time || "";
   if (notice.frequency === "once") {
-    return "once";
+    return `${notice.date || ""}:${time}`;
   }
   if (notice.frequency === "monthly") {
-    return dateKey(now).slice(0, 7);
+    return `${dateKey(now).slice(0, 7)}:${time}`;
   }
-  return dateKey(now);
+  return `${dateKey(now)}:${time}`;
+}
+
+export function shouldNotify(notice, now = new Date()) {
+  if (!isNoticeDue(notice, now)) {
+    return false;
+  }
+  if (notice.frequency !== "once") {
+    return true;
+  }
+  const scheduled = minutesOf(notice.time);
+  if (scheduled == null || !/^\d{4}-\d{2}-\d{2}$/.test(notice.date || "")) {
+    return false;
+  }
+  const [year, month, day] = notice.date.split("-").map(Number);
+  const at = new Date(year, month - 1, day, Math.floor(scheduled / 60), scheduled % 60, 0, 0);
+  return now.getTime() - at.getTime() <= 12 * 60 * 60 * 1000;
 }
 
 function noticeAt(year, monthIndex, day, hours, minutes) {

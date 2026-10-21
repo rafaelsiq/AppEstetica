@@ -1,0 +1,9 @@
+{
+  "name": "clinica-push",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "google-auth-library": "^9.15.1",
+    "web-push": "^3.6.7"
+  }
+}

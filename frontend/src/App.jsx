@@ -21,6 +21,7 @@ import ModalClose from "./ModalClose";
 import { phoneKey } from "./clientQuiz";
 import { applyClinicIcon } from "./pageIcon";
 import NotificationLists from "./NotificationLists";
+import ClinicNoticeRunner from "./ClinicNoticeRunner";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";
 import {
@@ -1481,15 +1482,19 @@ function PhotoMeasurementEditor({
   );
 }
 
-function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAdd, onRemove }) {
+function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAdd, onRemove, onClose }) {
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        onClose?.();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <section className="tracking-parameters">
-      <div>
-        <h5>Parâmetros</h5>
-        <p className="muted-text">
-          Crie uma medida desta cliente e a unidade. Ex.: alcance do ombro direito, em cm.
-        </p>
-      </div>
+    <div className="tracking-parameters">
       {parameters.length ? (
         <ul className="tracking-parameter-list">
           {parameters.map((parameter) => (
@@ -1537,12 +1542,12 @@ function TrackingParameterEditor({ parameters, form, error, busy, onChange, onAd
             <option value="down">O valor diminui</option>
           </select>
         </label>
-        <button className="secondary-btn" type="submit" disabled={busy}>
-          Adicionar parâmetro
+        <button className="primary-btn" type="submit" disabled={busy}>
+          {busy ? "Salvando..." : "Adicionar parâmetro"}
         </button>
       </form>
       {error ? <p className="error-text">{error}</p> : null}
-    </section>
+    </div>
   );
 }
 
@@ -1636,7 +1641,7 @@ function SessionDetail({ checkpoint, photos, onBack, onDelete }) {
                 ? ` · Sessão ${checkpoint.sessionNumber}`
                 : ""}
           </h4>
-          <p>{checkpoint.sessionType || "Tipo não informado"}</p>
+          {checkpoint.sessionType ? <p>{checkpoint.sessionType}</p> : feedback ? null : <p>Tipo não informado</p>}
         </div>
         <button type="button" className="secondary-btn" onClick={onBack}>
           Voltar
@@ -2260,6 +2265,7 @@ export default function App() {
   const [offRepeat, setOffRepeat] = useState(false);
   const [offBusy, setOffBusy] = useState(false);
   const [offError, setOffError] = useState("");
+  const [isAgendaOffOpen, setIsAgendaOffOpen] = useState(false);
   const publishedAvailabilityRef = useRef("");
   const availabilityQueueRef = useRef(Promise.resolve());
   const [agendaSelectedDate, setAgendaSelectedDate] = useState("");
@@ -2287,6 +2293,7 @@ export default function App() {
   const [parameterForm, setParameterForm] = useState(() => emptyParameterForm());
   const [parameterError, setParameterError] = useState("");
   const [parameterBusy, setParameterBusy] = useState(false);
+  const [isParameterEditorOpen, setIsParameterEditorOpen] = useState(false);
   const [checkpointError, setCheckpointError] = useState("");
   const [photoAnalyses, setPhotoAnalyses] = useState([]);
   const [checkpointForm, setCheckpointForm] = useState(buildEmptyCheckpoint());
@@ -2374,6 +2381,7 @@ export default function App() {
       setBookingWhatsAppUrl("");
       setAgendaClosures([]);
       setOffError("");
+      setIsAgendaOffOpen(false);
       publishedAvailabilityRef.current = "";
       availabilityQueueRef.current = Promise.resolve();
       importingLinksRef.current.clear();
@@ -2451,6 +2459,25 @@ export default function App() {
       });
     return undefined;
   }, [user, shareLinks, agendaClosures]);
+
+  useEffect(() => {
+    if (activeTab !== TABS.AGENDA && isAgendaOffOpen) {
+      setIsAgendaOffOpen(false);
+    }
+  }, [activeTab, isAgendaOffOpen]);
+
+  useEffect(() => {
+    if (!isAgendaOffOpen) {
+      return undefined;
+    }
+    const onKey = (event) => {
+      if (event.key === "Escape" && !offBusy) {
+        setIsAgendaOffOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isAgendaOffOpen, offBusy]);
 
   useEffect(() => {
     if (!selectedClientId) {
@@ -2750,6 +2777,7 @@ export default function App() {
       setTrackingParameters([]);
       setParameterForm(emptyParameterForm());
       setParameterError("");
+      setIsParameterEditorOpen(false);
       setPhotoAnalyses([]);
       setPhotoForm(buildEmptyPhotoAnalysis());
       setDraftPhotos([]);
@@ -3219,6 +3247,7 @@ export default function App() {
     setIsPhotoComposerOpen(false);
     setIsRecordMenuOpen(false);
     setIsEvolutionComposerOpen(false);
+    setIsParameterEditorOpen(false);
   };
 
   const handleStartEditAnamnese = () => {
@@ -3807,6 +3836,20 @@ export default function App() {
     setCheckpointForm((previous) => ({ ...previous, [fieldName]: value }));
   };
 
+  const openParameterEditor = () => {
+    setParameterError("");
+    setParameterForm(emptyParameterForm());
+    setIsParameterEditorOpen(true);
+  };
+
+  const closeParameterEditor = () => {
+    if (parameterBusy) {
+      return;
+    }
+    setParameterError("");
+    setIsParameterEditorOpen(false);
+  };
+
   const handleParameterFieldChange = (patch) => {
     setParameterError("");
     setParameterForm((previous) => ({ ...previous, ...patch }));
@@ -3830,6 +3873,7 @@ export default function App() {
         createdAt: serverTimestamp()
       });
       setParameterForm(emptyParameterForm());
+      setIsParameterEditorOpen(false);
     } catch (parameterSaveError) {
       setParameterError("Não foi possível salvar o parâmetro. Tente novamente.");
     } finally {
@@ -4149,6 +4193,18 @@ export default function App() {
   const monthTitle = `${visibleMonthLabel.charAt(0).toUpperCase()}${visibleMonthLabel.slice(1)} ${agendaVisibleMonth.getFullYear()}`;
   const selectedDayLabel = formatAgendaDayLabel(selectedAgendaDate);
   const agendaNavTitle = agendaMode === "month" ? monthTitle : selectedDayLabel;
+
+  const openAgendaOff = () => {
+    setOffError("");
+    setIsAgendaOffOpen(true);
+  };
+
+  const closeAgendaOff = () => {
+    if (offBusy) {
+      return;
+    }
+    setIsAgendaOffOpen(false);
+  };
 
   const openAppointmentModal = () => {
     setAppointmentDate(selectedAgendaDate);
@@ -4567,6 +4623,12 @@ export default function App() {
 
   return (
     <main className="page app-page">
+      <ClinicNoticeRunner
+        uid={user.uid}
+        tokens={shareLinks
+          .filter((link) => ["anamnese", "acompanhamento", "evolucao", "consentimento"].includes(link.type))
+          .map((link) => link.token || link.id)}
+      />
       {(isHeaderMenuOpen || isHeaderAlertsOpen) ? (
         <button
           type="button"
@@ -4962,73 +5024,12 @@ export default function App() {
             </article>
 
             <article className="card">
-              {agendaMode === "month" ? <h3 className="day-heading">{selectedDayLabel}</h3> : null}
-              <section className="agenda-off" aria-label="Dias e horários off">
-                <h4>Fora da agenda</h4>
-                <p>A cliente não consegue pedir o primeiro atendimento nestes dias ou horários. Manhã vai de 8h às 12h, tarde de 12h às 18h e noite de 18h às 21h.</p>
-                <div className="agenda-off-choices">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedDayAllDay)}
-                      disabled={offBusy}
-                      onChange={() => toggleAgendaAllDay(false)}
-                    />
-                    Este dia inteiro
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedWeekAllDay)}
-                      disabled={offBusy}
-                      onChange={() => toggleAgendaAllDay(true)}
-                    />
-                    Toda {WEEKDAY_LABELS[selectedWeekday]} inteira
-                  </label>
-                </div>
-                <div className="agenda-off-times">
-                  <label>
-                    Início
-                    <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
-                  </label>
-                  <label>
-                    Fim
-                    <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
-                  </label>
-                </div>
-                <div className="agenda-off-choices">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={offRepeat}
-                      onChange={(event) => setOffRepeat(event.target.checked)}
-                    />
-                    Repetir toda semana
-                  </label>
-                </div>
-                <button className="secondary-btn" type="button" onClick={handleAddAgendaOff} disabled={offBusy}>
-                  Bloquear horário
+              <div className="agenda-day-header">
+                {agendaMode === "month" ? <h3 className="day-heading">{selectedDayLabel}</h3> : null}
+                <button type="button" className="secondary-btn" onClick={openAgendaOff}>
+                  Fora da agenda
                 </button>
-                {offError ? <p className="error-text">{offError}</p> : null}
-                {selectedDayClosures.length > 0 ? (
-                  <ul className="agenda-off-list">
-                    {selectedDayClosures.map((closure) => (
-                      <li key={closure.id}>
-                        <span>{closureLabel(closure)}</span>
-                        <button
-                          type="button"
-                          className="danger-btn"
-                          disabled={offBusy}
-                          aria-label={`Remover ${closureLabel(closure)}`}
-                          onClick={() => removeAgendaClosure(closure.id)}
-                        >
-                          Remover
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </section>
+              </div>
               <ul className="list">
                 {selectedDayAppointments.length === 0 ? (
                   <li className="empty">Nenhum atendimento neste dia.</li>
@@ -5080,6 +5081,97 @@ export default function App() {
             </article>
           </div>
         </section>
+      ) : null}
+
+      {isAgendaOffOpen ? (
+        <div
+          className="client-modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) closeAgendaOff();
+          }}
+        >
+          <section
+            className="profile-modal agenda-off-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Fora da agenda"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>Fora da agenda</h4>
+                <p>
+                  {selectedDayLabel}. A cliente não consegue pedir o primeiro atendimento nestes dias ou horários. Manhã vai de 8h às 12h, tarde de 12h às 18h e noite de 18h às 21h.
+                </p>
+              </div>
+              <ModalClose onClick={closeAgendaOff} />
+            </header>
+            <div className="agenda-off">
+              <div className="agenda-off-choices">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedDayAllDay)}
+                    disabled={offBusy}
+                    onChange={() => toggleAgendaAllDay(false)}
+                  />
+                  Este dia inteiro
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedWeekAllDay)}
+                    disabled={offBusy}
+                    onChange={() => toggleAgendaAllDay(true)}
+                  />
+                  Toda {WEEKDAY_LABELS[selectedWeekday]} inteira
+                </label>
+              </div>
+              <div className="agenda-off-times">
+                <label>
+                  Início
+                  <input type="time" value={offStart} onChange={(event) => setOffStart(event.target.value)} />
+                </label>
+                <label>
+                  Fim
+                  <input type="time" value={offEnd} onChange={(event) => setOffEnd(event.target.value)} />
+                </label>
+              </div>
+              <div className="agenda-off-choices">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={offRepeat}
+                    onChange={(event) => setOffRepeat(event.target.checked)}
+                  />
+                  Repetir toda semana
+                </label>
+              </div>
+              <button className="secondary-btn" type="button" onClick={handleAddAgendaOff} disabled={offBusy}>
+                Bloquear horário
+              </button>
+              {offError ? <p className="error-text">{offError}</p> : null}
+              {selectedDayClosures.length > 0 ? (
+                <ul className="agenda-off-list">
+                  {selectedDayClosures.map((closure) => (
+                    <li key={closure.id}>
+                      <span>{closureLabel(closure)}</span>
+                      <button
+                        type="button"
+                        className="danger-btn"
+                        disabled={offBusy}
+                        aria-label={`Remover ${closureLabel(closure)}`}
+                        onClick={() => removeAgendaClosure(closure.id)}
+                      >
+                        Remover
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {isAppointmentModalOpen ? (
@@ -6109,33 +6201,29 @@ export default function App() {
                           <h4>Acompanhamento</h4>
                           <p>Sessões da clínica e feedbacks enviados pela cliente.</p>
                         </div>
-                        <button
-                          type="button"
-                          className="primary-btn"
-                          onClick={() => {
-                            setCheckpointForm({
-                              ...buildEmptyCheckpoint(),
-                              sessionNumber: String(getNextSessionNumber(checkpoints))
-                            });
-                            setDraftPhotos([]);
-                            setPhotoForm(buildEmptyPhotoAnalysis());
-                            setPhotoMessage("");
-                            setIsPhotoComposerOpen(false);
-                            setFollowupScreen("create");
-                          }}
-                        >
-                          Nova sessão
-                        </button>
+                        <div className="panel-header-actions">
+                          <button type="button" className="secondary-btn" onClick={openParameterEditor}>
+                            Adicionar parâmetro
+                          </button>
+                          <button
+                            type="button"
+                            className="primary-btn"
+                            onClick={() => {
+                              setCheckpointForm({
+                                ...buildEmptyCheckpoint(),
+                                sessionNumber: String(getNextSessionNumber(checkpoints))
+                              });
+                              setDraftPhotos([]);
+                              setPhotoForm(buildEmptyPhotoAnalysis());
+                              setPhotoMessage("");
+                              setIsPhotoComposerOpen(false);
+                              setFollowupScreen("create");
+                            }}
+                          >
+                            Nova sessão
+                          </button>
+                        </div>
                       </div>
-                      <TrackingParameterEditor
-                        parameters={trackingParameters}
-                        form={parameterForm}
-                        error={parameterError}
-                        busy={parameterBusy}
-                        onChange={handleParameterFieldChange}
-                        onAdd={handleAddParameter}
-                        onRemove={handleRemoveParameter}
-                      />
                       <ul className="list">
                         {checkpoints.length === 0 ? (
                           <li className="empty">Nenhum registro ainda.</li>
@@ -6167,7 +6255,12 @@ export default function App() {
                                         : ""}
                                   </strong>
                                   <p>
-                                    {checkpoint.sessionType || "Tipo não informado"} · Dor {checkpoint.painLevel ?? 0} ·
+                                    {checkpoint.sessionType
+                                      ? `${checkpoint.sessionType} · `
+                                      : isClientFeedback(checkpoint)
+                                        ? ""
+                                        : "Tipo não informado · "}
+                                    Dor {checkpoint.painLevel ?? 0} ·
                                     Estresse {checkpoint.stressLevel ?? 0} · Sono {checkpoint.sleepHours ?? 0}h
                                     {checkpointParameterSummary(checkpoint) ? ` · ${checkpointParameterSummary(checkpoint)}` : ""}
                                   </p>
@@ -6219,27 +6312,23 @@ export default function App() {
                       <h4>Nova sessão</h4>
                       <p>Sessão {checkpointForm.sessionNumber || getNextSessionNumber(checkpoints)}</p>
                     </div>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => {
-                        setIsPhotoComposerOpen(false);
-                        setFollowupScreen("list");
-                      }}
-                    >
-                      Voltar
-                    </button>
+                    <div className="panel-header-actions">
+                      <button type="button" className="secondary-btn" onClick={openParameterEditor}>
+                        Adicionar parâmetro
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => {
+                          setIsPhotoComposerOpen(false);
+                          setFollowupScreen("list");
+                        }}
+                      >
+                        Voltar
+                      </button>
+                    </div>
                   </div>
 
-                  <TrackingParameterEditor
-                    parameters={trackingParameters}
-                    form={parameterForm}
-                    error={parameterError}
-                    busy={parameterBusy}
-                    onChange={handleParameterFieldChange}
-                    onAdd={handleAddParameter}
-                    onRemove={handleRemoveParameter}
-                  />
                   <form
                     id="followup-checkpoint-form"
                     className="form grid-form"
@@ -6955,6 +7044,41 @@ export default function App() {
                 Cancelar
               </button>
             </form>
+          </section>
+        </div>
+      ) : null}
+
+      {isParameterEditorOpen && selectedClient ? (
+        <div
+          className="client-modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) closeParameterEditor();
+          }}
+        >
+          <section
+            className="profile-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Adicionar parâmetro"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-modal-header">
+              <div>
+                <h4>Parâmetros de {selectedClient.name}</h4>
+                <p>Crie uma medida desta cliente e a unidade. Ex.: alcance do ombro direito, em cm.</p>
+              </div>
+              <ModalClose onClick={closeParameterEditor} />
+            </header>
+            <TrackingParameterEditor
+              parameters={trackingParameters}
+              form={parameterForm}
+              error={parameterError}
+              busy={parameterBusy}
+              onChange={handleParameterFieldChange}
+              onAdd={handleAddParameter}
+              onRemove={handleRemoveParameter}
+              onClose={closeParameterEditor}
+            />
           </section>
         </div>
       ) : null}

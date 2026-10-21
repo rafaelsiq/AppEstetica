@@ -114,6 +114,24 @@ export default function ClientAccessPrompts({ clinicName, unlocked = false }) {
   }, [installSettled]);
 
   useEffect(() => {
+    const onNeed = () => {
+      if (notificationPermission() === "granted") {
+        return;
+      }
+      if (isIos() && !isInstalled()) {
+        setInstallSettled(false);
+        setInstallOpen(true);
+        return;
+      }
+      if (notificationPermission() === "default") {
+        setNotifyOpen(true);
+      }
+    };
+    window.addEventListener("clinica-notice-needs-permission", onNeed);
+    return () => window.removeEventListener("clinica-notice-needs-permission", onNeed);
+  }, []);
+
+  useEffect(() => {
     if (!unlocked || !installSettled || installOpen || notifyOpen || !notifyNeeded()) {
       return undefined;
     }

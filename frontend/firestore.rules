@@ -208,6 +208,22 @@ service cloud.firestore {
         allow update, delete: if signedIn() && resource.data.ownerId == request.auth.uid;
       }
 
+      function deviceOk(data) {
+        return data.keys().hasOnly(["endpoint", "p256dh", "auth"])
+          && data.endpoint is string
+          && data.endpoint.matches("^https://.{10,700}$")
+          && data.p256dh is string
+          && data.p256dh.matches("^[A-Za-z0-9_-]{20,180}$")
+          && data.auth is string
+          && data.auth.matches("^[A-Za-z0-9_-]{10,80}$");
+      }
+
+      match /devices/{deviceId} {
+        allow get, list: if false;
+        allow create, update: if deviceId.matches("^[A-Za-z0-9]{16,40}$") && deviceOk(request.resource.data);
+        allow delete: if isLinkOwner(token);
+      }
+
       match /notices/{noticeId} {
         allow get, list: if true;
         allow create, update: if isLinkOwner(token) && noticeOk(request.resource.data);
