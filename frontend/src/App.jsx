@@ -20,7 +20,7 @@ import { auth, db } from "./firebase";
 import ModalClose from "./ModalClose";
 import { phoneKey } from "./clientQuiz";
 import { applyClinicIcon } from "./pageIcon";
-import NotificationLists from "./NotificationLists";
+import NotificationLists from "./NotificationLists.jsx";
 import ClinicNoticeRunner from "./ClinicNoticeRunner";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory } from "./evolutionStory";

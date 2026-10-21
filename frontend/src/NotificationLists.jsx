@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { collection, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import ModalClose from "./ModalClose";
-import { publishNotificationList, removeNotificationList } from "./notificationLists";
+import { publishNotificationList, removeNotificationList } from "./notificationLists.js";
 import {
   WEEKDAYS,
   audienceLabel,
