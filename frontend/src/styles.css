@@ -4768,9 +4768,9 @@ h5 {
     gap: 16px;
   }
 
-  .app-shell > :not(.app-sidebar):not(.topbar):not(.topbar-backdrop):not(.bottom-nav):not(.client-modal-backdrop) {
+  .app-shell > :not(.app-sidebar):not(.topbar):not(.topbar-backdrop):not(.bottom-nav):not(.client-modal-backdrop):not(.is-day) {
     width: auto;
-    margin-inline: 20px;
+    margin-inline: 16px;
   }
 
   .app-sidebar {
@@ -4780,7 +4780,7 @@ h5 {
   .app-shell .topbar {
     position: static;
     height: auto;
-    padding: 24px 20px 8px;
+    padding: 24px 16px 8px;
     background: transparent;
     border-bottom: none;
   }
@@ -4809,7 +4809,7 @@ h5 {
   }
 
   .app-shell .topbar-popover-right {
-    right: 20px;
+    right: 16px;
   }
 
   .app-shell .topbar-popover-left {
