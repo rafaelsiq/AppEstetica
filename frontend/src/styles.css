@@ -8632,6 +8632,65 @@ input[type="radio"] {
   background: transparent;
 }
 
+.pain-map-canvas[data-editable="true"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.pain-map-loupe {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 40px));
+  border-radius: 50%;
+  border: 3px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border-strong), 0 12px 28px rgba(18, 32, 28, 0.22);
+  background: #f7f6f3;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 70;
+}
+
+.pain-map-loupe.below {
+  transform: translate(-50%, 40px);
+}
+
+.pain-map-loupe-lens {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+}
+
+.pain-map-loupe::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid #b37b10;
+  background: rgba(246, 204, 108, 0.55);
+}
+
+.pain-map-loupe-label {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  max-width: 90%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(18, 32, 28, 0.78);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .anamnese-map-card .pain-dot.selected {
   width: 18px;
   height: 18px;

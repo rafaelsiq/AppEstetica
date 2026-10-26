@@ -1282,10 +1282,17 @@ function normalizeClientNameKey(value) {
     .replace(/\s+/g, " ");
 }
 
+const PAIN_LOUPE_SIZE = 120;
+const PAIN_LOUPE_ZOOM = 2.5;
+const PAIN_LOUPE_HOLD_MS = 180;
+
 function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEditable }) {
   const [pendingSelection, setPendingSelection] = useState(null);
   const [mapSide, setMapSide] = useState("front");
+  const [press, setPress] = useState(null);
   const canvasRef = useRef(null);
+  const imageRef = useRef(null);
+  const pressRef = useRef(null);
 
   useEffect(() => {
     if (!isEditable) {
@@ -1308,26 +1315,145 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
     return closestRegion;
   };
 
-  const handleMapClick = (event, regions, side) => {
-    if (!isEditable) {
-      return;
-    }
+  const activeRegions = mapSide === "front" ? FRONT_PAIN_REGIONS : BACK_PAIN_REGIONS;
 
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-    const selectedRegion = getClosestRegion(x, y, regions);
+  // Segurar sobre o mapa mostra uma lupa; o ponto é escolhido onde o dedo/mouse é solto.
+  // No toque, a lupa só aparece depois de um instante parado, para não travar a rolagem da página.
+  const pointFromClient = (clientX, clientY) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const px = Math.min(Math.max(clientX - rect.left, 0), rect.width);
+    const py = Math.min(Math.max(clientY - rect.top, 0), rect.height);
+    return { px, py, width: rect.width, x: (px / rect.width) * 100, y: (py / rect.height) * 100 };
+  };
 
+  const commitPoint = (point) => {
+    const selectedRegion = getClosestRegion(point.x, point.y, activeRegions);
     if (!selectedRegion) {
       return;
     }
     setPendingSelection({
       label: selectedRegion.label,
-      side,
-      x: Number(x.toFixed(2)),
-      y: Number(y.toFixed(2)),
-      laterality: inferLateralityByCoordinate(x)
+      side: mapSide,
+      x: Number(point.x.toFixed(2)),
+      y: Number(point.y.toFixed(2)),
+      laterality: inferLateralityByCoordinate(point.x)
     });
+  };
+
+  const endPress = () => {
+    const state = pressRef.current;
+    if (state) {
+      clearTimeout(state.timer);
+    }
+    pressRef.current = null;
+    setPress(null);
+    return state;
+  };
+
+  const handlePointerDown = (event) => {
+    if (!isEditable || event.button > 0 || event.target.closest("button, .laterality-tooltip")) {
+      return;
+    }
+    endPress();
+    const point = pointFromClient(event.clientX, event.clientY);
+    const isTouch = event.pointerType === "touch";
+    const state = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: !isTouch,
+      last: point,
+      timer: null
+    };
+    pressRef.current = state;
+    setPendingSelection(null);
+    if (isTouch) {
+      state.timer = setTimeout(() => {
+        state.active = true;
+        setPress(state.last);
+      }, PAIN_LOUPE_HOLD_MS);
+    } else {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      setPress(point);
+    }
+  };
+
+  const handlePointerMove = (event) => {
+    const state = pressRef.current;
+    if (!state || state.pointerId !== event.pointerId) {
+      return;
+    }
+    state.last = pointFromClient(event.clientX, event.clientY);
+    if (state.active) {
+      setPress(state.last);
+    } else if (Math.hypot(event.clientX - state.startX, event.clientY - state.startY) > 10) {
+      // Arrastou antes de segurar: é rolagem da página, não seleção.
+      endPress();
+    }
+  };
+
+  const handlePointerUp = (event) => {
+    if (!pressRef.current || pressRef.current.pointerId !== event.pointerId) {
+      return;
+    }
+    const state = endPress();
+    commitPoint(state.active ? state.last : pointFromClient(event.clientX, event.clientY));
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return undefined;
+    }
+    const blockScrollWhileAiming = (event) => {
+      if (pressRef.current?.active) {
+        event.preventDefault();
+      }
+    };
+    canvas.addEventListener("touchmove", blockScrollWhileAiming, { passive: false });
+    return () => canvas.removeEventListener("touchmove", blockScrollWhileAiming);
+  }, []);
+
+  useEffect(() => () => clearTimeout(pressRef.current?.timer), []);
+
+  const renderLoupe = () => {
+    const image = imageRef.current;
+    if (!press || !image || !image.naturalWidth) {
+      return null;
+    }
+    // A imagem usa object-fit: contain, então calcula a área realmente desenhada dentro da caixa.
+    const boxWidth = image.clientWidth;
+    const boxHeight = image.clientHeight;
+    const scale = Math.min(boxWidth / image.naturalWidth, boxHeight / image.naturalHeight);
+    const drawnWidth = image.naturalWidth * scale;
+    const drawnHeight = image.naturalHeight * scale;
+    const offsetX = (boxWidth - drawnWidth) / 2;
+    const offsetY = (boxHeight - drawnHeight) / 2;
+    const half = PAIN_LOUPE_SIZE / 2;
+    const placeBelow = press.py < PAIN_LOUPE_SIZE + 48;
+    const loupeLeft = Math.min(Math.max(press.px, half), Math.max(half, press.width - half));
+    const region = getClosestRegion(press.x, press.y, activeRegions);
+
+    return (
+      <>
+        <span className="pain-dot pending" style={{ left: `${press.x}%`, top: `${press.y}%` }} aria-hidden />
+        <div
+          className={`pain-map-loupe ${placeBelow ? "below" : ""}`}
+          style={{ left: `${loupeLeft}px`, top: `${press.py}px`, width: PAIN_LOUPE_SIZE, height: PAIN_LOUPE_SIZE }}
+          aria-hidden
+        >
+          <div
+            className="pain-map-loupe-lens"
+            style={{
+              backgroundImage: `url(${image.currentSrc || image.src})`,
+              backgroundSize: `${drawnWidth * PAIN_LOUPE_ZOOM}px ${drawnHeight * PAIN_LOUPE_ZOOM}px`,
+              backgroundPosition: `${half - (press.px - offsetX) * PAIN_LOUPE_ZOOM}px ${half - (press.py - offsetY) * PAIN_LOUPE_ZOOM}px`
+            }}
+          />
+          {region ? <span className="pain-map-loupe-label">{region.label}</span> : null}
+        </div>
+      </>
+    );
   };
 
   const handleConfirmSelection = (laterality) => {
@@ -1397,9 +1523,9 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
     );
   };
 
-  const activeRegions = mapSide === "front" ? FRONT_PAIN_REGIONS : BACK_PAIN_REGIONS;
   const selectedOnSide = painSelections.filter((selection) => selection.side === mapSide);
   const showMapSide = (side) => {
+    endPress();
     setMapSide(side);
     setPendingSelection(null);
   };
@@ -1435,9 +1561,19 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
             data-editable={isEditable ? "true" : "false"}
             role={isEditable ? "button" : undefined}
             tabIndex={isEditable ? 0 : -1}
-            onClick={(event) => handleMapClick(event, activeRegions, mapSide)}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={endPress}
+            onContextMenu={(event) => {
+              if (isEditable) {
+                event.preventDefault();
+              }
+            }}
           >
             <img
+              ref={imageRef}
+              draggable={false}
               src={mapSide === "front" ? "/pain-map-front.jpg" : "/pain-map-back.jpg"}
               alt={mapSide === "front" ? "Mapa corporal frontal para seleção de dor" : "Mapa corporal traseiro para seleção de dor"}
             />
@@ -1459,6 +1595,7 @@ function PainMapSelector({ painSelections, onSelectRegion, onRemoveRegion, isEdi
               />
             ))}
             {renderLateralityTooltip(mapSide)}
+            {renderLoupe()}
           </div>
         </figure>
         <div className="pain-map-regions">
