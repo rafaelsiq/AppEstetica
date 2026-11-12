@@ -28,10 +28,6 @@ if (!existsSync(new URL("../frontend/node_modules/", import.meta.url))) {
 }
 run("npm", ["run", "build"]);
 
-if (!existsSync(new URL("../frontend/dist/.well-known/assetlinks.json", import.meta.url))) {
-  console.error("O build não copiou .well-known/assetlinks.json; o app Android abriria com barra de navegador.");
-  process.exit(1);
-}
 
 const only = withRules ? "hosting,firestore" : "hosting";
 run("firebase", ["deploy", "--only", only, "--project", PROJECT]);

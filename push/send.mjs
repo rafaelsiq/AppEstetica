@@ -42,7 +42,10 @@ async function accessToken() {
   if (process.env.GOOGLE_ACCESS_TOKEN) {
     return process.env.GOOGLE_ACCESS_TOKEN;
   }
-  const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/datastore"] });
+  const auth = new GoogleAuth({ scopes: [
+    "https://www.googleapis.com/auth/datastore",
+    "https://www.googleapis.com/auth/firebase.messaging"
+  ] });
   const client = await auth.getClient();
   const token = await client.getAccessToken();
   return token.token;
@@ -150,6 +153,37 @@ async function deliver(device, payload, onGone) {
   }
 }
 
+// App Android (Capacitor): envia pelo Firebase Cloud Messaging.
+async function deliverFcm(device, notice, onGone) {
+  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${PROJECT}/messages:send`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: {
+        token: device.fcmToken,
+        notification: { title: notice.title, body: notice.body },
+        data: { url: notice.url, tag: notice.tag },
+        android: {
+          priority: "high",
+          ttl: "43200s",
+          notification: { channel_id: notice.channel, tag: notice.tag, default_sound: true }
+        }
+      }
+    })
+  });
+  if (response.ok) {
+    sent += 1;
+    return true;
+  }
+  failed += 1;
+  const text = await response.text();
+  console.error(JSON.stringify({ status: response.status, message: text.slice(0, 240) }));
+  if (response.status === 404 || /UNREGISTERED|registration-token-not-registered/.test(text)) {
+    await onGone().catch(() => {});
+  }
+  return false;
+}
+
 // Pedidos de agendamento novos: avisa os aparelhos da clínica dona do link.
 const BOOKING_WINDOW_MS = 12 * 60 * 60 * 1000;
 const PERIODS = { manha: "manhã", tarde: "tarde", noite: "noite", qualquer: "qualquer horário" };
@@ -187,20 +221,25 @@ for (const link of links.filter((item) => item.type === "primeiro")) {
   const devices = ownerDevices.get(ownerId);
   for (const request of requests) {
     for (const device of devices) {
-      if (!device.endpoint || !device.p256dh || !device.auth) {
+      const webPush = device.endpoint && device.p256dh && device.auth;
+      if (!webPush && !device.fcmToken) {
         continue;
       }
-      const id = deliveryId(`agendamento:${request.id}`, link.id, device.endpoint);
+      const id = deliveryId(`agendamento:${request.id}`, link.id, device.fcmToken || device.endpoint);
       if (await alreadySent(token, id)) {
         continue;
       }
-      const payload = JSON.stringify({
+      const notice = {
         title: "Novo pedido de agendamento",
         body: bookingBody(request),
         url: `${SITE}/`,
-        tag: `agendamento:${request.id}`
-      });
-      const ok = await deliver(device, payload, () => firestore(token, `users/${ownerId}/pushDevices/${device.id}`, { method: "DELETE" }));
+        tag: `agendamento:${request.id}`,
+        channel: "agendamentos"
+      };
+      const forget = () => firestore(token, `users/${ownerId}/pushDevices/${device.id}`, { method: "DELETE" });
+      const ok = device.fcmToken
+        ? await deliverFcm(device, notice, forget)
+        : await deliver(device, JSON.stringify(notice), forget);
       if (ok) {
         await markSent(token, id, `agendamento:${request.id}`, link.id);
         bookings += 1;

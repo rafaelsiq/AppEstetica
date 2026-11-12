@@ -1,0 +1,13 @@
+{
+  "appId": "com.rafaelsiq.clinicaestetica.gestao",
+  "appName": "Minha Clínica de Estética",
+  "webDir": "dist",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "auto"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

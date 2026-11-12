@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { VAPID_PUBLIC_KEY } from "./vapidPublic";
@@ -69,12 +70,89 @@ export async function ensurePushSubscription(tokens) {
   await Promise.all(list.map((token) => setDoc(doc(db, "clientLinks", token, "devices", id), device)));
 }
 
+// No app Android (Capacitor) a notificação vem pelo Firebase Cloud Messaging;
+// no navegador, pelo Web Push.
+export const isNativeApp = Capacitor.isNativePlatform();
+const BOOKING_CHANNEL = "agendamentos";
+
+async function nativePush() {
+  const { PushNotifications } = await import("@capacitor/push-notifications");
+  return PushNotifications;
+}
+
+// "granted", "default" (ainda pode pedir), "denied" ou "unsupported".
+export async function clinicNotificationPermission() {
+  if (isNativeApp) {
+    const { receive } = await (await nativePush()).checkPermissions();
+    return receive === "granted" || receive === "denied" ? receive : "default";
+  }
+  if (!("Notification" in window)) {
+    return "unsupported";
+  }
+  return Notification.permission;
+}
+
+export async function requestClinicNotificationPermission() {
+  if (isNativeApp) {
+    const { receive } = await (await nativePush()).requestPermissions();
+    return receive === "granted" || receive === "denied" ? receive : "default";
+  }
+  if (!("Notification" in window)) {
+    return "unsupported";
+  }
+  return Notification.requestPermission();
+}
+
+async function nativeToken() {
+  const PushNotifications = await nativePush();
+  await PushNotifications.createChannel({
+    id: BOOKING_CHANNEL,
+    name: "Pedidos de agendamento",
+    description: "Avisa quando uma cliente pede um horário.",
+    importance: 5,
+    visibility: 1,
+    vibration: true
+  }).catch(() => {});
+  return new Promise((resolve, reject) => {
+    const handles = [];
+    let done = false;
+    const finish = (callback, value) => {
+      if (done) {
+        return;
+      }
+      done = true;
+      handles.forEach((handle) => handle.remove());
+      callback(value);
+    };
+    window.setTimeout(() => finish(reject, new Error("Sem resposta do registro de notificações.")), 20000);
+    Promise.all([
+      PushNotifications.addListener("registration", (token) => finish(resolve, token.value)),
+      PushNotifications.addListener("registrationError", (error) => finish(reject, new Error(error.error)))
+    ]).then((added) => {
+      handles.push(...added);
+      if (done) {
+        added.forEach((handle) => handle.remove());
+        return undefined;
+      }
+      return PushNotifications.register();
+    }).catch((error) => finish(reject, error));
+  });
+}
+
 // Aparelho da clínica: recebe o aviso de novos pedidos de agendamento.
 export async function ensureClinicPushSubscription(uid) {
-  if (!uid || !pushAvailable()) {
+  if (!uid || (await clinicNotificationPermission()) !== "granted") {
     return;
   }
-  const device = await currentSubscription();
+  let device;
+  if (isNativeApp) {
+    device = { fcmToken: await nativeToken(), platform: Capacitor.getPlatform() };
+  } else {
+    if (!pushAvailable()) {
+      return;
+    }
+    device = await currentSubscription();
+  }
   if (!device) {
     return;
   }

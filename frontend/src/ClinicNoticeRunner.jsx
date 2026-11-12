@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import { useDeliverNotices } from "./noticeDelivery";
-import { ensureClinicPushSubscription, ensurePushSubscription } from "./pushSubscribe";
+import {
+  clinicNotificationPermission,
+  ensureClinicPushSubscription,
+  ensurePushSubscription,
+  requestClinicNotificationPermission
+} from "./pushSubscribe";
 import ModalClose from "./ModalClose";
 
 const ASK_DISMISS_KEY = "clinica-agenda-push-adiado";
@@ -52,18 +57,27 @@ export default function ClinicNoticeRunner({ uid, tokens = [] }) {
   }, [tokenKey]);
 
   useEffect(() => {
-    if (!uid || !("Notification" in window)) {
+    if (!uid) {
       return undefined;
     }
-    if (Notification.permission === "granted") {
-      ensureClinicPushSubscription(uid).catch(() => {});
-      return undefined;
-    }
-    if (Notification.permission !== "default" || askDismissedRecently()) {
-      return undefined;
-    }
-    const timer = window.setTimeout(() => setAsk(true), 800);
-    return () => window.clearTimeout(timer);
+    let timer = 0;
+    let active = true;
+    clinicNotificationPermission().then((permission) => {
+      if (!active) {
+        return;
+      }
+      if (permission === "granted") {
+        ensureClinicPushSubscription(uid).catch(() => {});
+        return;
+      }
+      if (permission === "default" && !askDismissedRecently()) {
+        timer = window.setTimeout(() => setAsk(true), 800);
+      }
+    }).catch(() => {});
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [uid]);
 
   function dismiss() {
@@ -82,17 +96,13 @@ export default function ClinicNoticeRunner({ uid, tokens = [] }) {
   }, []);
 
   async function allow() {
-    if (!("Notification" in window)) {
-      setAsk(false);
-      return;
-    }
     try {
-      const result = await Notification.requestPermission();
+      const result = await requestClinicNotificationPermission();
       if (result === "granted") {
         window.dispatchEvent(new Event("clinica-notifications-granted"));
         await Promise.all([
           ensurePushSubscription(tokens).catch(() => {}),
-          ensureClinicPushSubscription(uid).catch(() => {})
+          ensureClinicPushSubscription(uid).catch((error) => console.error(error))
         ]);
       }
     } catch {

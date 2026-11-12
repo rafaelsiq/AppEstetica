@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "579519704866",
+    "project_id": "clinica-estetica-a219",
+    "storage_bucket": "clinica-estetica-a219.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:579519704866:android:2c55d88b5df7e608a3bf7b",
+        "android_client_info": {
+          "package_name": "com.rafaelsiq.clinicaestetica.gestao"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhesZWzKXRAysWSwYC7wnUBEo8p6ZJNtE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

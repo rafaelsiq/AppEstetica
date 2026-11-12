@@ -1,4 +1,5 @@
-// Gera o .aab do app Android (TWA), assina e envia para o Google Play.
+// Gera o .aab do app Android (React + Capacitor), assina e envia para o Google Play.
+// O build do React (frontend/dist) vai dentro do app.
 // Uso: node scripts/publicar-play.mjs [opções]
 //   --faixa <internal|alpha|beta|production>  faixa do Play (padrão: internal)
 //   --notas "texto"                           novidades da versão (pt-BR)
@@ -8,20 +9,21 @@
 // Variáveis de ambiente (todas opcionais):
 //   PLAY_SERVICE_ACCOUNT  JSON da conta de serviço com acesso ao Play Console
 //   UPLOAD_KEY_INFO       arquivo com keystore/alias/storepass/keypass
-//   JAVA_HOME             JDK 17+ (padrão: o JBR do Android Studio)
+//   JAVA_HOME             JDK 21+
 import { spawnSync } from "node:child_process";
 import { createSign } from "node:crypto";
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PACKAGE = "com.rafaelsiq.clinicaestetica.gestao";
-const android = fileURLToPath(new URL("../android/", import.meta.url));
+const frontend = fileURLToPath(new URL("../frontend/", import.meta.url));
+const android = join(frontend, "android");
 const gradleFile = join(android, "app", "build.gradle");
-const twaFile = join(android, "twa-manifest.json");
 const builtAab = join(android, "app", "build", "outputs", "bundle", "release", "app-release.aab");
 const signedAab = join(android, "app-release-signed.aab");
+const windows = process.platform === "win32";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -40,12 +42,11 @@ const keyInfoPath = process.env.UPLOAD_KEY_INFO
   || join(homedir(), ".android-keys", "estetica-gestao-upload.txt");
 
 // Se o build ou o envio falhar, volta o número da versão para a próxima tentativa reaproveitar.
-let previousVersion = null;
+let previousGradle = null;
 
 function fail(message) {
-  if (previousVersion) {
-    writeFileSync(gradleFile, previousVersion.gradle);
-    writeFileSync(twaFile, previousVersion.twa);
+  if (previousGradle) {
+    writeFileSync(gradleFile, previousGradle);
   }
   console.error(`\n${message}`);
   process.exit(1);
@@ -58,15 +59,31 @@ function run(command, commandArgs, options = {}) {
   }
 }
 
+function javaMajor(dir) {
+  const java = join(dir, "bin", windows ? "java.exe" : "java");
+  if (!existsSync(java)) {
+    return 0;
+  }
+  const result = spawnSync(java, ["-version"], { encoding: "utf8" });
+  const match = String(result.stderr || result.stdout).match(/version "(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
 function javaHome() {
+  const roots = ["C:/Program Files/Java", "C:/Program Files/Eclipse Adoptium", "D:/Program Files/Java"];
   const candidates = [
     process.env.JAVA_HOME,
     "C:/Program Files/Android/Android Studio/jbr",
-    "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+    "/Applications/Android Studio.app/Contents/jbr/Contents/Home",
+    ...roots.filter(existsSync).flatMap((root) => readdirSync(root).map((name) => join(root, name)))
   ].filter(Boolean);
-  const found = candidates.find((dir) => existsSync(join(dir, "bin", process.platform === "win32" ? "java.exe" : "java")));
+  // Capacitor 8 pede JDK 21+; Gradle 8.14 roda até o 24.
+  const found = candidates.find((dir) => {
+    const major = javaMajor(dir);
+    return major >= 21 && major <= 24;
+  });
   if (!found) {
-    fail("Não achei um JDK 17+. Defina JAVA_HOME.");
+    fail("Não achei um JDK entre 21 e 24. Defina JAVA_HOME.");
   }
   return found;
 }
@@ -88,19 +105,14 @@ function bumpVersion() {
   const gradle = readFileSync(gradleFile, "utf8");
   const match = gradle.match(/versionCode (\d+)/);
   if (!match) {
-    fail("Não achei versionCode em android/app/build.gradle.");
+    fail("Não achei versionCode em frontend/android/app/build.gradle.");
   }
   const code = Number(match[1]) + 1;
   const name = `1.0.${code}`;
-  previousVersion = { gradle, twa: readFileSync(twaFile, "utf8") };
+  previousGradle = gradle;
   writeFileSync(gradleFile, gradle
     .replace(/versionCode \d+/, `versionCode ${code}`)
     .replace(/versionName "[^"]*"/, `versionName "${name}"`));
-  const twa = JSON.parse(readFileSync(twaFile, "utf8"));
-  twa.appVersionCode = code;
-  twa.appVersionName = name;
-  twa.appVersion = name;
-  writeFileSync(twaFile, `${JSON.stringify(twa, null, 2)}\n`);
   return { code, name };
 }
 
@@ -119,14 +131,23 @@ function readKeyInfo() {
 }
 
 function buildAndSign() {
+  if (!existsSync(join(android, "app", "google-services.json"))) {
+    fail("Falta frontend/android/app/google-services.json (Firebase → app Android).");
+  }
+  const npm = windows ? "npm.cmd" : "npm";
+  const npx = windows ? "npx.cmd" : "npx";
+  run(npm, ["run", "build"], { cwd: frontend, shell: windows });
+  run(npx, ["cap", "sync", "android"], { cwd: frontend, shell: windows });
+
   const java = javaHome();
   ensureLocalProperties();
   const env = { ...process.env, JAVA_HOME: java };
-  const gradlew = process.platform === "win32" ? `"${join(android, "gradlew.bat")}"` : join(android, "gradlew");
-  run(gradlew, ["bundleRelease", "--no-daemon", "-q"], { cwd: android, env, shell: process.platform === "win32" });
+  const gradlew = windows ? `"${join(android, "gradlew.bat")}"` : join(android, "gradlew");
+  run(gradlew, ["bundleRelease", "--no-daemon", "-q"], { cwd: android, env, shell: windows });
   copyFileSync(builtAab, signedAab);
+
   const key = readKeyInfo();
-  const jarsigner = join(java, "bin", process.platform === "win32" ? "jarsigner.exe" : "jarsigner");
+  const jarsigner = join(java, "bin", windows ? "jarsigner.exe" : "jarsigner");
   run(jarsigner, [
     "-keystore", key.keystore,
     "-storepass", key.storepass,
@@ -236,9 +257,6 @@ try {
 } catch (error) {
   if ((error.status === 403 || error.status === 401) && /permission|caller does not have/i.test(error.message)) {
     fail(`Sem permissão no Play Console (${error.message}).\nConvide a conta de serviço em Usuários e permissões com acesso a este app.`);
-  }
-  if (/package not found|not found/i.test(error.message)) {
-    fail(`O Play não aceitou o envio pela API (${error.message}).\nFaça o primeiro envio arrastando ${signedAab} em Teste interno > Criar versão.`);
   }
   fail(`Falha no envio: ${error.message}`);
 }
