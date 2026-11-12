@@ -1,0 +1,9 @@
+{
+  "name": "appestetica",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "publicar:firebase": "node scripts/publicar-firebase.mjs",
+    "publicar:play": "node scripts/publicar-play.mjs"
+  }
+}

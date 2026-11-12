@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.rafaelsiq.clinicaestetica.gestao",
+      "sha256_cert_fingerprints": [
+        "A6:D0:D0:15:3C:F7:A6:D0:61:F5:16:92:A7:FF:AB:F4:CA:81:15:8E:55:05:5F:1D:68:7C:5B:EA:61:32:CF:77",
+        "8D:F9:D3:E7:EC:10:60:55:7A:1D:A7:B9:D7:27:55:8C:B6:E2:18:30:F4:3A:B4:1D:F1:06:8F:B5:64:95:77:5F"
+      ]
+    }
+  }
+]

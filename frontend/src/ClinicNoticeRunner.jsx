@@ -2,8 +2,28 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import { useDeliverNotices } from "./noticeDelivery";
-import { ensurePushSubscription } from "./pushSubscribe";
+import { ensureClinicPushSubscription, ensurePushSubscription } from "./pushSubscribe";
 import ModalClose from "./ModalClose";
+
+const ASK_DISMISS_KEY = "clinica-agenda-push-adiado";
+const ASK_AGAIN_MS = 3 * 24 * 60 * 60 * 1000;
+
+function askDismissedRecently() {
+  try {
+    const at = Number(localStorage.getItem(ASK_DISMISS_KEY) || 0);
+    return Date.now() - at < ASK_AGAIN_MS;
+  } catch {
+    return false;
+  }
+}
+
+function rememberAskDismissed() {
+  try {
+    localStorage.setItem(ASK_DISMISS_KEY, String(Date.now()));
+  } catch {
+    // Sem armazenamento, o pedido volta na próxima abertura.
+  }
+}
 
 export default function ClinicNoticeRunner({ uid, tokens = [] }) {
   const [lists, setLists] = useState([]);
@@ -32,6 +52,26 @@ export default function ClinicNoticeRunner({ uid, tokens = [] }) {
   }, [tokenKey]);
 
   useEffect(() => {
+    if (!uid || !("Notification" in window)) {
+      return undefined;
+    }
+    if (Notification.permission === "granted") {
+      ensureClinicPushSubscription(uid).catch(() => {});
+      return undefined;
+    }
+    if (Notification.permission !== "default" || askDismissedRecently()) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setAsk(true), 800);
+    return () => window.clearTimeout(timer);
+  }, [uid]);
+
+  function dismiss() {
+    rememberAskDismissed();
+    setAsk(false);
+  }
+
+  useEffect(() => {
     const onNeed = () => {
       if ("Notification" in window && Notification.permission === "default") {
         setAsk(true);
@@ -50,12 +90,15 @@ export default function ClinicNoticeRunner({ uid, tokens = [] }) {
       const result = await Notification.requestPermission();
       if (result === "granted") {
         window.dispatchEvent(new Event("clinica-notifications-granted"));
-        await ensurePushSubscription(tokens).catch(() => {});
+        await Promise.all([
+          ensurePushSubscription(tokens).catch(() => {}),
+          ensureClinicPushSubscription(uid).catch(() => {})
+        ]);
       }
     } catch {
       // O navegador não abriu o pedido.
     }
-    setAsk(false);
+    dismiss();
   }
 
   if (!ask) {
@@ -67,12 +110,12 @@ export default function ClinicNoticeRunner({ uid, tokens = [] }) {
       <section className="quiz-card install-app-modal" role="dialog" aria-modal="true" aria-labelledby="clinic-notify-title">
         <div className="install-app-header">
           <h2 id="clinic-notify-title">Ativar notificações</h2>
-          <ModalClose onClick={() => setAsk(false)} />
+          <ModalClose onClick={dismiss} />
         </div>
-        <p>Permita as notificações para o aviso aparecer na área de notificações deste celular na hora marcada.</p>
+        <p>Permita as notificações para receber neste celular os novos pedidos de agendamento das clientes e os avisos na hora marcada.</p>
         <div className="install-app-actions">
           <button type="button" className="primary-btn" onClick={allow}>Permitir notificações</button>
-          <button type="button" className="secondary-btn" onClick={() => setAsk(false)}>Agora não</button>
+          <button type="button" className="secondary-btn" onClick={dismiss}>Agora não</button>
         </div>
       </section>
     </div>

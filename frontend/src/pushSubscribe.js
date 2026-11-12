@@ -28,13 +28,18 @@ function deviceId() {
   }
 }
 
-export async function ensurePushSubscription(tokens) {
-  const list = [...new Set((Array.isArray(tokens) ? tokens : [tokens]).filter(Boolean))];
-  if (!list.length || !("Notification" in window) || Notification.permission !== "granted") {
-    return;
-  }
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    return;
+function pushAvailable() {
+  return "Notification" in window
+    && Notification.permission === "granted"
+    && "serviceWorker" in navigator
+    && "PushManager" in window;
+}
+
+async function currentSubscription() {
+  // A área da clínica não registra o worker no carregamento; registra aqui para receber push.
+  const existing = await navigator.serviceWorker.getRegistration("/");
+  if (!existing) {
+    await navigator.serviceWorker.register("/sw.js");
   }
   const registration = await navigator.serviceWorker.ready;
   let subscription = await registration.pushManager.getSubscription();
@@ -46,12 +51,36 @@ export async function ensurePushSubscription(tokens) {
   }
   const json = subscription.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+    return null;
+  }
+  return { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth };
+}
+
+export async function ensurePushSubscription(tokens) {
+  const list = [...new Set((Array.isArray(tokens) ? tokens : [tokens]).filter(Boolean))];
+  if (!list.length || !pushAvailable()) {
+    return;
+  }
+  const device = await currentSubscription();
+  if (!device) {
     return;
   }
   const id = deviceId();
-  await Promise.all(list.map((token) => setDoc(doc(db, "clientLinks", token, "devices", id), {
-    endpoint: json.endpoint,
-    p256dh: json.keys.p256dh,
-    auth: json.keys.auth
-  })));
+  await Promise.all(list.map((token) => setDoc(doc(db, "clientLinks", token, "devices", id), device)));
+}
+
+// Aparelho da clínica: recebe o aviso de novos pedidos de agendamento.
+export async function ensureClinicPushSubscription(uid) {
+  if (!uid || !pushAvailable()) {
+    return;
+  }
+  const device = await currentSubscription();
+  if (!device) {
+    return;
+  }
+  await setDoc(doc(db, "users", uid, "pushDevices", deviceId()), {
+    ...device,
+    userAgent: navigator.userAgent.slice(0, 200),
+    updatedAt: new Date().toISOString()
+  });
 }

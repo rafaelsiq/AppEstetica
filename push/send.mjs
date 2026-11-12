@@ -17,6 +17,9 @@ function valueOf(field) {
   if ("booleanValue" in field) {
     return field.booleanValue;
   }
+  if ("timestampValue" in field) {
+    return field.timestampValue;
+  }
   if ("integerValue" in field) {
     return Number(field.integerValue);
   }
@@ -126,6 +129,85 @@ const now = clinicNow();
 const links = await listDocuments(token, "clientLinks");
 let sent = 0;
 let failed = 0;
+let bookings = 0;
+
+async function deliver(device, payload, onGone) {
+  try {
+    await webpush.sendNotification({
+      endpoint: device.endpoint,
+      keys: { p256dh: device.p256dh, auth: device.auth }
+    }, payload, { TTL: 12 * 60 * 60 });
+    sent += 1;
+    return true;
+  } catch (error) {
+    failed += 1;
+    const status = error.statusCode || 0;
+    console.error(JSON.stringify({ status, message: String(error.body || error.message || "").slice(0, 240) }));
+    if (status === 404 || status === 410) {
+      await onGone().catch(() => {});
+    }
+    return false;
+  }
+}
+
+// Pedidos de agendamento novos: avisa os aparelhos da clínica dona do link.
+const BOOKING_WINDOW_MS = 12 * 60 * 60 * 1000;
+const PERIODS = { manha: "manhã", tarde: "tarde", noite: "noite", qualquer: "qualquer horário" };
+const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const ownerDevices = new Map();
+
+function bookingBody(request) {
+  const [year, month, day] = String(request.date || "").split("-").map(Number);
+  const when = year
+    ? `${WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]}, ${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}`
+    : "";
+  const period = PERIODS[request.period] || "";
+  const reasons = (request.reasons || []).join(", ");
+  const head = [request.clientName, [when, period].filter(Boolean).join(", ")].filter(Boolean).join(" — ");
+  return reasons ? `${head}
+${reasons}` : head;
+}
+
+for (const link of links.filter((item) => item.type === "primeiro")) {
+  const requests = (await listDocuments(token, `clientLinks/${link.id}/requests`))
+    .filter((request) => request.status === "pendente"
+      && request.createdAt
+      && Date.now() - new Date(request.createdAt).getTime() < BOOKING_WINDOW_MS);
+  if (!requests.length) {
+    continue;
+  }
+  const secretDoc = await firestore(token, `clientLinks/${link.id}/secret/access`);
+  const ownerId = secretDoc ? documentData(secretDoc).ownerId : "";
+  if (!ownerId) {
+    continue;
+  }
+  if (!ownerDevices.has(ownerId)) {
+    ownerDevices.set(ownerId, await listDocuments(token, `users/${ownerId}/pushDevices`));
+  }
+  const devices = ownerDevices.get(ownerId);
+  for (const request of requests) {
+    for (const device of devices) {
+      if (!device.endpoint || !device.p256dh || !device.auth) {
+        continue;
+      }
+      const id = deliveryId(`agendamento:${request.id}`, link.id, device.endpoint);
+      if (await alreadySent(token, id)) {
+        continue;
+      }
+      const payload = JSON.stringify({
+        title: "Novo pedido de agendamento",
+        body: bookingBody(request),
+        url: `${SITE}/`,
+        tag: `agendamento:${request.id}`
+      });
+      const ok = await deliver(device, payload, () => firestore(token, `users/${ownerId}/pushDevices/${device.id}`, { method: "DELETE" }));
+      if (ok) {
+        await markSent(token, id, `agendamento:${request.id}`, link.id);
+        bookings += 1;
+      }
+    }
+  }
+}
 
 for (const link of links) {
   const notices = await listDocuments(token, `clientLinks/${link.id}/notices`);
@@ -152,23 +234,12 @@ for (const link of links) {
         url: `${SITE}/c/${link.id}`,
         tag: `${notice.id}:${occurrence}`
       });
-      try {
-        await webpush.sendNotification({
-          endpoint: device.endpoint,
-          keys: { p256dh: device.p256dh, auth: device.auth }
-        }, payload, { TTL: 12 * 60 * 60 });
+      const ok = await deliver(device, payload, () => firestore(token, `clientLinks/${link.id}/devices/${device.id}`, { method: "DELETE" }));
+      if (ok) {
         await markSent(token, id, notice.id, occurrence);
-        sent += 1;
-      } catch (error) {
-        failed += 1;
-        const status = error.statusCode || 0;
-        console.error(JSON.stringify({ status, message: String(error.body || error.message || "").slice(0, 240) }));
-        if (status === 404 || status === 410) {
-          await firestore(token, `clientLinks/${link.id}/devices/${device.id}`, { method: "DELETE" }).catch(() => {});
-        }
       }
     }
   }
 }
 
-console.log(JSON.stringify({ sent, failed, links: links.length }));
+console.log(JSON.stringify({ sent, failed, bookings, links: links.length }));
