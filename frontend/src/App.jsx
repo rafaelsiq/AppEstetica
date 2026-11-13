@@ -23,6 +23,7 @@ import { applyClinicIcon } from "./pageIcon";
 import NotificationLists from "./NotificationLists.jsx";
 import ClinicNoticeRunner from "./ClinicNoticeRunner";
 import ClinicPushBanner from "./ClinicPushBanner";
+import { isNativeApp } from "./pushSubscribe";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory, wellnessScore } from "./evolutionStory";
 import {
@@ -5082,7 +5083,8 @@ export default function App() {
       }
       suggestedDate = rescheduleDate;
     }
-    const popup = window.open("", "_blank");
+    // No app Android não há janela extra: o WhatsApp abre depois, pela navegação direta.
+    const popup = isNativeApp ? null : window.open("", "_blank");
     setBookingBusy(action);
     setBookingNotice("");
     try {
@@ -5126,8 +5128,12 @@ export default function App() {
       const url = whatsAppUrl(appointment.clientPhone, message);
       setBookingWhatsAppUrl(url);
       setBookingReview({ ...appointment, ...patch });
-      if (popup) {
-        popup.location.href = url;
+      if (popup || isNativeApp) {
+        if (popup) {
+          popup.location.href = url;
+        } else {
+          window.location.href = url;
+        }
         setBookingNotice(
           action === "aprovado"
             ? "Consulta aprovada. O WhatsApp foi aberto para a cliente."

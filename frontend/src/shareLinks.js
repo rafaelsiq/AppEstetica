@@ -5,9 +5,10 @@ import { clinicHandle, sanitizeEvolutionStory } from "./evolutionStory";
 import { FIRST_CONTACT_SERVICE } from "./firstContact";
 import { IMAGE_CONSENT_TEXT, IMAGE_CONSENT_VERSION } from "./imageConsent";
 import { normalizeReadings } from "./trackingParameters";
+import { siteOrigin } from "./siteUrl";
 
 export function shareUrl(token) {
-  return `${window.location.origin}/c/${token}`;
+  return `${siteOrigin()}/c/${token}`;
 }
 
 export function isClientFeedback(item) {
