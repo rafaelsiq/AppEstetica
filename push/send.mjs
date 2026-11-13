@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import webpush from "web-push";
 import { GoogleAuth } from "google-auth-library";
 import { occurrenceKey, shouldNotify } from "../frontend/src/notificationSchedule.js";
+import { BOOKING_CHANNEL, BOOKING_TITLE, bookingBody, bookingDeliveryId } from "../frontend/functions/bookingMessage.js";
 
 const PROJECT = "clinica-estetica-a219";
 const SITE = "https://clinica-estetica-a219.web.app";
@@ -184,23 +185,10 @@ async function deliverFcm(device, notice, onGone) {
   return false;
 }
 
-// Pedidos de agendamento novos: avisa os aparelhos da clínica dona do link.
+// Pedidos de agendamento novos: a Cloud Function avisa na hora; aqui é a reserva
+// caso ela falhe. Usa o mesmo id de entrega, então não repete o aviso.
 const BOOKING_WINDOW_MS = 12 * 60 * 60 * 1000;
-const PERIODS = { manha: "manhã", tarde: "tarde", noite: "noite", qualquer: "qualquer horário" };
-const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const ownerDevices = new Map();
-
-function bookingBody(request) {
-  const [year, month, day] = String(request.date || "").split("-").map(Number);
-  const when = year
-    ? `${WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]}, ${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}`
-    : "";
-  const period = PERIODS[request.period] || "";
-  const reasons = (request.reasons || []).join(", ");
-  const head = [request.clientName, [when, period].filter(Boolean).join(", ")].filter(Boolean).join(" — ");
-  return reasons ? `${head}
-${reasons}` : head;
-}
 
 for (const link of links.filter((item) => item.type === "primeiro")) {
   const requests = (await listDocuments(token, `clientLinks/${link.id}/requests`))
@@ -225,16 +213,16 @@ for (const link of links.filter((item) => item.type === "primeiro")) {
       if (!webPush && !device.fcmToken) {
         continue;
       }
-      const id = deliveryId(`agendamento:${request.id}`, link.id, device.fcmToken || device.endpoint);
+      const id = bookingDeliveryId(request.id, link.id, device.fcmToken || device.endpoint);
       if (await alreadySent(token, id)) {
         continue;
       }
       const notice = {
-        title: "Novo pedido de agendamento",
+        title: BOOKING_TITLE,
         body: bookingBody(request),
         url: `${SITE}/`,
         tag: `agendamento:${request.id}`,
-        channel: "agendamentos"
+        channel: BOOKING_CHANNEL
       };
       const forget = () => firestore(token, `users/${ownerId}/pushDevices/${device.id}`, { method: "DELETE" });
       const ok = device.fcmToken

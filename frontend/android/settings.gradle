@@ -1,3 +1,8 @@
+// Baixa sozinho o JDK exigido pelos plugins do Capacitor (ex.: JDK 21 do filesystem).
+plugins {
+    id "org.gradle.toolchains.foojay-resolver-convention" version "0.10.0"
+}
+
 include ':app'
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')

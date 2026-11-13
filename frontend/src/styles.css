@@ -5301,6 +5301,38 @@ h5 {
   align-items: center;
 }
 
+/* Botão do link de primeiro atendimento: texto curto no celular */
+.btn-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-label-short {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .btn-label-full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .btn-label-short {
+    display: inline;
+  }
+
+  .agenda-actions .secondary-btn,
+  .agenda-actions .primary-btn {
+    min-width: 0;
+  }
+}
+
 .app-shell .agenda-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;

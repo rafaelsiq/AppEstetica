@@ -24,6 +24,7 @@ import NotificationLists from "./NotificationLists.jsx";
 import ClinicNoticeRunner from "./ClinicNoticeRunner";
 import ClinicPushBanner from "./ClinicPushBanner";
 import { isNativeApp } from "./pushSubscribe";
+import { saveFile } from "./saveFile";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory, wellnessScore } from "./evolutionStory";
 import {
@@ -2071,6 +2072,24 @@ function chartLabelIndexes(count) {
     indexes.add(Math.round((step * (count - 1)) / 4));
   }
   return [...indexes].sort((first, second) => first - second);
+}
+
+// Texto do botão do link de primeiro atendimento: completo em telas largas,
+// curto no celular (o botão divide a linha com "Novo atendimento").
+function FirstContactLinkLabel({ busy, ready }) {
+  if (busy) {
+    return <span className="btn-label">Gerando link...</span>;
+  }
+  return (
+    <>
+      <span className="btn-label btn-label-full">
+        {ready ? "Copiar link de primeiro atendimento" : "Link de primeiro atendimento"}
+      </span>
+      <span className="btn-label btn-label-short" aria-hidden="true">
+        {ready ? "Copiar link" : "Gerar link"}
+      </span>
+    </>
+  );
 }
 
 function EvolutionPhonePreview({ clinicName, clientName, highlight, comments, homeCare, latest }) {
@@ -4355,7 +4374,7 @@ export default function App() {
       });
 
       const normalizedClientName = normalizeFileName(selectedClient.name || "cliente");
-      doc.save(`anamnese-${normalizedClientName}.pdf`);
+      await saveFile(doc.output("blob"), `anamnese-${normalizedClientName}.pdf`, "Anamnese");
     } catch (error) {
       setAnamneseMessage("Não foi possível gerar o PDF agora. Tente novamente.");
       setTimeout(() => setAnamneseMessage(""), 3500);
@@ -5598,11 +5617,7 @@ export default function App() {
                   <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
                   <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
                 </svg>
-                {firstContactBusy
-                  ? "Gerando link..."
-                  : firstContactLink
-                    ? "Copiar link de primeiro atendimento"
-                    : "Link de primeiro atendimento"}
+                <FirstContactLinkLabel busy={firstContactBusy} ready={Boolean(firstContactLink)} />
               </button>
               <button className="primary-btn" type="button" onClick={openAppointmentModal}>
                 <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -5802,11 +5817,7 @@ export default function App() {
                   <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
                   <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
                 </svg>
-                {firstContactBusy
-                  ? "Gerando link..."
-                  : firstContactLink
-                    ? "Copiar link de primeiro atendimento"
-                    : "Link de primeiro atendimento"}
+                <FirstContactLinkLabel busy={firstContactBusy} ready={Boolean(firstContactLink)} />
               </button>
               <button className="primary-btn" type="button" onClick={openAppointmentModal}>
                 <svg className="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
