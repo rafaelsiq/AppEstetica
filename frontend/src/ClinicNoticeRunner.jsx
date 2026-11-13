@@ -73,7 +73,7 @@ export default function ClinicNoticeRunner({ uid, tokens = [] }) {
       if (permission === "default" && !askDismissedRecently()) {
         timer = window.setTimeout(() => setAsk(true), 800);
       }
-    }).catch(() => {});
+    }).catch((error) => console.error(error));
     return () => {
       active = false;
       window.clearTimeout(timer);

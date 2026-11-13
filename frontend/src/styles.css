@@ -4509,12 +4509,13 @@ h5 {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   grid-template-areas:
+    "push push"
     "header header"
     "notice notice"
     "stats stats"
     "agenda today"
     "agenda shortcuts";
-  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-rows: auto auto auto auto auto 1fr;
   gap: 16px;
   align-items: start;
 }
@@ -4527,6 +4528,68 @@ h5 {
 .home-notice {
   grid-area: notice;
   margin: 0;
+}
+
+/* Aviso de notificações desligadas no topo do Início */
+.push-banner {
+  grid-area: push;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 14px;
+  padding: 14px 16px;
+  border: 1px solid #ecd9b8;
+  border-radius: var(--radius-xl);
+  background: var(--warning-soft);
+  color: var(--text);
+}
+
+.push-banner-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--warning);
+  display: grid;
+  place-items: center;
+}
+
+.push-banner-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.push-banner-text strong {
+  display: block;
+  font-size: 15px;
+}
+
+.push-banner-text p {
+  margin: 2px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.push-banner-btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .push-banner {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .push-banner-btn {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 46px;
+  }
 }
 
 .app-shell .home-stats {
@@ -4872,6 +4935,7 @@ h5 {
   .app-shell .home-page {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
+      "push"
       "notice"
       "today"
       "stats"

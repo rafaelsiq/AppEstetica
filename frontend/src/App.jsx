@@ -22,6 +22,7 @@ import { phoneKey } from "./clientQuiz";
 import { applyClinicIcon } from "./pageIcon";
 import NotificationLists from "./NotificationLists.jsx";
 import ClinicNoticeRunner from "./ClinicNoticeRunner";
+import ClinicPushBanner from "./ClinicPushBanner";
 import { createFirstContactLink, createShareLink, importFirstContactRequest, importSubmittedLink, isClientFeedback, sanitizeLogoDataUrl, shareUrl, syncClinicLogo, syncEvolutionInstagram, updateEvolutionLink } from "./shareLinks";
 import { EVOLUTION_HIGHLIGHT_LIMIT, EVOLUTION_TEXT_LIMIT, sanitizeEvolutionStory, wellnessScore } from "./evolutionStory";
 import {
@@ -5577,6 +5578,7 @@ export default function App() {
 
       {activeTab === TABS.INICIO ? (
         <section className="home-page">
+          <ClinicPushBanner uid={user.uid} />
           <header className="page-header home-header">
             <div>
               <h1>

@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { VAPID_PUBLIC_KEY } from "./vapidPublic";
@@ -75,15 +76,13 @@ export async function ensurePushSubscription(tokens) {
 export const isNativeApp = Capacitor.isNativePlatform();
 const BOOKING_CHANNEL = "agendamentos";
 
-async function nativePush() {
-  const { PushNotifications } = await import("@capacitor/push-notifications");
-  return PushNotifications;
-}
+// Atenção: não devolver o PushNotifications de uma função async. Ele é um Proxy do
+// Capacitor e a Promise tentaria chamar PushNotifications.then(), que falha no Android.
 
 // "granted", "default" (ainda pode pedir), "denied" ou "unsupported".
 export async function clinicNotificationPermission() {
   if (isNativeApp) {
-    const { receive } = await (await nativePush()).checkPermissions();
+    const { receive } = await PushNotifications.checkPermissions();
     return receive === "granted" || receive === "denied" ? receive : "default";
   }
   if (!("Notification" in window)) {
@@ -94,7 +93,7 @@ export async function clinicNotificationPermission() {
 
 export async function requestClinicNotificationPermission() {
   if (isNativeApp) {
-    const { receive } = await (await nativePush()).requestPermissions();
+    const { receive } = await PushNotifications.requestPermissions();
     return receive === "granted" || receive === "denied" ? receive : "default";
   }
   if (!("Notification" in window)) {
@@ -104,7 +103,6 @@ export async function requestClinicNotificationPermission() {
 }
 
 async function nativeToken() {
-  const PushNotifications = await nativePush();
   await PushNotifications.createChannel({
     id: BOOKING_CHANNEL,
     name: "Pedidos de agendamento",
